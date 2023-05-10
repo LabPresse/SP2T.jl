@@ -12,7 +12,7 @@ include("datatypes.jl")
 include("psfs.jl")
 include("samplers.jl")
 # include("priors.jl")
-include("photostates.jl")
+include("states.jl")
 include("tracks.jl")
 include("forward.jl")
 include("plotting.jl")
@@ -22,36 +22,31 @@ function forward_main(
     priors::Priors;
     particle_num::Int = 3,
     bleach::Real = 0,
-    diffusion::Float64 = 0.05,
-    emission::Float64 = 1e4,
-    background::Float64 = 1e5,
-    gain::Float64 = 0.3,
-    length_per_exposure::Int = 100,
+    diffusion::AbstractVector{Float64} = [0.05],
+    emission::Float64 = 1e1,
+    background::Float64 = 1e2,
 )
-    times = get_times(params.period, params.exposure, length_per_exposure, params.length)
+    times = (0:params.length-1) .* params.period
 
-    photostates = photostates_from_prior(
+    states = get_states_from_prior(
         particle_num,
-        length_per_exposure * params.length,
+        params.length,
         priors.photostate,
     )
-    tracks = tracks_from_prior(particle_num, times, priors.location, diffusion)
-    
-    weights = get_weights(length_per_exposure)
-    integratedpsf = integrate_psf(tracks, params, weights)
+    tracks = get_tracks_from_prior(states, params.period, priors.location, diffusion)
 
-    observation = get_readout(integratedpsf, emission, background, gain, params)
+    integratedpsf = integrate_psf(tracks, params)
+
+    observation = get_readout(integratedpsf, emission, background, params)
 
     gt = GroundTruth(
         particle_num,
         tracks,
-        photostates,
+        states,
         diffusion,
         # emission,
         background,
-        gain,
         times,
-        length_per_exposure,
         integratedpsf,
     )
 

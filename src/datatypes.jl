@@ -31,18 +31,18 @@ struct ExperimentalParameters
     refractiveindex::Float64
     wavelength::Float64
     psf::AbstractPSF
+    validpixel::Matrix{Bool}
     ExperimentalParameters(;
-        length::Int=50,
-        period::Float64=0.033,
-        exposure::Float64=0.03,
-        pixelnumx::Int=15,
-        pixelnumy::Int=23,
-        pixelsize::Real=0.133,
-        na::Float64=1.45,
-        refractiveindex::Float64=1.515,
-        wavelength::Float64=0.665,
-        psf::AbstractPSF=CircularGaussianLorenzian(1.45,1.515,0.665),
-        units::Tuple{String,String,String} = ("μm", "s","ADU"),
+        length::Int = 100,
+        period::Float64 = 0.0033,
+        exposure::Float64 = 0.003,
+        validpixel::AbstractMatrix{Bool} = zeros(Bool, 50, 50),
+        pixelsize::Real = 0.133,
+        na::Float64 = 1.45,
+        refractiveindex::Float64 = 1.515,
+        wavelength::Float64 = 0.665,
+        psf::AbstractPSF = CircularGaussianLorenzian(1.45, 1.515, 0.665),
+        units::Tuple{String,String,String} = ("μm", "s", "ADU"),
         offsetx::Float64 = 0.0,
         offsety::Float64 = 0.0,
     ) = new(
@@ -50,10 +50,10 @@ struct ExperimentalParameters
         length,
         period,
         exposure,
-        collect(range(offsetx, step = pixelsize, length = pixelnumx + 1)),
-        collect(range(offsety, step = pixelsize, length = pixelnumy + 1)),
-        pixelnumx,
-        pixelnumy,
+        collect(range(offsetx, step = pixelsize, length = size(validpixel, 1) + 1)),
+        collect(range(offsety, step = pixelsize, length = size(validpixel, 2) + 1)),
+        size(validpixel, 1),
+        size(validpixel, 2),
         pixelsize,
         pixelsize^2 * exposure,
         na,
@@ -112,12 +112,10 @@ struct GroundTruth
     particle_num::Int
     tracks::Array{Float64,3}
     photostate::Array{Int8,3}
-    diffus_coeff::Real
+    diffus_coeff::Vector{Float64}
     # emissionrate::Float64
     background::Float64
-    gain::Float64
     times::Vector{Float64}
-    length_per_exposure::Int
     emitterPSF::Array{Float64,3}
 end
 
