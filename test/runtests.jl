@@ -13,8 +13,8 @@ priors = SpBNPTrack.Priors(
     location_σy = params.pixelsize * 2,
 )
 
-(video, gt) = SpBNPTrack.forward_main(params, priors)
+(video, gt) = SpBNPTrack.forward_main(params, priors, emission = 40.0, background = 10.0)
 
-fig = SpBNPTrack.visualize_data(video, gt)
+fig = SpBNPTrack.visualize_data_3D(video, gt)
 
 # fig
