@@ -90,8 +90,8 @@ end
 function visualize_data_3D(v::Video, gt::GroundTruth)
     fig = Figure()
     ax = [
-        Axis3(fig[1:3, 1], zlabel="t"),
-        Axis(fig[4, 1]),
+        Axis3(fig[1:3, 1], zlabel = "t"),
+        Axis(fig[4, 1], xlabel = "t", ylabel = "z"),
         Axis(fig[1:4, 2], aspect = DataAspect()),
         # Axis(fig[3:4, 2], aspect = DataAspect()),
     ]
@@ -146,8 +146,8 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
         colorrange = (false, true),
     )
 
-    hidexdecorations!(ax[1], label=false)
-    hideydecorations!(ax[1], label=false)
+    hidexdecorations!(ax[1], label = false)
+    hideydecorations!(ax[1], label = false)
     hidedecorations!(ax[3])
     # hidedecorations!(ax[3])
     hidespines!(ax[3])
