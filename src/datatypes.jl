@@ -36,7 +36,7 @@ struct ExperimentalParameters
         length::Int = 100,
         period::Float64 = 0.0033,
         exposure::Float64 = 0.003,
-        validpixel::AbstractMatrix{Bool} = zeros(Bool, 50, 50),
+        validpixel::AbstractMatrix{Bool} = ones(Bool, 50, 50),
         pixelsize::Real = 0.133,
         na::Float64 = 1.45,
         refractiveindex::Float64 = 1.515,

@@ -106,5 +106,5 @@ function get_readout(
 )
     u = F * params.areatimesexposure .+ h .* g
     p = -expm1.(-u)
-    return rand(eltype(p), size(p)) .< p
+    return rand(eltype(p), size(p)) .< p .&& params.validpixel
 end
