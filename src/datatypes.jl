@@ -119,7 +119,7 @@ struct GroundTruth
     emitterPSF::Array{Float64,3}
 end
 
-mutable struct Sample
+struct Sample
     spatial_loc::Array{Float64,3}
     photostate::Array{Int8,3}
     load::Vector{Bool}

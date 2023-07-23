@@ -16,6 +16,7 @@ include("states.jl")
 include("tracks.jl")
 include("forward.jl")
 include("plotting.jl")
+include("chains.jl")
 
 function forward_main(
     params::ExperimentalParameters,
@@ -35,9 +36,9 @@ function forward_main(
     )
     tracks = get_tracks_from_prior(states, params.period, priors.location, diffusion)
 
-    integratedpsf = integrate_psf(tracks, params)
+    pureframe = combine_psfs(tracks, params)
 
-    observation = get_readout(integratedpsf, emission, background, params)
+    observation = get_readout(pureframe, emission, background, params)
 
     gt = GroundTruth(
         particle_num,
@@ -47,7 +48,7 @@ function forward_main(
         # emission,
         background,
         times,
-        integratedpsf,
+        pureframe,
     )
 
     video = Video(observation, params)
