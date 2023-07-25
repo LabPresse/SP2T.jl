@@ -3,42 +3,40 @@ module SpBNPTrack
 using Distributions
 using SpecialFunctions
 using LinearAlgebra
+using Flux
+using CUDA
+
 using GLMakie
 # using StatsBase
 # using Octavian
-using LoopVectorization
+# using LoopVectorization
+
 
 include("datatypes.jl")
 include("psfs.jl")
 include("samplers.jl")
 # include("priors.jl")
-include("states.jl")
-include("tracks.jl")
 include("forward.jl")
 include("plotting.jl")
 include("chains.jl")
 
 function forward_main(
-    params::ExperimentalParameters,
-    priors::Priors;
-    particle_num::Int = 3,
-    bleach::Real = 0,
-    diffusion::AbstractVector{Float64} = [0.05],
-    emission::Float64 = 1e1,
-    background::Float64 = 1e2,
+    params,
+    priors;
+    particle_num = 3,
+    bleach = 0,
+    diffusion = [0.05],
+    emission = 1e1,
+    background = 1e2,
 )
     times = (0:params.length-1) .* params.period
 
-    states = get_states_from_prior(
-        particle_num,
-        params.length,
-        priors.photostate,
-    )
-    tracks = get_tracks_from_prior(states, params.period, priors.location, diffusion)
+    states = sim_states(particle_num, params.length, priors.photostate)
+    tracks = sim_tracks(states, priors.location, diffusion, params.period)
 
-    pureframe = combine_psfs(tracks, params)
+    pureframe = sim_img(tracks, params.pxboundsx, params.pxboundsy, params.PSF)
 
-    observation = get_readout(pureframe, emission, background, params)
+    observation = sim_frames(pureframe, background, emission, params)
 
     gt = GroundTruth(
         particle_num,

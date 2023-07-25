@@ -46,11 +46,11 @@ function visualize_data(v::Video, gt::GroundTruth)
     uls = (
         1.1 * max(
             maximum(view(gt.tracks, 1, :, :)),
-            v.params.pixelboundsx[end] - v.params.pixelboundsx[1],
+            v.params.pxboundsx[end] - v.params.pxboundsx[1],
         ),
         1.1 * max(
             maximum(view(gt.tracks, 2, :, :)),
-            v.params.pixelboundsy[end] - v.params.pixelboundsy[1],
+            v.params.pxboundsy[end] - v.params.pxboundsy[1],
         ),
         1.1 * maximum(view(gt.tracks, 3, :, :)),
     )
@@ -62,18 +62,18 @@ function visualize_data(v::Video, gt::GroundTruth)
 
     d =
         max.(
-            uls .- (v.params.pixelnumx, v.params.pixelnumy, 0) .* (v.params.pixelsize / 2),
-            (v.params.pixelnumx, v.params.pixelnumy, 0) .* (v.params.pixelsize / 2) .- lls,
+            uls .- (v.params.pxnumx, v.params.pxnumy, 0) .* (v.params.pxsize / 2),
+            (v.params.pxnumx, v.params.pxnumy, 0) .* (v.params.pxsize / 2) .- lls,
         )
     ylims!(
         ax[1],
-        (v.params.pixelboundsx[end] - v.params.pixelboundsx[1]) / 2 - d[1],
-        (v.params.pixelboundsx[end] - v.params.pixelboundsx[1]) / 2 + d[1],
+        (v.params.pxboundsx[end] - v.params.pxboundsx[1]) / 2 - d[1],
+        (v.params.pxboundsx[end] - v.params.pxboundsx[1]) / 2 + d[1],
     )
     ylims!(
         ax[2],
-        (v.params.pixelboundsy[end] - v.params.pixelboundsy[1]) / 2 - d[2],
-        (v.params.pixelboundsy[end] - v.params.pixelboundsy[1]) / 2 + d[2],
+        (v.params.pxboundsy[end] - v.params.pxboundsy[1]) / 2 - d[2],
+        (v.params.pxboundsy[end] - v.params.pxboundsy[1]) / 2 + d[2],
     )
     ylims!(ax[3], -d[3], d[3])
 
@@ -117,8 +117,8 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
 
     hm = heatmap!(
         ax[1],
-        v.params.pixelboundsx,
-        v.params.pixelboundsy,
+        v.params.pxboundsx,
+        v.params.pxboundsy,
         frame1,
         colormap = (:grays, 0.7),
     )
@@ -132,15 +132,15 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
 
     heatmap!(
         ax[3],
-        v.params.pixelboundsx,
-        v.params.pixelboundsy .+ (2 * v.params.pixelsize + v.params.pixelboundsy[end]),
+        v.params.pxboundsx,
+        v.params.pxboundsy .+ (2 * v.params.pxsize + v.params.pxboundsy[end]),
         frame1,
         colormap = :grays,
     )
     heatmap!(
         ax[3],
-        v.params.pixelboundsx,
-        v.params.pixelboundsy,
+        v.params.pxboundsx,
+        v.params.pxboundsy,
         frame2,
         colormap = :grays,
         colorrange = (false, true),
@@ -156,12 +156,12 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
 
     # limits!(
     #     ax[1],
-    #     v.params.pixelboundsx[1], v.params.pixelboundsx[end],
-    #     v.params.pixelboundsy[1], v.params.pixelboundsy[end],
+    #     v.params.pxboundsx[1], v.params.pxboundsx[end],
+    #     v.params.pxboundsy[1], v.params.pxboundsy[end],
     # )
 
-    (lowerx, upperx) = get_limits(v.params.pixelboundsx, view(gt.tracks, 1, :, :))
-    (lowery, uppery) = get_limits(v.params.pixelboundsy, view(gt.tracks, 2, :, :))
+    (lowerx, upperx) = get_limits(v.params.pxboundsx, view(gt.tracks, 1, :, :))
+    (lowery, uppery) = get_limits(v.params.pxboundsy, view(gt.tracks, 2, :, :))
     # limits!(ax[1], lowerx, upperx, lowery, uppery)
 
     xlims!(ax[1], lowerx, upperx)
@@ -173,11 +173,11 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
     # uls = (
     #     1.1 * max(
     #         maximum(view(gt.tracks, 1, :, :)),
-    #         v.params.pixelboundsx[end] - v.params.pixelboundsx[1],
+    #         v.params.pxboundsx[end] - v.params.pxboundsx[1],
     #     ),
     #     1.1 * max(
     #         maximum(view(gt.tracks, 2, :, :)),
-    #         v.params.pixelboundsy[end] - v.params.pixelboundsy[1],
+    #         v.params.pxboundsy[end] - v.params.pxboundsy[1],
     #     ),
     #     1.1 * maximum(view(gt.tracks, 3, :, :)),
     # )
@@ -189,18 +189,18 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
 
     # d =
     #     max.(
-    #         uls .- (v.params.pixelnumx, v.params.pixelnumy, 0) .* (v.params.pixelsize / 2),
-    #         (v.params.pixelnumx, v.params.pixelnumy, 0) .* (v.params.pixelsize / 2) .- lls,
+    #         uls .- (v.params.pxnumx, v.params.pxnumy, 0) .* (v.params.pxsize / 2),
+    #         (v.params.pxnumx, v.params.pxnumy, 0) .* (v.params.pxsize / 2) .- lls,
     #     )
     # ylims!(
     #     ax[1],
-    #     (v.params.pixelboundsx[end] - v.params.pixelboundsx[1]) / 2 - d[1],
-    #     (v.params.pixelboundsx[end] - v.params.pixelboundsx[1]) / 2 + d[1],
+    #     (v.params.pxboundsx[end] - v.params.pxboundsx[1]) / 2 - d[1],
+    #     (v.params.pxboundsx[end] - v.params.pxboundsx[1]) / 2 + d[1],
     # )
     # ylims!(
     #     ax[2],
-    #     (v.params.pixelboundsy[end] - v.params.pixelboundsy[1]) / 2 - d[2],
-    #     (v.params.pixelboundsy[end] - v.params.pixelboundsy[1]) / 2 + d[2],
+    #     (v.params.pxboundsy[end] - v.params.pxboundsy[1]) / 2 - d[2],
+    #     (v.params.pxboundsy[end] - v.params.pxboundsy[1]) / 2 + d[2],
     # )
     # ylims!(ax[3], -d[3], d[3])
 

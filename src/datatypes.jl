@@ -21,27 +21,28 @@ struct ExperimentalParameters
     length::Int
     period::Float64
     exposure::Float64
-    pixelboundsx::Vector{Float64}
-    pixelboundsy::Vector{Float64}
-    pixelnumx::Int
-    pixelnumy::Int
-    pixelsize::Float64
-    areatimesexposure::Float64
-    na::Float64
-    refractiveindex::Float64
+    pxboundsx::Vector{Float64}
+    pxboundsy::Vector{Float64}
+    pxnumx::Int
+    pxnumy::Int
+    pxsize::Float64
+    pxarea::Float64
+    pxareatimesexposure::Float64
+    NA::Float64
+    nᵣ::Float64
     wavelength::Float64
-    psf::AbstractPSF
-    validpixel::Matrix{Bool}
+    PSF::AbstractPSF
+    validpx::Matrix{Bool}
     ExperimentalParameters(;
         length::Int = 100,
         period::Float64 = 0.0033,
         exposure::Float64 = 0.003,
-        validpixel::AbstractMatrix{Bool} = ones(Bool, 50, 50),
-        pixelsize::Real = 0.133,
-        na::Float64 = 1.45,
-        refractiveindex::Float64 = 1.515,
+        validpx::AbstractMatrix{Bool} = ones(Bool, 50, 50),
+        pxsize::Real = 0.133,
+        NA::Float64 = 1.45,
+        nᵣ::Float64 = 1.515,
         wavelength::Float64 = 0.665,
-        psf::AbstractPSF = CircularGaussianLorenzian(1.45, 1.515, 0.665),
+        PSF::AbstractPSF = CircularGaussianLorenzian(1.45, 1.515, 0.665),
         units::Tuple{String,String,String} = ("μm", "s", "ADU"),
         offsetx::Float64 = 0.0,
         offsety::Float64 = 0.0,
@@ -50,16 +51,17 @@ struct ExperimentalParameters
         length,
         period,
         exposure,
-        collect(range(offsetx, step = pixelsize, length = size(validpixel, 1) + 1)),
-        collect(range(offsety, step = pixelsize, length = size(validpixel, 2) + 1)),
-        size(validpixel, 1),
-        size(validpixel, 2),
-        pixelsize,
-        pixelsize^2 * exposure,
-        na,
-        refractiveindex,
+        collect(range(offsetx, step = pxsize, length = size(validpx, 1) + 1)),
+        collect(range(offsety, step = pxsize, length = size(validpx, 2) + 1)),
+        size(validpx, 1),
+        size(validpx, 2),
+        pxsize,
+        pxsize^2,
+        pxsize^2 * exposure,
+        NA,
+        nᵣ,
         wavelength,
-        psf,
+        PSF,
     )
 end
 
@@ -104,7 +106,7 @@ struct Priors
 end
 
 struct Video
-    data::Array{Float64,3}
+    data::BitArray{3}
     params::ExperimentalParameters
 end
 

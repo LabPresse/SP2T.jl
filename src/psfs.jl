@@ -97,7 +97,7 @@ function combine_psfs(x::AbstractArray{<:Real}, params::ExperimentalParameters)
             view(x, :, :, n),
             params.pixelboundsx,
             params.pixelboundsy,
-            params.psf,
+            params.PSF,
         )
     end
     g .*= params.exposure
