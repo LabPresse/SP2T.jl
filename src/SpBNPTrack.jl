@@ -5,7 +5,6 @@ using SpecialFunctions
 using LinearAlgebra
 using Flux
 using CUDA
-
 using GLMakie
 # using StatsBase
 # using Octavian
@@ -20,38 +19,16 @@ include("forward.jl")
 include("plotting.jl")
 include("chains.jl")
 
-function forward_main(
-    params,
-    priors;
-    particle_num = 3,
-    bleach = 0,
-    diffusion = [0.05],
-    emission = 1e1,
-    background = 1e2,
-)
-    times = (0:params.length-1) .* params.period
+function forward_main(params, priors; M = 3, D = 0.05, h = 1e1, F = 1e2; T = Float64)
+    x = Array{T,3}(undef, 3, M, params.length)
+    simulate!(x, priors.x, D, params.period)
 
-    states = sim_states(particle_num, params.length, priors.photostate)
-    tracks = sim_tracks(states, priors.location, diffusion, params.period)
+    g = Array{T,3}(undef, params.pxnumx, params.pxnumy, params.length)
+    simulate!(g, x, params.pxboundsx, params.pxboundsy, params.PSF)
 
-    pureframe = sim_img(tracks, params.pxboundsx, params.pxboundsy, params.PSF)
+    data = simulate(g, F, h, params)
 
-    observation = sim_frames(pureframe, background, emission, params)
-
-    gt = GroundTruth(
-        particle_num,
-        tracks,
-        states,
-        diffusion,
-        # emission,
-        background,
-        times,
-        pureframe,
-    )
-
-    video = Video(observation, params)
-
-    return (video, gt)
+    return (Video(data, params), Sample(x, D, h, F))
 end
 
 end
