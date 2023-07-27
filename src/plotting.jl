@@ -14,8 +14,8 @@ function visualize_data(v::Video, gt::GroundTruth)
         Axis(fig[1:4, 2][2, 1], aspect = DataAspect()),
     ]
 
-    for i = 1:gt.particle_num, j = 1:3
-        lines!(ax[j], gt.times, view(gt.tracks, j, i, :))
+    for i = 1:gt.B, j = 1:3
+        lines!(ax[j], gt.times, view(gt.x, j, i, :))
     end
 
     sl_x = Slider(fig[4, 1], range = 1:v.params.length, startvalue = 1)
@@ -45,19 +45,19 @@ function visualize_data(v::Video, gt::GroundTruth)
 
     uls = (
         1.1 * max(
-            maximum(view(gt.tracks, 1, :, :)),
+            maximum(view(gt.x, 1, :, :)),
             v.params.pxboundsx[end] - v.params.pxboundsx[1],
         ),
         1.1 * max(
-            maximum(view(gt.tracks, 2, :, :)),
+            maximum(view(gt.x, 2, :, :)),
             v.params.pxboundsy[end] - v.params.pxboundsy[1],
         ),
-        1.1 * maximum(view(gt.tracks, 3, :, :)),
+        1.1 * maximum(view(gt.x, 3, :, :)),
     )
     lls = (
-        1.1 * min(minimum(view(gt.tracks, 1, :, :)), 0),
-        1.1 * min(minimum(view(gt.tracks, 2, :, :)), 0),
-        1.1 * minimum(view(gt.tracks, 3, :, :)),
+        1.1 * min(minimum(view(gt.x, 1, :, :)), 0),
+        1.1 * min(minimum(view(gt.x, 2, :, :)), 0),
+        1.1 * minimum(view(gt.x, 3, :, :)),
     )
 
     d =
@@ -96,9 +96,9 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
         # Axis(fig[3:4, 2], aspect = DataAspect()),
     ]
 
-    for m = 1:gt.particle_num
-        lines!(ax[1], view(gt.tracks, 1, m, :), view(gt.tracks, 2, m, :), gt.times)
-        lines!(ax[2], gt.times, view(gt.tracks, 3, m, :))
+    for m = 1:gt.B
+        lines!(ax[1], view(gt.x, 1, m, :), view(gt.x, 2, m, :), gt.times)
+        lines!(ax[2], gt.times, view(gt.x, 3, m, :))
     end
 
     sl_x = Slider(fig[5, 1], range = 1:v.params.length, startvalue = 1)
@@ -160,8 +160,8 @@ function visualize_data_3D(v::Video, gt::GroundTruth)
     #     v.params.pxboundsy[1], v.params.pxboundsy[end],
     # )
 
-    (lowerx, upperx) = get_limits(v.params.pxboundsx, view(gt.tracks, 1, :, :))
-    (lowery, uppery) = get_limits(v.params.pxboundsy, view(gt.tracks, 2, :, :))
+    (lowerx, upperx) = get_limits(v.params.pxboundsx, view(gt.x, 1, :, :))
+    (lowery, uppery) = get_limits(v.params.pxboundsy, view(gt.x, 2, :, :))
     # limits!(ax[1], lowerx, upperx, lowery, uppery)
 
     xlims!(ax[1], lowerx, upperx)

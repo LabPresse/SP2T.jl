@@ -7,10 +7,9 @@ using Test
 
 params = SpBNPTrack.ExperimentalParameters()
 priors = SpBNPTrack.Priors(
-    location_μx = params.pxnumx * params.pxsize / 2,
-    location_μy = params.pxnumy * params.pxsize / 2,
-    location_σx = params.pxsize * 2,
-    location_σy = params.pxsize * 2,
+    μₓ = [params.pxnumx * params.pxsize / 2, params.pxnumy * params.pxsize / 2, 0],
+    σₓ = [params.pxsize * 2, params.pxsize * 2, 0],
+    p_s = [1, 0],
 )
 
 (video, gt) = SpBNPTrack.forward_main(params, priors, emission = 200.0, background = 10.0)

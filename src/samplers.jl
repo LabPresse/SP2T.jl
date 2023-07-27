@@ -1,11 +1,11 @@
-function randc(p::AbstractArray{<:Real})
-    r = rand() - p[1]
-    c = 1
-    while r > 0
-        c += 1
-        r -= p[c]
+function randc(p)
+    i = 1
+    c = p[1]
+    u = rand()
+    while c < u
+        c += p[i+=1]
     end
-    return c
+    return i
 end
 
 function randc!(s::AbstractArray{<:Integer}, p::AbstractArray{<:Real})
@@ -15,6 +15,4 @@ function randc!(s::AbstractArray{<:Integer}, p::AbstractArray{<:Real})
     return s
 end
 
-function randb(p::Real)
-    return rand() < p
-end
+randb(p) = rand() < p

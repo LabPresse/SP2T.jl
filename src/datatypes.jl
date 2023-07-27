@@ -17,8 +17,7 @@ struct CircularGaussianLorenzian <: AbstractPSF
 end
 
 struct ExperimentalParameters
-    units::Tuple{String,String,String}
-    length::Int
+    units::Tuple{String,String}
     period::Float64
     exposure::Float64
     pxboundsx::Vector{Float64}
@@ -34,7 +33,7 @@ struct ExperimentalParameters
     PSF::AbstractPSF
     validpx::Matrix{Bool}
     ExperimentalParameters(;
-        length::Int = 100,
+        units::Tuple{String,String,String} = ("μm", "s"),
         period::Float64 = 0.0033,
         exposure::Float64 = 0.003,
         validpx::AbstractMatrix{Bool} = ones(Bool, 50, 50),
@@ -43,12 +42,10 @@ struct ExperimentalParameters
         nᵣ::Float64 = 1.515,
         wavelength::Float64 = 0.665,
         PSF::AbstractPSF = CircularGaussianLorenzian(1.45, 1.515, 0.665),
-        units::Tuple{String,String,String} = ("μm", "s", "ADU"),
         offsetx::Float64 = 0.0,
         offsety::Float64 = 0.0,
     ) = new(
         units,
-        length,
         period,
         exposure,
         collect(range(offsetx, step = pxsize, length = size(validpx, 1) + 1)),
@@ -65,43 +62,59 @@ struct ExperimentalParameters
     )
 end
 
+# struct Priors
+#     s::Categorical
+#     x::MvNormal
+#     D::InverseGamma
+#     h::Gamma
+#     F::Gamma
+#     b::Bernoulli
+#     Priors(;
+#         p_s::AbstractVector{<:Real} = [0.5, 0.5],
+#         μₓ::AbstractVector{<:Real} = [0, 0, 0],
+#         σₓ::AbstractVector{<:Real} = [0, 0, 0],
+#         # bleachrate_ϕ::Real = 1,
+#         # bleachrate_ψ::Real = 1,
+#         ϕ_D::Real = 1,
+#         χ_D::Real = 1,
+#         ϕ_F::Real = 1,
+#         ψ_F::Real = 1,
+#         ϕ_h::Real = 1,
+#         ψ_h::Real = 1,
+#         p_b::Real = 0.1,
+#     ) = new(
+#         Categorical(p_s),
+#         MvNormal(μₓ, Diagonal(σₓ)),
+#         # Gamma(bleachrate_ϕ, bleachrate_ψ / bleachrate_ϕ),
+#         InverseGamma(ϕ_D, ϕ_D * χ_D),
+#         Gamma(ϕ_h, ψ_h / ϕ_h),
+#         Gamma(ϕ_F, ψ_F / ϕ_F),
+#         Bernoulli(p_b),
+#     )
+# end
+
 struct Priors
-    photostate::Categorical
-    location::MvNormal
-    bleachrate::Gamma
-    diffusion::InverseGamma
-    # emissionrate::Gamma
-    background::Gamma
-    gain::InverseGamma
-    load::Bernoulli
+    x::MvNormal
+    D::InverseGamma
+    h::Gamma
+    F::Gamma
+    b::Bernoulli
     Priors(;
-        photostate_p::AbstractVector{<:Real} = [1, 0],
-        location_μx::Real = 0,
-        location_σx::Real = 0,
-        location_μy::Real = 0,
-        location_σy::Real = 0,
-        location_μz::Real = 0,
-        location_σz::Real = 0,
-        bleachrate_ϕ::Real = 1,
-        bleachrate_ψ::Real = 1,
-        diffusion_ϕ::Real = 1,
-        diffusion_χ::Real = 1,
-        background_ϕ::Real = 1,
-        background_ψ::Real = 1,
-        gain_ϕ::Real = 1,
-        gain_χ::Real = 1,
-        load_p::Real = 0.1,
+        μₓ = [0, 0, 0],
+        σₓ = [0, 0, 0],
+        ϕ_D = 1,
+        χ_D = 1,
+        ϕ_F = 1,
+        ψ_F = 1,
+        ϕ_h = 1,
+        ψ_h = 1,
+        p_b = 0.1,
     ) = new(
-        Categorical(photostate_p),
-        MvNormal(
-            [location_μx, location_μy, location_μz],
-            Diagonal([location_σx, location_σy, location_σz]),
-        ),
-        Gamma(bleachrate_ϕ, bleachrate_ψ / bleachrate_ϕ),
-        InverseGamma(diffusion_ϕ, diffusion_ϕ * diffusion_χ),
-        Gamma(background_ϕ, background_ψ / background_ϕ),
-        InverseGamma(gain_ϕ, gain_ϕ * gain_χ),
-        Bernoulli(load_p),
+        MvNormal(μₓ, Diagonal(σₓ)),
+        InverseGamma(ϕ_D, ϕ_D * χ_D),
+        Gamma(ϕ_h, ψ_h / ϕ_h),
+        Gamma(ϕ_F, ψ_F / ϕ_F),
+        Bernoulli(p_b),
     )
 end
 
@@ -110,25 +123,68 @@ struct Video
     params::ExperimentalParameters
 end
 
-struct GroundTruth
-    particle_num::Int
-    tracks::Array{Float64,3}
-    photostate::Array{Int8,3}
-    diffus_coeff::Vector{Float64}
-    # emissionrate::Float64
-    background::Float64
-    times::Vector{Float64}
-    emitterPSF::Array{Float64,3}
+# mutable struct Sample{Tf<:AbstractFloat,Ti<:Integer}
+#     b::Vector{Bool}
+#     s::Array{Ti,3}
+#     x::Array{Tf,3}
+#     D::Tf
+#     h::Tf
+#     F::Matrix{Tf}
+#     i::Int # iteration
+#     T::Tf # temperature
+#     logℙ::Tf # log posterior
+# end
+
+
+mutable struct Sample{Tf<:AbstractFloat}
+    b::Vector{Bool}
+    x::Array{Tf,3}
+    D::Tf
+    h::Tf
+    F::Matrix{Tf}
+    i::Int # iteration
+    T::Tf # temperature
+    logℙ::Tf # log posterior
+    Sample(T) = new{T}()
+    Sample(x, D, h, F; i = 0, T = 1.0, logℙ = NaN) =
+        new{eltype(x)}(ones(Bool, size(x, 2)), x, D, h, F, i, T, logℙ)
 end
 
-struct Sample
-    spatial_loc::Array{Float64,3}
-    photostate::Array{Int8,3}
-    load::Vector{Bool}
-    emissionrate::Float64
-    background::Float64
+# struct GroundTruth{Tf<:AbstractFloat,Ti<:Integer}
+#     B::Int
+#     x::Array{Tf,3}
+#     s::Array{Ti,3}
+#     D::Vector{Tf}
+#     h::Tf
+#     F::Tf
+#     emitterPSF::Array{Tf,3}
+# end
+
+mutable struct Acceptances
+    x::Int
+    Acceptances() = new(0)
 end
 
-mutable struct MarkovChain
-    x::Float64
+abstract type Annealing end
+
+struct PolynomialAnnealing <: Annealing
+    init_temperature::Real
+    cutoff_iteration::Real
+    order::Real
+    PolynomialAnnealing(init_temperature, cutoff_iteration, order = 2) =
+        new(init_temperature, cutoff_iteration, order)
+end
+
+get_temperature(i, a::PolynomialAnnealing)::Float64 =
+    i >= a.cutoff_iteration || a.init_temperature * (i / a.cutoff_iteration - 1)^a.order
+
+mutable struct Chain{Tf<:AbstractFloat}
+    status::Sample{Tf}
+    samples::Vector{Sample{Tf}}
+    acceptances::Acceptances
+    priors::Priors
+    stride::Int
+    size::Int
+    sizelimit::Int
+    Chain(T) = new{T}()
 end
