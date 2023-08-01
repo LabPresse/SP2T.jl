@@ -9,12 +9,9 @@ Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 MKL = "33e6dc65-8f57-5167-99aa-e5a354878fb2"
 MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
-Octavian = "6fd5a793-0b7e-452c-907f-f8bfe9c57db4"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
-StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 julia = "1"

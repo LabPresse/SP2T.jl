@@ -1,19 +1,38 @@
 using SpBNPTrack
-using Test
+# using Test
 
 # @testset "BNPTrack.jl" begin
 #     # Write your tests here.
 # end
 
-params = SpBNPTrack.ExperimentalParameters()
-priors = SpBNPTrack.Priors(
-    μₓ = [params.pxnumx * params.pxsize / 2, params.pxnumy * params.pxsize / 2, 0],
-    σₓ = [params.pxsize * 2, params.pxsize * 2, 0],
-    p_s = [1, 0],
+params = SpBNPTrack.ExperimentalParameters(
+    Float64,
+    units = ("μm", "s"),
+    length = 100,
+    period = 0.0033,
+    exposure = 0.003,
+    pxnumx = 50,
+    pxnumy = 50,
+    pxsize = 0.133,
+    NA = 1.45,
+    nᵣ = 1.515,
+    λ = 0.665,
+)
+priors = SpBNPTrack.Priors(params)
+
+groundtruth = SpBNPTrack.Sample(Float64)
+SpBNPTrack.simulate!(
+    groundtruth,
+    params = params,
+    priors = priors,
+    diffusion_coefficient = 0.05,
+    emission_rate = 200.0,
+    background_flux = fill(10.0, params.pxnumx, params.pxnumy),
+    emitter_number = 3,
 )
 
-(video, gt) = SpBNPTrack.forward_main(params, priors, emission = 200.0, background = 10.0)
-
-fig = SpBNPTrack.visualize_data_3D(video, gt)
+video = SpBNPTrack.Video(params)
+SpBNPTrack.simulate!(video, groundtruth)
+SpBNPTrack.visualize_data_3D(video, groundtruth)
 
 # fig

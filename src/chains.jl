@@ -10,19 +10,19 @@ function shrink!(chain)
 end
 
 function initialize!(chain::Chain, M::Integer, priors::Priors)
-    if isnothing
+    chain.status = 
     return chain
 end
 
-function initialize!(chain::Chain, initial_sample::Sample)
-    if isnothing
-    return chain
-end
+# function initialize!(chain::Chain, initial_sample::Sample)
+#     if isnothing
+#     return chain
+# end
 
-function initialize(sample::Sample, priors::Priors)
-    chain = Chain
-    return chain
-end
+# function initialize(sample::Sample, priors::Priors)
+#     chain = Chain
+#     return chain
+# end
 
 #! change!
 """

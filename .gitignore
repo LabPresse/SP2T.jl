@@ -1,6 +1,7 @@
-/Manifest.toml
 .vscode
 .gitignore
+.JuliaFormatter.toml
+Manifest.toml
 test/scrach.jl
 test/benchmark*
 backup
