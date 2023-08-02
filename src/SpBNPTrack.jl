@@ -7,13 +7,22 @@ using Flux
 using CUDA
 using GLMakie
 
-include("datatypes.jl")
-include("psfs.jl")
+export ExperimentalParameter
+export Video
+export Prior
+export Sample
+export Chain
+export visualize_data_3D
+
+include("psf.jl")
+include("data.jl")
+include("sample.jl")
+include("annealing.jl")
+include("chain.jl")
+
 include("samplers.jl")
 # include("priors.jl")
 include("forward.jl")
 include("plotting.jl")
-include("chains.jl")
-include("main_fxns.jl")
 
 end

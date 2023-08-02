@@ -1,12 +1,9 @@
 using SpBNPTrack
-# using Test
 
-# @testset "BNPTrack.jl" begin
-#     # Write your tests here.
-# end
+FloatType = Float64
 
-params = SpBNPTrack.ExperimentalParameters(
-    Float64,
+param = ExperimentalParameter(
+    FloatType,
     units = ("μm", "s"),
     length = 100,
     period = 0.0033,
@@ -18,21 +15,33 @@ params = SpBNPTrack.ExperimentalParameters(
     nᵣ = 1.515,
     λ = 0.665,
 )
-priors = SpBNPTrack.Priors(params)
+prior = Prior(param)
 
-groundtruth = SpBNPTrack.Sample(Float64)
+groundtruth = Sample(FloatType)
 SpBNPTrack.simulate!(
     groundtruth,
-    params = params,
-    priors = priors,
+    param = param,
+    prior = prior,
     diffusion_coefficient = 0.05,
     emission_rate = 200.0,
-    background_flux = fill(10.0, params.pxnumx, params.pxnumy),
+    background_flux = fill(10.0, param.pxnumx, param.pxnumy),
     emitter_number = 3,
 )
 
-video = SpBNPTrack.Video(params)
+video = Video(param)
 SpBNPTrack.simulate!(video, groundtruth)
-SpBNPTrack.visualize_data_3D(video, groundtruth)
+visualize_data_3D(video, groundtruth)
 
-# fig
+initial_guess = Sample(FloatType)
+SpBNPTrack.simulate!(
+    initial_guess,
+    param = param,
+    prior = prior,
+    diffusion_coefficient = 0.05,
+    emission_rate = 200.0,
+    background_flux = fill(10.0, param.pxnumx, param.pxnumy),
+    emitter_number = 5,
+)
+
+chain = Chain(FloatType)
+SpBNPTrack.initialize!(chain, max_emitter_num = 100, prior = prior)

@@ -86,7 +86,7 @@ end
 
 function visualize_data_3D(v::Video, s::Sample)
     data = v.data
-    p = v.params
+    p = v.param
     x = s.x
     B = size(x, 2)
 
