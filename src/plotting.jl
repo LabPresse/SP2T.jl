@@ -90,7 +90,7 @@ function visualize_data_3D(v::Video, s::Sample)
     x = s.x
     B = size(x, 2)
 
-    g = Array{get_type(s),3}(undef, p.pxnumx, p.pxnumy, p.length)
+    g = Array{ftypeof(s),3}(undef, p.pxnumx, p.pxnumy, p.length)
     simulate!(g, s.x, p.pxboundsx, p.pxboundsy, p.PSF)
 
     t = range(start=0, step=p.period, length=p.length)

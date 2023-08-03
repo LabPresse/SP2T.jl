@@ -23,11 +23,6 @@ struct Prior
     )
 end
 
-Prior(params::ExperimentalParameter) = Prior(
-    μₓ = [params.pxnumx * params.pxsize / 2, params.pxnumy * params.pxsize / 2, 0],
-    σₓ = [params.pxsize * 2, params.pxsize * 2, 0],
-)
-
 mutable struct Acceptances
     x::Int
     Acceptances() = new(0)
@@ -36,39 +31,16 @@ end
 mutable struct Chain{FT<:AbstractFloat}
     status::FullSample{FT}
     samples::Vector{Sample{FT}}
+    annealing::Annealing
     acceptances::Acceptances
     prior::Prior
     stride::Int
     sizelimit::Int
-    Chain(FT) = new{FT}()
-    Chain(
-        status::FullSample{FT},
-        samples::Vector{Sample{FT}},
-        acceptances::Acceptances,
-        prior::Prior,
-        stride::Int,
-        sizelimit::Int,
-    ) where {FT<:AbstractFloat} =
-        new{FT}(status, samples, acceptances, prior, stride, sizelimit)
 end
-
-Chain(;
-    initial_guesss::Sample,
-    max_emitter_num::Integer,
-    prior::Prior,
-    sizelimit::Integer,
-) = Chain(
-    FullSample(initial_guesss, max_emitter_num),
-    [initial_guesss],
-    Acceptances(),
-    prior,
-    1,
-    sizelimit,
-)
 
 chainlength(c::Chain) = length(c.samples)
 
-get_type(c::Chain{FT}) where {FT} = FT
+ftypeof(c::Chain{FT}) where {FT} = FT
 
 isfull(c::Chain) = chainlength(c) >= c.sizelimit
 
@@ -78,19 +50,6 @@ isfull(c::Chain) = chainlength(c) >= c.sizelimit
 Shrink the chain of samples by only keeping the odd number samples.
 """
 shrink!(c::Chain) = deleteat!(c.samples, 2:2:lastindex(c.samples))
-
-function initialize!(
-    c::Chain;
-    initial_guess::Sample,
-    max_emitter_num::Integer,
-    prior::Prior,
-    annealing::Annealing,
-)
-    M = max_emitter_num
-    c.status, c.prior = FullSample(initial_guess, M)
-    c.prior = prior
-    return c
-end
 
 # function initialize!(chain::Chain, initial_sample::Sample)
 #     if isnothing

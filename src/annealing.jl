@@ -4,12 +4,11 @@ struct PolynomialAnnealing{FT<:AbstractFloat} <: Annealing
     T₀::FT
     𝑖::FT
     order::Int
-    PolynomialAnnealing(
-        FT::DataType = Float64;
+    PolynomialAnnealing{FT}(
         init_temperature::Real = 1,
         cutoff_iteration::Real = 1,
         order::Integer = 2,
-    ) = new{FT}(init_temperature, cutoff_iteration, order)
+    ) where {FT<:AbstractFloat} = new{FT}(init_temperature, cutoff_iteration, order)
 end
 
 function get_temperature(i::Integer, a::PolynomialAnnealing)

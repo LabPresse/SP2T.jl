@@ -17,24 +17,21 @@ param = ExperimentalParameter(
 )
 prior = Prior(param)
 
-groundtruth = Sample(FloatType)
-SpBNPTrack.simulate!(
-    groundtruth,
+groundtruth = Sample(
+    FloatType,
     param = param,
     prior = prior,
-    diffusion_coefficient = 0.05,
-    emission_rate = 200.0,
-    background_flux = fill(10.0, param.pxnumx, param.pxnumy),
+    diffusion_coefficient = FloatType(0.05),
+    emission_rate = FloatType(200),
+    background_flux = fill(FloatType(10.0), param.pxnumx, param.pxnumy),
     emitter_number = 3,
 )
 
-video = Video(param)
-SpBNPTrack.simulate!(video, groundtruth)
+video = Video(param, groundtruth)
 visualize_data_3D(video, groundtruth)
 
-initial_guess = Sample(FloatType)
-SpBNPTrack.simulate!(
-    initial_guess,
+initial_guess = Sample(
+    FloatType,
     param = param,
     prior = prior,
     diffusion_coefficient = 0.05,
@@ -43,5 +40,10 @@ SpBNPTrack.simulate!(
     emitter_number = 5,
 )
 
-chain = Chain(FloatType)
-SpBNPTrack.initialize!(chain, max_emitter_num = 100, prior = prior)
+chain = Chain(
+    initial_guess = initial_guess,
+    max_emitter_num = 100,
+    prior = prior,
+    sizelimit = 100,
+)
+# SpBNPTrack.initialize!(chain, max_emitter_num = 100, prior = prior)
