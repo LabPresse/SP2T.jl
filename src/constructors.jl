@@ -27,7 +27,8 @@ function Sample(
     emission_rate::Real,
     background_flux::Matrix{<:Real},
 )
-    ftypeof(param) ≡ FloatType || @warn "Float type mismatch!"
+    ftypeof(param) ≡ FloatType ||
+        @warn "The float type in the argument is different from that of the experimental parameter!"
     (B, N, T, D, h, F) = (
         emitter_number,
         param.length,
@@ -42,7 +43,8 @@ function Sample(
 end
 
 function Video(p::ExperimentalParameter, s::Sample)
-    ftypeof(p) ≡ ftypeof(s) || @warn "Float type mismatch!"
+    ftypeof(p) ≡ ftypeof(s) ||
+        @warn "Float type mismatch between the experimental parameter and the sample!"
     g = Array{ftypeof(p),3}(undef, p.pxnumx, p.pxnumy, p.length)
     d = BitArray{3}(undef, p.pxnumx, p.pxnumy, p.length)
     simulate!(g, s.x, p.pxboundsx, p.pxboundsy, p.PSF)
@@ -75,3 +77,23 @@ Chain(;
     1,
     sizelimit,
 )
+
+function Chain(;
+    initial_guess::Sample{FT},
+    max_emitter_num::Integer,
+    prior::Prior,
+    sizelimit::Integer,
+    annealing::Annealing,
+) where {FT<:AbstractFloat}
+    ftypeof(sample) ≡ ftypof(annealing) ||
+        @warn "Float type missmatch between initial_guss and annealing!"
+    return Chain{FT}(
+        FullSample(initial_guess, max_emitter_num),
+        [initial_guess],
+        PolynomialAnnealing{FT}(),
+        Acceptances(),
+        prior,
+        1,
+        sizelimit,
+    )
+end

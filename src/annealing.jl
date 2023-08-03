@@ -19,3 +19,5 @@ function get_temperature(i::Integer, a::PolynomialAnnealing)
         return a.T₀ * (i / a.𝑖 - 1)^a.order
     end
 end
+
+ftypof(p::PolynomialAnnealing{FT}) where {FT} = FT
