@@ -49,24 +49,6 @@ end
 
 ftypeof(p::ExperimentalParameter{FT}) where {FT} = FT
 
-# convert(FT::AbstractFloat, params::ExperimentalParameter) = ExperimentalParameter{FT}(
-#     params.units,
-#     params.length,
-#     params.period,
-#     params.exposure,
-#     params.pxboundsx,
-#     params.pxboundsy,
-#     params.pxnumx,
-#     params.pxnumy,
-#     params.pxsize,
-#     params.pxarea,
-#     params.pxareatimesexposure,
-#     params.NA,
-#     params.nᵣ,
-#     params.λ,
-#     params.PSF,
-# )
-
 struct Video
     data::BitArray{3}
     param::ExperimentalParameter

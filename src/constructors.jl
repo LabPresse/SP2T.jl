@@ -52,45 +52,22 @@ function Video(p::ExperimentalParameter, s::Sample)
     return Video(d, p)
 end
 
-# function Chain(initial_guess::Sample,
-#     max_emitter_num::Integer,
-#     prior::Prior,
-#     annealing::Annealing,
-# )
-#     M = max_emitter_num
-#     c.status, c.prior = FullSample(initial_guess, M)
-#     c.prior = prior
-#     return Chain(FullSample(initial_guess, M), )
-# end
-
-Chain(;
-    initial_guess::Sample{FT},
-    max_emitter_num::Integer,
-    prior::Prior,
-    sizelimit::Integer,
-) where {FT<:AbstractFloat} = Chain{FT}(
-    FullSample(initial_guess, max_emitter_num),
-    [initial_guess],
-    PolynomialAnnealing{FT}(),
-    Acceptances(),
-    prior,
-    1,
-    sizelimit,
-)
-
 function Chain(;
     initial_guess::Sample{FT},
     max_emitter_num::Integer,
     prior::Prior,
     sizelimit::Integer,
-    annealing::Annealing,
+    annealing::Union{Annealing,Nothing} = nothing,
 ) where {FT<:AbstractFloat}
-    ftypeof(sample) ≡ ftypof(annealing) ||
+    if isnothing(annealing)
+        annealing = PolynomialAnnealing{FT}()
+    elseif !(ftypeof(initial_guess) ≡ ftypof(annealing))
         @warn "Float type missmatch between initial_guss and annealing!"
+    end
     return Chain{FT}(
         FullSample(initial_guess, max_emitter_num),
         [initial_guess],
-        PolynomialAnnealing{FT}(),
+        annealing,
         Acceptances(),
         prior,
         1,

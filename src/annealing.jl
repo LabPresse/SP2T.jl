@@ -21,3 +21,4 @@ function get_temperature(i::Integer, a::PolynomialAnnealing)
 end
 
 ftypof(p::PolynomialAnnealing{FT}) where {FT} = FT
+ftypof(p::Nothing) = Nothing
