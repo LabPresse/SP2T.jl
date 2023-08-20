@@ -6,15 +6,19 @@ mutable struct Sample{FT<:AbstractFloat} <: AbstractSample
     h::FT
     F::Matrix{FT}
     i::Int # iteration
-    T::FT # temperature
+    𝕋::FT # temperature
     logℙ::FT # log posterior
-    Sample(FT) = new{FT}()
-    Sample(
+    Sample(x::Array{FT,3}, D::FT, h::FT, F::Matrix{FT}) where {FT<:AbstractFloat} =
+        new{FT}(x, D, h, F, 0, 1, FT(NaN))
+    Sample{FT}(
         x::Array{FT,3},
         D::FT,
         h::FT,
         F::Matrix{FT},
-    ) where {FT<:AbstractFloat} = new{FT}(x, D, h, F, 0, 1, FT(NaN))
+        i::Int,
+        𝕋::FT,
+        logℙ::FT,
+    ) where {FT<:AbstractFloat} = new{FT}(x, D, h, F, i, 𝕋, logℙ)
 end
 
 get_B(s::Sample) = size(s.x, 2)
@@ -29,7 +33,7 @@ mutable struct FullSample{FT<:AbstractFloat} <: AbstractSample
     h::FT
     F::Matrix{FT}
     i::Int # iteration
-    T::FT # temperature
+    𝕋::FT # temperature
     logℙ::FT # log posterior
     FullSample(FT) = new{FT}()
     FullSample(
@@ -49,3 +53,7 @@ get_B(s::FullSample) = count(s.b)
 get_M(s::FullSample) = size(s.x, 2)
 
 ftypeof(s::FullSample{FT}) where {FT} = FT
+
+view_x(s::FullSample) = @view s.x[:, 1:get_B(s), :]
+
+view_𝕩(s::FullSample) = @view s.x[:, get_B(s)+1:end, :]

@@ -30,4 +30,7 @@ include("samplers.jl")
 include("forward.jl")
 include("plotting.jl")
 
+include("diffusion.jl")
+include("trajectory.jl")
+
 end

@@ -1,20 +1,21 @@
-Prior(params::ExperimentalParameter) = Prior(
+Prior(params::ExperimentalParameter{FT}) where {FT} = Prior{FT}(
     μₓ = [params.pxnumx * params.pxsize / 2, params.pxnumy * params.pxsize / 2, 0],
     σₓ = [params.pxsize * 2, params.pxsize * 2, 0],
 )
 
-Sample(s::FullSample) = Sample(s.x[:, s.b, :], s.D, s.h, s.F, s.i, s.T, s.logℙ)
+Sample(s::FullSample{FT}) where {FT} =
+    Sample{FT}(s.x[:, s.b, :], s.D, s.h, s.F, s.i, s.𝕋, s.logℙ)
 
 # Sample(s::FullSample) = Sample(s.x[:, 1:get_B(s), :], s.D, s.h, s.F, s.i, s.T, s.logℙ)
 
 function FullSample(s::Sample{FT}, M::Integer) where {FT<:AbstractFloat}
     (~, B, N) = size(s.x)
     M < B && error("Weak limit is too small!")
-    b = BitVector(zeros(Bool, 5))
+    b = BitVector(zeros(Bool, M))
     b[1:B] .= true
     x = Array{FT,3}(undef, 3, M, N)
     x[:, 1:B, :] = s.x
-    return FullSample(b, x, s.D, s.h, s.F, iszero(s.i) ? 1 : s.i, s.T, s.logℙ)
+    return FullSample(b, x, s.D, s.h, s.F, iszero(s.i) ? 1 : s.i, s.𝕋, s.logℙ)
     #TODO initialize T and logℙ better
 end
 

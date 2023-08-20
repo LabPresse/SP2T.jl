@@ -47,3 +47,4 @@ chain = Chain(
     sizelimit = 100,
 )
 # SpBNPTrack.initialize!(chain, max_emitter_num = 100, prior = prior)
+SpBNPTrack.run_MCMC!(chain, video, num_iter = 100)
