@@ -240,7 +240,7 @@ function run_MCMC!(
     end
     while isnothing(num_iter) || iter < num_iter
         # update_off_x!(c.status, c.prior.x, v.param)
-        # update_D!(c.status, v.param)
+        update_D!(c.status, v.param)
         update_on_x!(c.status, v.data, v.param)
         extend!(c)
         iter += 1
