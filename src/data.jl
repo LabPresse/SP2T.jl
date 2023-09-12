@@ -1,4 +1,4 @@
-struct ExperimentalParameter{FT<:AbstractFloat}
+mutable struct ExperimentalParameter{FT<:AbstractFloat}
     units::Tuple{String,String}
     length::Int
     period::FT
@@ -9,20 +9,19 @@ struct ExperimentalParameter{FT<:AbstractFloat}
     pxnumy::Int
     pxsize::FT
     pxarea::FT
-    pxareatimesexposure::FT
+    darkcounts::AbstractMatrix{FT}
     NA::FT
     nᵣ::FT
     λ::FT
-    PSF::AbstractPSF
+    PSF::AbstractPSF{FT}
     ExperimentalParameter(
         FT::DataType;
         units::Tuple{String,String} = ("μm", "s"),
         length::Integer,
         period::Real,
         exposure::Real,
-        pxnumx::Integer,
-        pxnumy::Integer,
         pxsize::Real,
+        darkcounts::AbstractMatrix{<:Real},
         NA::Real,
         nᵣ::Real,
         λ::Real,
@@ -33,23 +32,23 @@ struct ExperimentalParameter{FT<:AbstractFloat}
         length,
         period,
         exposure,
-        collect(range(offsetx, step = pxsize, length = pxnumx + 1)),
-        collect(range(offsety, step = pxsize, length = pxnumy + 1)),
-        pxnumx,
-        pxnumy,
+        range(offsetx, step = pxsize, length = size(darkcounts, 1) + 1),
+        range(offsety, step = pxsize, length = size(darkcounts, 2) + 1),
+        size(darkcounts, 1),
+        size(darkcounts, 2),
         pxsize,
         pxsize^2,
-        pxsize^2 * exposure,
+        darkcounts,
         NA,
         nᵣ,
         λ,
-        CircularGaussianLorenzian(NA, nᵣ, λ),
+        CircularGaussianLorenzian{FT}(NA, nᵣ, λ),
     )
 end
 
 ftypeof(p::ExperimentalParameter{FT}) where {FT} = FT
 
-struct Video
-    data::BitArray{3}
-    param::ExperimentalParameter
+mutable struct Video{FT<:AbstractFloat}
+    data::AbstractArray{Bool,3}
+    param::ExperimentalParameter{FT}
 end

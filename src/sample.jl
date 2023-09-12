@@ -4,56 +4,61 @@ mutable struct Sample{FT<:AbstractFloat} <: AbstractSample
     x::Array{FT,3}
     D::FT
     h::FT
-    F::Matrix{FT}
     i::Int # iteration
-    𝕋::FT # temperature
-    logℙ::FT # log posterior
-    Sample(x::Array{FT,3}, D::FT, h::FT, F::Matrix{FT}) where {FT<:AbstractFloat} =
-        new{FT}(x, D, h, F, 0, 1, FT(NaN))
+    𝑇::FT # temperature
+    ln𝒫::FT # log posterior
+    Sample(x::Array{FT,3}, D::FT, h::FT) where {FT<:AbstractFloat} =
+        new{FT}(x, D, h, 0, 1, FT(NaN))
+    Sample(;
+        tracks::Array{FT,3},
+        diffusion_coefficient::FT,
+        emission_rate::FT,
+    ) where {FT<:AbstractFloat} =
+        new{FT}(tracks, diffusion_coefficient, emission_rate, 0, 1, FT(NaN))
     Sample{FT}(
         x::Array{FT,3},
         D::FT,
         h::FT,
-        F::Matrix{FT},
         i::Int,
-        𝕋::FT,
-        logℙ::FT,
-    ) where {FT<:AbstractFloat} = new{FT}(x, D, h, F, i, 𝕋, logℙ)
+        𝑇::FT,
+        ln𝒫::FT,
+    ) where {FT<:AbstractFloat} = new{FT}(x, D, h, i, 𝑇, ln𝒫)
 end
 
 get_B(s::Sample) = size(s.x, 2)
 
 ftypeof(s::Sample{FT}) where {FT} = FT
 
-# FullSample contains auxiliary variables
-mutable struct FullSample{FT<:AbstractFloat} <: AbstractSample
-    b::BitVector
-    x::Array{FT,3}
-    D::FT
-    h::FT
-    F::Matrix{FT}
-    i::Int # iteration
-    𝕋::FT # temperature
-    logℙ::FT # log posterior
-    FullSample(FT) = new{FT}()
-    FullSample(
-        b::BitVector,
-        x::Array{FT,3},
-        D::FT,
-        h::FT,
-        F::Matrix{FT},
-        i::Int = 0,
-        T::FT = 1.0,
-        logℙ::FT = NaN,
-    ) where {FT<:AbstractFloat} = new{FT}(b, x, D, h, F, i, T, logℙ)
-end
+# # FullSample contains auxiliary variables
+# mutable struct FullSample{FT<:AbstractFloat} <: AbstractSample
+#     b::BitVector
+#     x::Array{FT,3}
+#     D::FT
+#     h::FT
+#     F::Matrix{FT}
+#     G::Array{FT,3}
+#     i::Int # iteration
+#     𝑇::FT # temperature
+#     ln𝒫::FT # log posterior
+#     FullSample(
+#         b::BitVector,
+#         x::Array{FT,3},
+#         D::FT,
+#         h::FT,
+#         F::Matrix{FT},
+#         G::Array{FT,3},
+#         i::Int = 0,
+#         𝑇::FT = 1.0,
+#         ln𝒫::FT = NaN,
+#     ) where {FT<:AbstractFloat} = new{FT}(b, x, D, h, F, G, i, 𝑇, ln𝒫)
+# end
 
-get_B(s::FullSample) = count(s.b)
+# get_B(s::FullSample) = count(s.b)
 
-get_M(s::FullSample) = size(s.x, 2)
+# get_M(s::FullSample) = size(s.x, 2)
 
-ftypeof(s::FullSample{FT}) where {FT} = FT
+# ftypeof(s::FullSample{FT}) where {FT} = FT
 
-view_x(s::FullSample) = @view s.x[:, 1:get_B(s), :]
+# view_x(s::FullSample) = @view s.x[:, 1:get_B(s), :]
 
-view_𝕩(s::FullSample) = @view s.x[:, get_B(s)+1:end, :]
+# view_𝕩(s::FullSample) = @view s.x[:, get_B(s)+1:end, :]

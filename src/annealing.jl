@@ -1,6 +1,6 @@
-abstract type Annealing end
+abstract type Annealing{FT} end
 
-struct PolynomialAnnealing{FT<:AbstractFloat} <: Annealing
+struct PolynomialAnnealing{FT<:AbstractFloat} <: Annealing{FT}
     T₀::FT
     𝑖::FT
     order::Int
