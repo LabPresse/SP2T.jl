@@ -7,9 +7,17 @@ using SpecialFunctions
 using LogExpFunctions
 using LinearAlgebra
 using Random
+
+# GPU 
 using Flux
 using CUDA
+
+# For visualization
 using GLMakie
+using ColorSchemes
+
+# Progress Meter
+using ProgressMeter
 
 export ExperimentalParameter
 export PriorParameter
@@ -19,7 +27,7 @@ export Sample
 export Chain
 
 export simulate_sample
-export visualize_data_3D
+export visualize
 
 # The files in the first "include" block ONLY contains struct definitions, basic constructors, and simple utility functions.
 include("psf.jl")

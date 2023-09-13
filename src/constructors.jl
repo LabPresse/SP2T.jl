@@ -4,7 +4,7 @@ Prior(param::ExperimentalParameter{FT}) where {FT} = Prior{FT}(
 )
 
 Sample(s::ChainStatus{FT}) where {FT} =
-    Sample{FT}(s.x.value[:, s.b.value, :], s.D.value, s.h.value, s.i, s.𝑇, s.ln𝒫)
+    Sample{FT}(s.x.value[:, s.b.value, :] |> cpu, s.D.value, s.h.value, s.i, s.𝑇, s.ln𝒫)
 
 # Sample(s::ChainStatus) = Sample(s.x[:, 1:get_B(s), :], s.D, s.h, s.F, s.i, s.T, s.ln𝒫)
 
@@ -50,7 +50,7 @@ function ChainStatus(
         M,
         N,
         MvNormal(prior_param.μx, prior_param.σx),
-        MvNormal(prior_param.μx, prior_param.σx),
+        MvNormal([exp_param.PSF.σ_ref, exp_param.PSF.σ_ref, exp_param.PSF.z_ref] ./ 2),
     )
     D = set_D(s.D, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
     h = set_h(s.h, Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh), Beta())

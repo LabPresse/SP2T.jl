@@ -1,11 +1,13 @@
 using SpBNPTrack
+using Random
 
+Random.seed!(2)
 FloatType = Float32
 
 param = ExperimentalParameter(
     FloatType,
     units = ("μm", "s"),
-    length = 100,
+    length = 256,
     period = 0.0033,
     exposure = 0.003,
     pxsize = 0.133,
@@ -25,7 +27,7 @@ groundtruth = simulate_sample(
 )
 
 video = Video(param, groundtruth)
-# visualize_data_3D(video, groundtruth)
+visualize(video, groundtruth)
 
 initial_guess = simulate_sample(
     param = param,
@@ -46,11 +48,13 @@ prior_param = PriorParameter(
 )
 
 chain = Chain(
-    initial_guess = initial_guess,
+    initial_guess = groundtruth,
     exp_param = video.param,
     max_emitter_num = 100,
     prior_param = prior_param,
-    sizelimit = 100,
+    sizelimit = 1000,
 )
 
-SpBNPTrack.run_MCMC!(chain, video, num_iter = 100, run_on_gpu = true)
+@time SpBNPTrack.run_MCMC!(chain, video, num_iter = 100_000, run_on_gpu = true);
+
+visualize(video, groundtruth, chain.samples)
