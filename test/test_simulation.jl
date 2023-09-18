@@ -29,4 +29,5 @@ groundtruth = simulate_sample(
 video = Video(param, groundtruth)
 visualize(video, groundtruth)
 
-jldsave("example.jld2"; video)
+jldsave("example_video.jld2"; video)
+jldsave("example_groundtruth.jld2"; groundtruth)
