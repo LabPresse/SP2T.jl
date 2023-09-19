@@ -12,6 +12,9 @@ using Random
 using Flux
 using CUDA
 
+# # IO
+# using JLD2
+
 # For visualization
 using GLMakie
 using ColorSchemes
@@ -28,6 +31,7 @@ export Chain
 
 export simulate_sample
 export visualize
+export ftypeof
 
 # The files in the first "include" block ONLY contains struct definitions, basic constructors, and simple utility functions.
 include("psf.jl")

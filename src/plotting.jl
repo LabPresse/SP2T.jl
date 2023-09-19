@@ -83,8 +83,7 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
     x = gt.x
     B = size(x, 2)
 
-    g = Array{ftypeof(gt),3}(undef, p.pxnumx, p.pxnumy, p.length)
-    simulate!(g, gt.x, p.pxboundsx, p.pxboundsy, p.PSF)
+    g = get_pxPSF(gt.x, p.pxboundsx, p.pxboundsy, p.PSF)
 
     # t = range(start = 0, step = p.period, length = p.length)
     t = 1:p.length

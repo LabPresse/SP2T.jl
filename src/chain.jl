@@ -92,6 +92,8 @@ view_on_x(s::ChainStatus) = @view s.x.value[:, 1:get_B(s), :]
 
 view_off_x(s::ChainStatus) = @view s.x.value[:, get_B(s)+1:end, :]
 
+viewdiag(M::AbstractMatrix) = view(M, diagind(M))
+
 function default_init_pos_prior(param::ExperimentalParameter)
     Nx, Ny, a = param.pxnumx, param.pxnumy, param.pxsize
     μₓ = [Nx * a / 2, Ny * a / 2, 0]
@@ -285,10 +287,12 @@ function run_MCMC!(
     run_on_gpu::Bool = true,
 )
     iter::Int64 = 0
+    device::Device = CPU()
     if run_on_gpu && has_cuda_gpu()
         CUDA.allowscalar(false)
         to_gpu!(c)
         to_gpu!(v)
+        device = GPU()
     end
     # while isnothing(num_iter) || iter < num_iter
     #     iter += 1
@@ -301,9 +305,8 @@ function run_MCMC!(
 
     @showprogress 1 "Computing..." for iter = 1:num_iter
         c.status.i = iter
-        # update_off_x!(c.status, c.prior.x, v.param)
         # update_D!(c.status, v.param)
-        update_on_x!(c.status, v.data, v.param)
+        update_x!(c.status, v.data, v.param, device)
         if mod(iter, c.stride) == 0
             extend!(c)
         end

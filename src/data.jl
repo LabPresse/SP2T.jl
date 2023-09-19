@@ -1,3 +1,9 @@
+abstract type Device end
+
+struct CPU <: Device end
+
+struct GPU <: Device end
+
 mutable struct ExperimentalParameter{FT<:AbstractFloat}
     units::Tuple{String,String}
     length::Int
@@ -52,3 +58,5 @@ mutable struct Video{FT<:AbstractFloat}
     data::AbstractArray{Bool,3}
     param::ExperimentalParameter{FT}
 end
+
+ftypeof(p::Video{FT}) where {FT} = FT

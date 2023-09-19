@@ -9,7 +9,7 @@ optimize operations on a time point.
 """
 function evolve!(x::AbstractArray{FT,3}, σ::FT) where {FT<:AbstractFloat}
     (~, M, N) = size(x)
-    x[:, :, 2:N] = σ .* randn(eltype(x), 3, M, N - 1)
+    x[:, :, 2:N] = σ .* randn(FT, 3, M, N - 1)
     cumsum!(x, x, dims = 3)
     return x
 end
@@ -19,46 +19,66 @@ function simulate!(
     prior::Distribution,
     D::FT,
     τ::FT,
+    ::GPU,
 ) where {FT<:AbstractFloat}
-    x[:, :, 1] = rand(prior, size(x, 2))
-    evolve!(x, sqrt(2 * D * τ))
+    (~, M, N) = size(x)
+    σ = sqrt(2 * D * τ)
+    x .= σ .* CUDA.randn(FT, 3, M, N)
+    CUDA.@allowscalar x[:, :, 1] = rand(prior, M)
+    cumsum!(x, x, dims = 3)
+    return x
+end
+
+function simulate!(
+    x::AbstractArray{FT,3},
+    prior::Distribution,
+    D::FT,
+    τ::FT,
+    ::CPU,
+) where {FT<:AbstractFloat}
+    (~, M, N) = size(x)
+    σ = sqrt(2 * D * τ)
+    x[:, :, 1] .= rand(prior, M)
+    x[:, :, 2:N] .= σ .* randn(FT, 3, M, N - 1)
+    cumsum!(x, x, dims = 3)
     return x
 end
 
 # forward functions that calculate contributions from emitters
+get_σ_sqrt2(
+    x::AbstractArray{FT,3},
+    PSF::CircularGaussianLorenzian{FT},
+) where {FT<:AbstractFloat} =
+    PSF.σ_ref_sqrt2 .* sqrt.(1 .+ (view(x, 3:3, :, :) ./ PSF.z_ref) .^ 2)
+
 function get_erf(x, xᵖ, σ)
     U = (xᵖ .- x) ./ σ
     return @views erf.(U[1:end-1, :, :], U[2:end, :, :]) ./ 2
 end
 
-function simulate!(
-    g::AbstractArray{FT,3},
+function get_pxPSF!(
+    G::AbstractArray{FT,3},
     x::AbstractArray{FT,3},
     xᵖ::AbstractVector{FT},
     yᵖ::AbstractVector{FT},
-    PSF::CircularGaussianLorenzian{FT},
+    PSF::AbstractPSF{FT},
 ) where {FT<:AbstractFloat}
-    σ_sqrt2 = PSF.σ_ref_sqrt2 .* sqrt.(1 .+ (view(x, 3:3, :, :) ./ PSF.z_ref) .^ 2)
+    σ_sqrt2 = get_σ_sqrt2(x, PSF)
     U = get_erf(view(x, 1:1, :, :), xᵖ, σ_sqrt2)
     V = get_erf(view(x, 2:2, :, :), yᵖ, σ_sqrt2)
-    return batched_mul!(g, U, batched_adjoint(V))
+    return batched_mul!(G, U, batched_adjoint(V))
 end
 
-function simulate_G(
+function get_pxPSF(
     x::AbstractArray{FT,3},
     xᵖ::AbstractVector{FT},
     yᵖ::AbstractVector{FT},
-    PSF::CircularGaussianLorenzian{FT},
+    PSF::AbstractPSF{FT},
 ) where {FT<:AbstractFloat}
-    σ_sqrt2 = PSF.σ_ref_sqrt2 .* sqrt.(1 .+ (view(x, 3:3, :, :) ./ PSF.z_ref) .^ 2)
-    U = get_erf(view(x, 1:1, :, :), xᵖ, σ_sqrt2)
-    V = get_erf(view(x, 2:2, :, :), yᵖ, σ_sqrt2)
-    return batched_mul(U, batched_adjoint(V))
+    G = similar(x, length(xᵖ) - 1, length(yᵖ) - 1, size(x, 3))
+    get_pxPSF!(G, x, xᵖ, yᵖ, PSF)
+    return G
 end
-
-# sim_frames(u) = rand(size(u)) .< -expm1.(-u)
-
-# g = sim_img(x, param.pxboundsx, param.pxboundsy, param.PSF)
 
 function simulate!(
     v::BitArray{3},
@@ -136,6 +156,7 @@ function simulate_sample(;
     diffusion_coefficient::Real,
     emission_rate::Real,
     init_pos_prior::Union{Missing,MultivariateDistribution} = missing,
+    device::Device = CPU(),
 ) where {FT}
     B, N, T, D, h = emitter_number,
     param.length,
@@ -146,6 +167,6 @@ function simulate_sample(;
         init_pos_prior = default_init_pos_prior(param)
     end
     x = Array{FT,3}(undef, 3, B, N)
-    simulate!(x, init_pos_prior, D, T)
+    simulate!(x, init_pos_prior, D, T, device)
     return Sample(x, D, h)
 end

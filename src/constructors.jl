@@ -54,7 +54,7 @@ function ChainStatus(
     )
     D = set_D(s.D, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
     h = set_h(s.h, Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh), Beta())
-    G = simulate_G(s.x, exp_param.pxboundsx, exp_param.pxboundsy, exp_param.PSF)
+    G = get_pxPSF(s.x, exp_param.pxboundsx, exp_param.pxboundsy, exp_param.PSF)
     return ChainStatus(b, x, D, h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
     #TODO initialize 𝑇 and ln𝒫 better
 end
@@ -84,7 +84,7 @@ end
 function Video(p::ExperimentalParameter, s::Sample)
     ftypeof(p) ≡ ftypeof(s) ||
         @warn "Float type mismatch between the experimental parameter and the sample!"
-    G = simulate_G(s.x, p.pxboundsx, p.pxboundsy, p.PSF)
+    G = get_pxPSF(s.x, p.pxboundsx, p.pxboundsy, p.PSF)
     data = simulate_w(G, s.h, p.darkcounts, p.exposure)
     return Video(data, p)
 end

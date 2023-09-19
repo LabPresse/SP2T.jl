@@ -32,6 +32,6 @@ chain = Chain(
     sizelimit = 1000,
 )
 
-@time SpBNPTrack.run_MCMC!(chain, video, num_iter = 100, run_on_gpu = true);
+@time SpBNPTrack.run_MCMC!(chain, video, num_iter = 500, run_on_gpu = true);
 
 visualize(video, groundtruth, chain.samples)
