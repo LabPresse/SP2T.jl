@@ -51,7 +51,11 @@ get_σ_sqrt2(
 ) where {FT<:AbstractFloat} =
     PSF.σ_ref_sqrt2 .* sqrt.(1 .+ (view(x, 3:3, :, :) ./ PSF.z_ref) .^ 2)
 
-function get_erf(x, xᵖ, σ)
+function get_erf(
+    x::AbstractArray{FT},
+    xᵖ::AbstractArray{FT},
+    σ::AbstractArray{FT},
+) where {FT<:AbstractFloat}
     U = (xᵖ .- x) ./ σ
     return @views erf.(U[1:end-1, :, :], U[2:end, :, :]) ./ 2
 end

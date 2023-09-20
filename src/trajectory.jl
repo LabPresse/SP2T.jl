@@ -56,7 +56,7 @@ end
 
 neighbour_indices(n::Integer, N::Integer) = n == 1 ? 2 : n-1:2:min(n + 1, N)
 
-neighbourx(x::AbstractArray{<:AbstractFloat,3}, n::Integer, N::Integer) =
+view_neighbour(x::AbstractArray{<:AbstractFloat,3}, n::Integer, N::Integer) =
     view(x, :, :, neighbour_indices(n, N))
 
 get_Δln𝒫_x₁(
@@ -91,22 +91,6 @@ function get_Δln𝒫_x(
     return Δln𝒫
 end
 
-function get_Δln𝒫_x(
-    xᵖ::AbstractArray{FT,3},
-    xᵒ::AbstractArray{FT,3},
-    n::Integer,
-    τ::FT,
-    D::FT,
-    𝒫::MvNormal,
-    device::Device,
-) where {FT<:AbstractFloat}
-    N = size(xᵒ, 3)
-    ΔΔx² = get_Δx²(view(xᵖ, :, :, n), view(xᵒ, :, :, n), neighbourx(xᵒ, n, N))
-    Δln𝒫 = -ΔΔx² / (4 * D * τ)
-    n == 1 && (Δln𝒫 += get_Δln𝒫_x₁(view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), 𝒫, device))
-    return Δln𝒫
-end
-
 function update_on_x!(
     s::ChainStatus,
     w::AbstractArray{Bool},
@@ -115,58 +99,36 @@ function update_on_x!(
 )
     N, F = param.length, param.darkcounts
     h, fourDτ = s.h.value, 4 * s.D.value * param.period
-    𝒫, 𝒬, count = s.x.𝒫, s.x.𝒬, s.x.count
+    𝒫, 𝒬, counter = s.x.𝒫, s.x.𝒬, view(s.x.count, :, 2)
     xᵒ, Gᵒ = view_on_x(s), s.G
     xᵖ, Gᵖ = get_xᵖ(xᵒ, 𝒬, param, device)
     Δlnℒ = get_Δlnℒ_x(w, h, Gᵖ, Gᵒ, F, device)
-    for n in randperm(N)
-        ln𝓊 = log(rand())
-        xᵖₙ, xᵒₙ, xᶜₙ = view(xᵖ, :, :, n), view(xᵒ, :, :, n), neighbourx(xᵒ, n, N)
-        ln𝓇 = Δlnℒ[n] + get_Δln𝒫_x(xᵖₙ, xᵒₙ, xᶜₙ, fourDτ, n == 1, 𝒫, device)
-        if ln𝓇 > ln𝓊
-            xᵒ[:, :, n] .= xᵖ[:, :, n]
-            count[1] += 1
-        end
-        count[2] += 1
+    accepted = BitVector(undef, N)
+    @inbounds for n in randperm(N)
+        xᵖₙ, xᵒₙ, xⁿₙ = view(xᵖ, :, :, n), view(xᵒ, :, :, n), view_neighbour(xᵒ, n, N)
+        ln𝓇 = Δlnℒ[n] + get_Δln𝒫_x(xᵖₙ, xᵒₙ, xⁿₙ, fourDτ, n == 1, 𝒫, device)
+        accepted[n] = ln𝓇 > log(rand())
+        accepted[n] && (xᵒₙ .= xᵒₙ)
     end
-    #? potential improvemnt
-    s.G = get_pxPSF(xᵒ, param.pxboundsx, param.pxboundsy, param.PSF)
+    counter .+= count(accepted), N
+    Gᵒ[:, :, accepted] .= view(Gᵖ, :, :, accepted)
 end
 
-update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::GPU) =
-    simulate!(view_off_x(s), s.x.𝒫, s.D.value, param.period, device::GPU)
-
-update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::CPU) =
-    simulate!(view_off_x(s), s.x.𝒫, s.D.value, param.period, device::CPU)
+update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
+    simulate!(view_off_x(s), s.x.𝒫, s.D.value, param.period, device)
 
 function update_x!(
     s::ChainStatus,
     w::AbstractArray{Bool},
     param::ExperimentalParameter,
-    device::GPU,
+    device::Device,
 )
-    update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::GPU)
+    update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device)
     update_on_x!(
         s::ChainStatus,
         w::AbstractArray{Bool},
         param::ExperimentalParameter,
-        device::GPU,
-    )
-    return s
-end
-
-function update_x!(
-    s::ChainStatus,
-    w::AbstractArray{Bool},
-    param::ExperimentalParameter,
-    device::CPU,
-)
-    update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::CPU)
-    update_on_x!(
-        s::ChainStatus,
-        w::AbstractArray{Bool},
-        param::ExperimentalParameter,
-        device::CPU,
+        device::Device,
     )
     return s
 end
@@ -203,19 +165,20 @@ end
 #     sum_Δxᵒ² = sum(diff(xᵒ, dims = 3) .^ 2)
 #     xᵖ, Gᵖ = get_xᵖ(xᵒ, CuArray(diag(x.𝒬.Σ)), param)
 #     diff_lnℒ = get_Δlnℒ_x(w, s.h.value, Gᵖ, Gᵒ, param.darkcounts, device) |> cpu
+#     accepted = BitVector(undef, N)
 #     for n in randperm(param.length)
 #         ln𝓊 = log(rand())
 #         ln𝓇, sum_Δxᵖ² = get_Δln𝒫_x(xᵖ, xᵒ, n, τ, sum_Δxᵒ², s.D.𝒫, x.𝒫, device)
 #         ln𝓇 += diff_lnℒ[n]
-#         if ln𝓇 > ln𝓊
+#         accepted[n] = ln𝓇 > ln𝓊
+#         if accepted[n]
 #             xᵒ[:, :, n] .= xᵖ[:, :, n]
 #             sum_Δxᵒ² = sum_Δxᵖ²
 #             x.count[1] += 1
 #         end
 #         x.count[2] += 1
 #     end
-#     #? potential improvemnt
-#     s.G = simulate_G(xᵒ, param.pxboundsx, param.pxboundsy, param.PSF)
+#     Gᵒ[:, :, accepted] .= Gᵖ[:, :, accepted]
 # end
 
 # get_ln𝓇_x(
