@@ -18,7 +18,7 @@ mutable struct MetropolisHastingsScalarRV{FT<:AbstractFloat} <: RandomVariable{F
     value::FT
     𝒫::Distribution
     𝒬::Distribution
-    count::Matrix{Int}
+    counter::Matrix{Int}
     batchsize::Int
     MetropolisHastingsScalarRV(value::FT, 𝒫::Distribution, 𝒬::Distribution) where {FT} =
         new{FT}(value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
@@ -30,7 +30,7 @@ mutable struct MetropolisHastingsVectorRV{AT<:AbstractArray} <: RandomVariable{A
     value::AT
     𝒫::Distribution
     𝒬::Distribution
-    count::Matrix{Int}
+    counter::Matrix{Int}
     batchsize::Int
     MetropolisHastingsVectorRV(value::FT, 𝒫::Distribution, 𝒬::Distribution) where {FT} =
         new{FT}(value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)

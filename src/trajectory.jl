@@ -99,7 +99,7 @@ function update_on_x!(
 )
     N, F = param.length, param.darkcounts
     h, fourDτ = s.h.value, 4 * s.D.value * param.period
-    𝒫, 𝒬, counter = s.x.𝒫, s.x.𝒬, view(s.x.count, :, 2)
+    𝒫, 𝒬, counter = s.x.𝒫, s.x.𝒬, view(s.x.counter, :, 2)
     xᵒ, Gᵒ = view_on_x(s), s.G
     xᵖ, Gᵖ = get_xᵖ(xᵒ, 𝒬, param, device)
     Δlnℒ = get_Δlnℒ_x(w, h, Gᵖ, Gᵒ, F, device)
