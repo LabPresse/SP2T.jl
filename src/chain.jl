@@ -101,70 +101,6 @@ function default_init_pos_prior(param::ExperimentalParameter)
     return MvNormal(μₓ, σₓ)
 end
 
-# struct Prior{FT<:AbstractFloat}
-#     x::MvNormal{FT}
-#     D::InverseGamma{FT}
-#     h::Gamma{FT}
-#     b::Bernoulli{FT}
-#     Prior{FT}(;
-#         μₓ = [0, 0, 0],
-#         σₓ = [0, 0, 0],
-#         ϕᴰ = 1,
-#         χᴰ = 1,
-#         ϕₕ = 1,
-#         ψₕ = 1,
-#         pᵇ = 0.1,
-#     ) where {FT} = new{FT}(
-#         MvNormal(μₓ, Diagonal(σₓ)),
-#         InverseGamma(ϕᴰ, ϕᴰ * χᴰ), # ϕᴰ = α, ϕᴰχᴰ = θ
-#         Gamma(ϕₕ, ψₕ / ϕₕ), # ϕₕ = α, ϕₕ / ϕₕ = θ
-#         Bernoulli(pᵇ),
-#     )
-# end
-
-# 𝐱
-
-# Prior(
-#     FloatType;
-#     μₓ = [0, 0, 0],
-#     σₓ = [0, 0, 0],
-#     ϕᴰ = 1,
-#     χᴰ = 1,
-#     ϕ_F = 1,
-#     ψ_F = 1,
-#     ϕₕ = 1,
-#     ψₕ = 1,
-#     pᵇ = 0.1,
-# ) = new{FT}(
-#     MvNormal(μₓ, Diagonal(σₓ)),
-#     InverseGamma(ϕᴰ, ϕᴰ * χᴰ), # ϕᴰ = α, ϕᴰχᴰ = θ
-#     Gamma(ϕₕ, ψₕ / ϕₕ), # ϕₕ = α, ϕₕ / ϕₕ = θ
-#     Bernoulli(pᵇ),
-# )
-
-# mutable struct MetropolisHastings
-#     𝒬::Distribution
-#     accep_count::Matrix{Int}
-# stepsize::Real
-#     stepsize::Float64
-#     MetropolisHastings(𝒬::Distribution) = new(𝒬, zeros(Int, 2, 2), 1)
-# end
-
-# mutable struct Acceptance
-#     x::Int
-#     Acceptance() = new(0)
-# end
-
-# mutable struct Proposal
-#     accep_count::Vector{Int}
-#     distritbution::Distribution
-#     Proposal(ℚ::Distribution) = new([0, 0], ℚ)
-# end
-
-# struct Proposals
-#     h::Proposal
-# end
-
 mutable struct Chain{FT<:AbstractFloat}
     status::ChainStatus{FT}
     samples::Vector{Sample{FT}}
@@ -178,22 +114,6 @@ chainlength(c::Chain) = length(c.samples)
 ftypeof(c::Chain{FT}) where {FT} = FT
 
 isfull(c::Chain) = chainlength(c) > c.sizelimit
-
-# function get_x(s::Sample{FT}) where {FT}
-#     ℬ = get_B(s)
-#     N = size(s.x, 3)
-#     x = Matrix{FT}(undef, ℬ, N)
-#     y = Matrix{FT}(undef, ℬ, N)
-#     z = Matrix{FT}(undef, ℬ, N)
-#     𝒷 = 1
-#     for s in S, m in get_B(s)
-#         x[𝒷, :] = s.x[1, m, :]
-#         y[𝒷, :] = s.x[2, m, :]
-#         z[𝒷, :] = s.x[3, m, :]
-#         𝒷 += 1
-#     end
-#     return x, y, z
-# end
 
 function get_x(S::AbstractVector{Sample{FT}}) where {FT}
     ℬ = sum(get_B.(S))
@@ -235,16 +155,6 @@ function extend!(c::Chain)
     isfull(c) && shrink!(c)
     return c
 end
-
-# function get_next_sample(old_sample::Sample, data::Video)
-#     new_sample = 0
-#     return new_sample
-# end
-
-# function extend!(status::Chain)
-#     status.sample.i += 1
-#     return status
-# end
 
 function to_cpu!(c::Chain)
     s = c.status
