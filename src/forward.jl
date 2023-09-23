@@ -85,26 +85,23 @@ function get_pxPSF(
 end
 
 function simulate!(
-    v::BitArray{3},
-    g::AbstractArray{FT,3},
-    h::FT,
+    w::AbstractArray{Bool,3},
+    G::AbstractArray{FT,3},
+    hτ::FT,
     F::AbstractMatrix{FT},
-    τ::FT,
-    τA::FT,
 ) where {FT<:AbstractFloat}
-    u = @. F * τA + h * g * τ
-    v .= rand(eltype(u), size(u)) .< -expm1.(-u)
-    return v
+    u = @. F + hτ * G
+    w .= rand(eltype(u), size(u)) .< -expm1.(-u)
+    return w
 end
 
 function simulate_w(
     G::AbstractArray{FT,3},
-    h::FT,
+    hτ::FT,
     F::AbstractMatrix{FT},
-    τ::FT,
 ) where {FT<:AbstractFloat}
-    u = @. F + h * G * τ
-    return rand(eltype(u), size(u)) .< -expm1.(-u)
+    w = BitArray(undef, size(G))
+    return simulate!(w, G, hτ, F)
 end
 
 # function simulate(M::Integer, p::Real)
