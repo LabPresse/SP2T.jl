@@ -4,7 +4,7 @@ Prior(param::ExperimentalParameter{FT}) where {FT} = Prior{FT}(
 )
 
 Sample(s::ChainStatus{FT}) where {FT} =
-    Sample{FT}(s.x.value[:, s.b.value, :] |> cpu, s.D.value, s.h.value, s.i, s.𝑇, s.ln𝒫)
+    Sample{FT}(Array(s.x.value[:, s.b.value, :]), s.D.value, s.h.value, s.i, s.𝑇, s.ln𝒫)
 
 # Sample(s::ChainStatus) = Sample(s.x[:, 1:get_B(s), :], s.D, s.h, s.F, s.i, s.T, s.ln𝒫)
 
