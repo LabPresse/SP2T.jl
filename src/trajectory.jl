@@ -28,28 +28,13 @@ get_Δx²(
 
 function get_Δlnℒ_x(
     w::AbstractArray{Bool,3},
-    hτ::FT,
     Gᵖ::AbstractArray{FT,3},
     Gᵒ::AbstractArray{FT,3},
+    hτ::FT,
     F::AbstractMatrix{FT},
-    ::GPU,
 ) where {FT<:AbstractFloat}
     uᵖ = F .+ hτ .* Gᵖ
     uᵒ = F .+ hτ .* Gᵒ
-    Δlnℒ = w .* (logexpm1.(uᵖ) .- logexpm1.(uᵒ)) .- (uᵖ .- uᵒ)
-    return Array(sum(Δlnℒ, dims = (1, 2)))
-end
-
-function get_Δlnℒ_x(
-    w::AbstractArray{Bool,3},
-    h::FT,
-    Gᵖ::AbstractArray{FT,3},
-    Gᵒ::AbstractArray{FT,3},
-    F::AbstractMatrix{FT},
-    ::CPU,
-) where {FT<:AbstractFloat}
-    uᵖ = F .+ h .* Gᵖ
-    uᵒ = F .+ h .* Gᵒ
     Δlnℒ = uᵒ .- uᵖ
     Δlnℒ[w] .+= logexpm1.(uᵖ[w]) .- logexpm1.(uᵒ[w])
     return sum(Δlnℒ, dims = (1, 2))
@@ -103,7 +88,7 @@ function update_on_x!(
     𝒫, 𝒬, counter = s.x.𝒫, s.x.𝒬, view(s.x.counter, :, 2)
     xᵒ, Gᵒ = view_on_x(s), s.G
     xᵖ, Gᵖ = get_xᵖ(xᵒ, 𝒬, param, device)
-    Δlnℒ = get_Δlnℒ_x(w, hτ, Gᵖ, Gᵒ, F, device)
+    Δlnℒ = get_Δlnℒ_x(w, Gᵖ, Gᵒ, hτ, F)
     accepted = BitVector(undef, N)
     @inbounds for n in randperm(N)
         xᵖₙ, xᵒₙ, xⁿₙ = view(xᵖ, :, :, n), view(xᵒ, :, :, n), view_neighbour(xᵒ, n, N)
