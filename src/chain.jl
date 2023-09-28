@@ -1,43 +1,3 @@
-abstract type RandomVariable{T} end
-
-mutable struct DirectlySampledScalarRV{FT<:AbstractFloat} <: RandomVariable{FT}
-    value::FT
-    𝒫::Distribution
-end
-
-ftypeof(rv::DirectlySampledScalarRV{FT}) where {FT} = FT
-
-mutable struct DirectlySampledVectorRV{AT<:AbstractArray} <: RandomVariable{AT}
-    value::AT
-    𝒫::Distribution
-end
-
-ftypeof(rv::DirectlySampledVectorRV{AT}) where {AT} = AT
-
-mutable struct MetropolisHastingsScalarRV{FT<:AbstractFloat} <: RandomVariable{FT}
-    value::FT
-    𝒫::Distribution
-    𝒬::Distribution
-    counter::Matrix{Int}
-    batchsize::Int
-    MetropolisHastingsScalarRV(value::FT, 𝒫::Distribution, 𝒬::Distribution) where {FT} =
-        new{FT}(value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
-end
-
-ftypeof(rv::MetropolisHastingsScalarRV{FT}) where {FT} = FT
-
-mutable struct MetropolisHastingsVectorRV{AT<:AbstractArray} <: RandomVariable{AT}
-    value::AT
-    𝒫::Distribution
-    𝒬::Distribution
-    counter::Matrix{Int}
-    batchsize::Int
-    MetropolisHastingsVectorRV(value::FT, 𝒫::Distribution, 𝒬::Distribution) where {FT} =
-        new{FT}(value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
-end
-
-ftypeof(rv::MetropolisHastingsVectorRV{AT}) where {AT} = AT
-
 struct PriorParameter{FT<:AbstractFloat}
     pb::FT
     μx::AbstractArray{FT}
@@ -62,19 +22,19 @@ ftypeof(p::PriorParameter{FT}) where {FT} = FT
 
 # ChainStatus contains auxiliary variables
 mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
-    b::DirectlySampledVectorRV
-    x::MetropolisHastingsVectorRV{AT}
-    D::DirectlySampledScalarRV{FT}
-    h::MetropolisHastingsScalarRV{FT}
+    b::DSTrajectory
+    x::MHTrajectory{AT}
+    D::DSIID{FT}
+    h::MHIID{FT}
     G::AbstractArray{FT,3}
     i::Int # iteration
     𝑇::FT # temperature
     ln𝒫::FT # log posterior
     ChainStatus(
-        b::DirectlySampledVectorRV{<:AbstractVector{Bool}},
-        x::MetropolisHastingsVectorRV{AT},
-        D::DirectlySampledScalarRV{FT},
-        h::MetropolisHastingsScalarRV{FT},
+        b::DSTrajectory{<:AbstractVector{Bool}},
+        x::MHTrajectory{AT},
+        D::DSIID{FT},
+        h::MHIID{FT},
         G::AbstractArray{FT,3},
         i::Int = 0,
         𝑇::FT = 1.0,
@@ -158,8 +118,8 @@ end
 
 function to_cpu!(c::Chain)
     s = c.status
-    b = DirectlySampledVectorRV(Array(s.b.value), s.b.𝒫)
-    x = MetropolisHastingsVectorRV(Array(s.x.value), s.x.𝒫, s.x.𝒬)
+    b = DSTrajectory(Array(s.b.value), s.b.dynamics, s.b.𝒫)
+    x = MHTrajectory(Array(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
     G = Array(s.G)
     c.status = ChainStatus(b, x, s.D, s.h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
     return c
@@ -175,8 +135,8 @@ end
 
 function to_gpu!(c::Chain)
     s = c.status
-    b = DirectlySampledVectorRV(CuArray(s.b.value), s.b.𝒫)
-    x = MetropolisHastingsVectorRV(CuArray(s.x.value), s.x.𝒫, s.x.𝒬)
+    b = DSTrajectory(CuArray(s.b.value), s.b.dynamics, s.b.𝒫)
+    x = MHTrajectory(CuArray(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
     G = CuArray(s.G)
     c.status = ChainStatus(b, x, s.D, s.h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
     return c
@@ -217,6 +177,7 @@ function run_MCMC!(
         c.status.i = iter
         # update_D!(c.status, v.param)
         update_x!(c.status, v.data, v.param, device)
+        update_ln𝒫!(c.status, v.data, v.param, device)
         if mod(iter, c.stride) == 0
             extend!(c)
         end

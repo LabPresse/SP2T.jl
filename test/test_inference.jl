@@ -19,7 +19,7 @@ prior_param = PriorParameter(
     ftypeof(video),
     pb = 0.1,
     μx = [video.param.pxnumx, video.param.pxnumy, 0] .* (video.param.pxsize / 2),
-    σx = [1, 1, 0] .* (video.param.pxsize * 2),
+    σx = [1, 1, 1] .* (video.param.pxsize * 2),
     ϕD = 1,
     χD = 1,
     ϕh = 1,
@@ -27,13 +27,13 @@ prior_param = PriorParameter(
 )
 
 chain = Chain(
-    initial_guess = initial_guess,
+    initial_guess = groundtruth,
     exp_param = video.param,
     max_emitter_num = 100,
     prior_param = prior_param,
     sizelimit = 1000,
 )
 
-@time SpBNPTrack.run_MCMC!(chain, video, num_iter = 500, run_on_gpu = true);
+@time SpBNPTrack.run_MCMC!(chain, video, num_iter = 100, run_on_gpu = true);
 
 visualize(video, groundtruth, chain.samples)

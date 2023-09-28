@@ -20,11 +20,11 @@ function get_xᵖ(
     return xᵖ, Gᵖ
 end
 
-get_Δx²(
+get_ΔΔx²(
     xᵖ::AbstractMatrix{FT},
     xᵒ::AbstractMatrix{FT},
     neighbourx::AbstractArray{FT},
-) where {FT<:AbstractFloat} = sum((xᵖ .- neighbourx) .^ 2 .- (xᵒ .- neighbourx) .^ 2)
+) where {FT<:AbstractFloat} = sum((xᵒ .- neighbourx) .^ 2 .- (xᵖ .- neighbourx) .^ 2)
 
 function get_Δlnℒ_x(
     w::AbstractArray{Bool,3},
@@ -71,8 +71,7 @@ function get_Δln𝒫_x(
     𝒫::MvNormal,
     device::Device,
 ) where {FT<:AbstractFloat}
-    ΔΔx² = get_Δx²(xᵖ, xᵒ, xᶜ)
-    Δln𝒫 = -ΔΔx² / fourDτ
+    Δln𝒫 = get_ΔΔx²(xᵖ, xᵒ, xᶜ) / fourDτ
     isfirstframe && (Δln𝒫 += get_Δln𝒫_x₁(xᵖ, xᵒ, 𝒫, device))
     return Δln𝒫
 end
@@ -89,6 +88,7 @@ function update_on_x!(
     xᵒ, Gᵒ = view_on_x(s), s.G
     xᵖ, Gᵖ = get_xᵖ(xᵒ, 𝒬, param, device)
     Δlnℒ = get_Δlnℒ_x(w, Gᵖ, Gᵒ, hτ, F)
+    Δlnℒ isa CuArray && (Δlnℒ = Array(Δlnℒ))
     accepted = BitVector(undef, N)
     @inbounds for n in randperm(N)
         xᵖₙ, xᵒₙ, xⁿₙ = view(xᵖ, :, :, n), view(xᵒ, :, :, n), view_neighbour(xᵒ, n, N)

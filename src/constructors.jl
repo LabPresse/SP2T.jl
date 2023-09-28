@@ -8,10 +8,16 @@ Sample(s::ChainStatus{FT}) where {FT} =
 
 # Sample(s::ChainStatus) = Sample(s.x[:, 1:get_B(s), :], s.D, s.h, s.F, s.i, s.T, s.ln𝒫)
 
+function set_b(B::Integer, M::Integer, dynamics::Dynamics, 𝒫::Distribution)
+    b = BitVector(zeros(Bool, M))
+    b[1:B] .= true
+    return DSTrajectory(b, dynamics, 𝒫)
+end
+
 function set_b(B::Integer, M::Integer, 𝒫::Distribution)
     b = BitVector(zeros(Bool, M))
     b[1:B] .= true
-    return DirectlySampledVectorRV(b, 𝒫)
+    return DSIID(b, 𝒫)
 end
 
 function set_x(
@@ -19,17 +25,18 @@ function set_x(
     B::Integer,
     M::Integer,
     N::Integer,
+    dynamics::Dynamics,
     𝒫::Distribution,
     𝒬::Distribution,
 ) where {FT}
     newx = Array{FT,3}(undef, 3, M, N)
     newx[:, 1:B, :] = x
-    return MetropolisHastingsVectorRV(newx, 𝒫, 𝒬)
+    return MHTrajectory(newx, dynamics, 𝒫, 𝒬)
 end
 
-set_D(D::Real, 𝒫::Distribution) = DirectlySampledScalarRV(D, 𝒫)
+set_D(D::Real, 𝒫::Distribution) = DSIID(D, 𝒫)
 
-set_h(h::Real, 𝒫::Distribution, 𝒬::Distribution) = MetropolisHastingsScalarRV(h, 𝒫, 𝒬)
+set_h(h::Real, 𝒫::Distribution, 𝒬::Distribution) = MHIID(h, 𝒫, 𝒬)
 
 # load_prior = Bernoulli{FloatType}(0.5)
 # init_pos_prior = default_init_pos_prior(param)
@@ -43,12 +50,13 @@ function ChainStatus(
     prior_param::PriorParameter{FT},
 ) where {FT<:AbstractFloat}
     (~, B, N) = size(s.x)
-    b = set_b(B, M, Bernoulli(prior_param.pb))
+    b = set_b(B, M, Step(), Bernoulli(prior_param.pb))
     x = set_x(
         s.x,
         B,
         M,
         N,
+        Brownian(),
         MvNormal(prior_param.μx, prior_param.σx),
         MvNormal([exp_param.PSF.σ_ref, exp_param.PSF.σ_ref, exp_param.PSF.z_ref] ./ 2),
     )
@@ -85,7 +93,7 @@ function Video(p::ExperimentalParameter, s::Sample)
     ftypeof(p) ≡ ftypeof(s) ||
         @warn "Float type mismatch between the experimental parameter and the sample!"
     G = get_pxPSF(s.x, p.pxboundsx, p.pxboundsy, p.PSF)
-    data = simulate_w(G, s.h, p.darkcounts, p.exposure)
+    data = simulate_w(G, s.h * p.period, p.darkcounts)
     return Video(data, p)
 end
 
