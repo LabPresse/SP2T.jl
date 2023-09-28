@@ -8,7 +8,8 @@ mutable struct ExperimentalParameter{FT<:AbstractFloat}
     units::Tuple{String,String}
     length::Int
     period::FT
-    exposure::FT
+    fourτ::FT
+    # exposure::FT
     pxboundsx::AbstractVector{FT}
     pxboundsy::AbstractVector{FT}
     pxnumx::Int
@@ -25,7 +26,7 @@ mutable struct ExperimentalParameter{FT<:AbstractFloat}
         units::Tuple{String,String} = ("μm", "s"),
         length::Integer,
         period::Real,
-        exposure::Real,
+        # exposure::Real,
         pxsize::Real,
         darkcounts::AbstractMatrix{<:Real},
         NA::Real,
@@ -37,7 +38,8 @@ mutable struct ExperimentalParameter{FT<:AbstractFloat}
         units,
         length,
         period,
-        exposure,
+        4 * period,
+        # exposure,
         range(offsetx, step = pxsize, length = size(darkcounts, 1) + 1),
         range(offsety, step = pxsize, length = size(darkcounts, 2) + 1),
         size(darkcounts, 1),
