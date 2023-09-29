@@ -3,8 +3,15 @@ Prior(param::ExperimentalParameter{FT}) where {FT} = Prior{FT}(
     σₓ = [param.pxsize * 2, param.pxsize * 2, 0],
 )
 
-Sample(s::ChainStatus{FT}) where {FT} =
-    Sample{FT}(Array(s.x.value[:, s.b.value, :]), s.D.value, s.h.value, s.i, s.𝑇, s.ln𝒫)
+Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
+    Array(s.x.value[:, s.b.value, :]),
+    s.D.value,
+    s.h.value,
+    s.i,
+    s.𝑇,
+    s.ln𝒫,
+    s.lnℒ,
+)
 
 # Sample(s::ChainStatus) = Sample(s.x[:, 1:get_B(s), :], s.D, s.h, s.F, s.i, s.T, s.ln𝒫)
 
@@ -63,7 +70,7 @@ function ChainStatus(
     D = set_D(s.D, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
     h = set_h(s.h, Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh), Beta())
     G = get_pxPSF(s.x, exp_param.pxboundsx, exp_param.pxboundsy, exp_param.PSF)
-    return ChainStatus(b, x, D, h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
+    return ChainStatus(b, x, D, h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     #TODO initialize 𝑇 and ln𝒫 better
 end
 
@@ -106,6 +113,7 @@ function Chain(;
     annealing::Union{Annealing{FT},Nothing} = nothing,
 ) where {FT<:AbstractFloat}
     isnothing(annealing) && (annealing = PolynomialAnnealing{FT}())
+    exp_param.pxboundsx isa CuArray && (to_cpu!(exp_param))
     status = ChainStatus(initial_guess, max_emitter_num, exp_param, prior_param)
     return Chain{FT}(status, [initial_guess], annealing, 1, sizelimit)
 end

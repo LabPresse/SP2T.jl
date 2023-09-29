@@ -7,6 +7,7 @@ mutable struct Sample{FT<:AbstractFloat} <: AbstractSample
     i::Int # iteration
     𝑇::FT # temperature
     ln𝒫::FT # log posterior
+    lnℒ::FT # log likelihood
     Sample(x::Array{FT,3}, D::FT, h::FT) where {FT<:AbstractFloat} =
         new{FT}(x, D, h, 0, 1, FT(NaN))
     Sample(;
@@ -22,7 +23,8 @@ mutable struct Sample{FT<:AbstractFloat} <: AbstractSample
         i::Int,
         𝑇::FT,
         ln𝒫::FT,
-    ) where {FT<:AbstractFloat} = new{FT}(x, D, h, i, 𝑇, ln𝒫)
+        lnℒ::FT,
+    ) where {FT<:AbstractFloat} = new{FT}(x, D, h, i, 𝑇, ln𝒫, lnℒ)
 end
 
 get_B(s::Sample) = size(s.x, 2)

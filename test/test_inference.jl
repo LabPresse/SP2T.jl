@@ -29,11 +29,11 @@ prior_param = PriorParameter(
 chain = Chain(
     initial_guess = groundtruth,
     exp_param = video.param,
-    max_emitter_num = 100,
+    max_emitter_num = 10,
     prior_param = prior_param,
     sizelimit = 1000,
 )
 
-@time SpBNPTrack.run_MCMC!(chain, video, num_iter = 100, run_on_gpu = true);
+@time SpBNPTrack.run_MCMC!(chain, video, num_iter = 100_000, run_on_gpu = true);
 
 visualize(video, groundtruth, chain.samples)

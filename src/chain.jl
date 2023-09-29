@@ -30,6 +30,7 @@ mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
     i::Int # iteration
     𝑇::FT # temperature
     ln𝒫::FT # log posterior
+    lnℒ::FT # log likelihood
     ChainStatus(
         b::DSTrajectory{<:AbstractVector{Bool}},
         x::MHTrajectory{AT},
@@ -39,7 +40,9 @@ mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
         i::Int = 0,
         𝑇::FT = 1.0,
         ln𝒫::FT = NaN,
-    ) where {FT<:AbstractFloat,AT<:AbstractArray{FT}} = new{FT,AT}(b, x, D, h, G, i, 𝑇, ln𝒫)
+        lnℒ::FT = NaN,
+    ) where {FT<:AbstractFloat,AT<:AbstractArray{FT}} =
+        new{FT,AT}(b, x, D, h, G, i, 𝑇, ln𝒫, lnℒ)
 end
 
 get_B(s::ChainStatus) = count(s.b.value)
@@ -125,10 +128,15 @@ function to_cpu!(c::Chain)
     return c
 end
 
+function to_cpu!(p::ExperimentalParameter)
+    p.pxboundsx = Array(p.pxboundsx)
+    p.pxboundsy = Array(p.pxboundsy)
+    p.darkcounts = Array(p.darkcounts)
+    return p
+end
+
 function to_cpu!(v::Video)
-    v.param.pxboundsx = Array(v.param.pxboundsx)
-    v.param.pxboundsy = Array(v.param.pxboundsy)
-    v.param.darkcounts = Array(v.param.darkcounts)
+    to_cpu!(v.param)
     v.data = Array(v.data)
     return v
 end
@@ -138,7 +146,7 @@ function to_gpu!(c::Chain)
     b = DSTrajectory(CuArray(s.b.value), s.b.dynamics, s.b.𝒫)
     x = MHTrajectory(CuArray(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
     G = CuArray(s.G)
-    c.status = ChainStatus(b, x, s.D, s.h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
+    c.status = ChainStatus(b, x, s.D, s.h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
 end
 
