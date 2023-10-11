@@ -106,14 +106,17 @@ end
 
 function Chain(;
     initial_guess::Sample{FT},
-    exp_param::ExperimentalParameter{FT},
+    video::Video{FT},
     prior_param::PriorParameter{FT},
     max_emitter_num::Integer,
     sizelimit::Integer,
     annealing::Union{Annealing{FT},Nothing} = nothing,
 ) where {FT<:AbstractFloat}
     isnothing(annealing) && (annealing = PolynomialAnnealing{FT}())
-    exp_param.pxboundsx isa CuArray && (to_cpu!(exp_param))
-    status = ChainStatus(initial_guess, max_emitter_num, exp_param, prior_param)
-    return Chain{FT}(status, [initial_guess], annealing, 1, sizelimit)
+    to_cpu!(video)
+    status = ChainStatus(initial_guess, max_emitter_num, video.param, prior_param)
+    update_ln𝒫!(status, video, CPU())
+    chain = Chain{FT}(status, Sample{FT}[], annealing, 1, sizelimit)
+    extend!(chain)
+    return chain
 end

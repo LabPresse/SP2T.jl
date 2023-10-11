@@ -184,8 +184,8 @@ function run_MCMC!(
     @showprogress 1 "Computing..." for iter = 1:num_iter
         c.status.i = iter
         # update_D!(c.status, v.param)
-        update_x!(c.status, v.data, v.param, device)
-        update_ln𝒫!(c.status, v.data, v.param, device)
+        update_x!(c.status, v, device)
+        update_ln𝒫!(c.status, v, device)
         if mod(iter, c.stride) == 0
             extend!(c)
         end

@@ -76,12 +76,8 @@ function get_Δln𝒫_x(
     return Δln𝒫
 end
 
-function update_on_x!(
-    s::ChainStatus,
-    w::AbstractArray{Bool},
-    param::ExperimentalParameter,
-    device::Device,
-)
+function update_on_x!(s::ChainStatus, v::Video, device::Device)
+    w, param = v.data, v.param
     N, F = param.length, param.darkcounts
     hτ, fourDτ = (s.h.value, 4 * s.D.value) .* param.period
     𝒫, 𝒬, counter = s.x.𝒫, s.x.𝒬, view(s.x.counter, :, 2)
@@ -103,19 +99,9 @@ end
 update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
     simulate!(view_off_x(s), s.x.𝒫, s.D.value, param.period, device)
 
-function update_x!(
-    s::ChainStatus,
-    w::AbstractArray{Bool},
-    param::ExperimentalParameter,
-    device::Device,
-)
-    update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device)
-    update_on_x!(
-        s::ChainStatus,
-        w::AbstractArray{Bool},
-        param::ExperimentalParameter,
-        device::Device,
-    )
+function update_x!(s::ChainStatus, v::Video, device::Device)
+    update_off_x!(s, v.param, device)
+    update_on_x!(s, v, device)
     return s
 end
 

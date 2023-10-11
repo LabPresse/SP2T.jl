@@ -88,6 +88,9 @@ end
 get_ln𝒫(x::Trajectory, dynRV::RealNumOrVec, device::Device) =
     get_ln𝒫(x.dynamics, dynRV, x.𝒫, x.value, device)
 
+get_ln𝒫(x::Trajectory, dynRV::RealNumOrVec, B::Integer, device::Device) =
+    get_ln𝒫(x.dynamics, dynRV, x.𝒫, view(x.value, :, 1:B, :), device)
+
 # """
 #     get_ln𝒫(x, fourDτ)
 
@@ -118,13 +121,12 @@ end
 
 function update_ln𝒫!(
     s::ChainStatus,
-    w::AbstractArray{Bool},
-    param::ExperimentalParameter,
+    v::Video,
     device::Device,
 )
     s.ln𝒫 =
-        get_lnℒ(w, s.G, s.h.value * param.period, param.darkcounts, device) +
-        get_ln𝒫(s.x, s.D.value * param.fourτ, device) +
+        get_lnℒ(v.data, s.G, s.h.value * v.param.period, v.param.darkcounts, device) +
+        get_ln𝒫(s.x, s.D.value * v.param.fourτ, get_B(s), device) +
         get_ln𝒫(s.D) +
         get_ln𝒫(s.h)
     return s
