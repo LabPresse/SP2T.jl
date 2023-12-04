@@ -10,7 +10,7 @@ function sample_D(
     𝑇::FT,
 ) where {FT<:AbstractFloat}
     Δshape::FT, Δscale = sum_Δx²(x) ./ (2, fourτ)
-    newparams = params(𝒫) .+ (Δshape, Δscale) ./ 𝑇
+    newparams = (shape(𝒫), scale(𝒫)) .+ (Δshape, Δscale) ./ 𝑇
     return rand(InverseGamma(newparams...))
 end
 
