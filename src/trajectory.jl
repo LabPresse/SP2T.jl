@@ -1,99 +1,246 @@
-function get_xᵖ(
-    xᵒ::AbstractArray{FT,3},
-    𝒬::MvNormal,
-    param::ExperimentalParameter{FT},
-    ::GPU,
-) where {FT<:AbstractFloat}
-    xᵖ = xᵒ .+ sqrt.(CuArray(diag(𝒬.Σ))) .* CUDA.randn(size(xᵒ)...)
-    Gᵖ = get_pxPSF(xᵖ, param.pxboundsx, param.pxboundsy, param.PSF)
-    return xᵖ, Gᵖ
+#* Forward functions
+function set_init_x!(x::AbstractArray{FT}, 𝒫::Distribution, ::CPU) where {FT<:AbstractFloat}
+    x .= rand(𝒫, size(x, 2))
+    return x
 end
 
-function get_xᵖ(
-    xᵒ::AbstractArray{FT,3},
-    𝒬::MvNormal,
-    param::ExperimentalParameter{FT},
-    ::CPU,
-) where {FT<:AbstractFloat}
-    xᵖ = xᵒ .+ sqrt.(viewdiag(𝒬.Σ)) .* randn(size(xᵒ)...)
-    Gᵖ = get_pxPSF(xᵖ, param.pxboundsx, param.pxboundsy, param.PSF)
-    return xᵖ, Gᵖ
+function set_init_x!(x::AbstractArray{FT}, 𝒫::Distribution, ::GPU) where {FT<:AbstractFloat}
+    x .= CuArray(rand(𝒫, size(x, 2)))
+    return x
 end
 
-get_ΔΔx²(
-    xᵖ::AbstractMatrix{FT},
-    xᵒ::AbstractMatrix{FT},
-    neighbourx::AbstractArray{FT},
-) where {FT<:AbstractFloat} = sum((xᵒ .- neighbourx) .^ 2 .- (xᵖ .- neighbourx) .^ 2)
-
-function get_Δlnℒ_x(
-    w::AbstractArray{Bool,3},
-    Gᵖ::AbstractArray{FT,3},
-    Gᵒ::AbstractArray{FT,3},
-    hτ::FT,
-    F::AbstractMatrix{FT},
-) where {FT<:AbstractFloat}
-    uᵖ = F .+ hτ .* Gᵖ
-    uᵒ = F .+ hτ .* Gᵒ
-    Δlnℒ = uᵒ .- uᵖ
-    Δlnℒ[w] .+= logexpm1.(uᵖ[w]) .- logexpm1.(uᵒ[w])
-    return sum(Δlnℒ, dims = (1, 2))
+function set_Δx!(x::AbstractArray{FT,3}, σ::FT, ::CPU) where {FT<:AbstractFloat}
+    x .= randn(FT, size(x)...)
+    x .*= σ
+    return x
 end
 
-neighbour_indices(n::Integer, N::Integer) = n == 1 ? 2 : n-1:2:min(n + 1, N)
+function set_Δx!(x::AbstractArray{FT,3}, σ::FT, ::GPU) where {FT<:AbstractFloat}
+    CUDA.randn!(x)
+    x .*= σ
+    return x
+end
+
+function simulate!(
+    x::AbstractArray{FT,3},
+    𝒫::Distribution,
+    D::FT,
+    τ::FT,
+    device::Device,
+) where {FT<:AbstractFloat}
+    @views begin
+        set_init_x!(x[:, :, 1], 𝒫, device)
+        set_Δx!(x[:, :, 2:end], √(2 * D * τ), device)
+    end
+    cumsum!(x, x, dims = 3)
+    return x
+end
+
+#* Inverse functions
+propose_x(xᵒ::AbstractArray{FT,3}, 𝒬::MvNormal, ::CPU) where {FT<:AbstractFloat} =
+    xᵒ .+ sqrt.(viewdiag(𝒬.Σ)) .* randn(size(xᵒ)...)
+
+propose_x(xᵒ::AbstractArray{FT,3}, 𝒬::MvNormal, ::GPU) where {FT<:AbstractFloat} =
+    xᵒ .+ sqrt.(CuArray(diag(𝒬.Σ))) .* CUDA.randn(size(xᵒ)...)
+
+# get_ΔΔx²(
+#     xᵒ::AbstractMatrix{FT},
+#     xᵖ::AbstractMatrix{FT},
+#     neighbourx::AbstractArray{FT},
+# ) where {FT<:AbstractFloat} = sum((xᵒ .- neighbourx) .^ 2 .- (xᵖ .- neighbourx) .^ 2)
+
+# function get_Δlnℒ_x(
+#     w::AbstractArray{Bool,3},
+#     Gᵖ::AbstractArray{FT,3},
+#     Gᵒ::AbstractArray{FT,3},
+#     hτ::FT,
+#     F::AbstractMatrix{FT},
+# ) where {FT<:AbstractFloat}
+#     uᵖ = F .+ hτ .* Gᵖ
+#     uᵒ = F .+ hτ .* Gᵒ
+#     Δlnℒ = uᵒ .- uᵖ
+#     Δlnℒ[w] .+= logexpm1.(uᵖ[w]) .- logexpm1.(uᵒ[w])
+#     return sum(Δlnℒ, dims = (1, 2))
+# end
+
+neighbour_indices(n::Integer, N::Integer) = ifelse(n == 1, 2, n-1:2:min(n + 1, N))
 
 view_neighbour(x::AbstractArray{<:AbstractFloat,3}, n::Integer, N::Integer) =
     view(x, :, :, neighbour_indices(n, N))
 
-get_Δln𝒫_x₁(
-    xᵖ::AbstractMatrix{FT},
+function add_Δln𝒫_x₁!(
+    ln𝓇::AbstractVector{FT},
     xᵒ::AbstractMatrix{FT},
-    𝒫::MvNormal,
-    ::GPU,
-) where {FT<:AbstractFloat} = sum(
-    ((xᵒ .- CuArray(𝒫.μ)) .^ 2 - (xᵖ .- CuArray(𝒫.μ)) .^ 2) ./ (2 .* CuArray(diag(𝒫.Σ))),
-)
-
-get_Δln𝒫_x₁(
     xᵖ::AbstractMatrix{FT},
-    xᵒ::AbstractMatrix{FT},
     𝒫::MvNormal,
-    ::CPU,
-) where {FT<:AbstractFloat} =
-    sum(((xᵒ .- 𝒫.μ) .^ 2 - (xᵖ .- 𝒫.μ) .^ 2) ./ (2 .* viewdiag(𝒫.Σ)))
-
-function get_Δln𝒫_x(
-    xᵖ::AbstractVecOrMat{FT},
-    xᵒ::AbstractVecOrMat{FT},
-    xᶜ::AbstractArray{FT},
-    fourDτ::FT,
-    isfirstframe::Bool,
-    𝒫::MvNormal,
-    device::Device,
 ) where {FT<:AbstractFloat}
-    Δln𝒫 = get_ΔΔx²(xᵖ, xᵒ, xᶜ) / fourDτ
-    isfirstframe && (Δln𝒫 += get_Δln𝒫_x₁(xᵖ, xᵒ, 𝒫, device))
-    return Δln𝒫
+    ln𝓇[1] += sum(((xᵒ .- 𝒫.μ) .^ 2 - (xᵖ .- 𝒫.μ) .^ 2) ./ (2 .* viewdiag(𝒫.Σ)))
+    return ln𝓇
 end
 
-function update_on_x!(s::ChainStatus, v::Video, device::Device)
-    w, param = v.data, v.param
-    N, F = param.length, param.darkcounts
-    hτ, fourDτ = (s.h.value, 4 * s.D.value) .* param.period
-    𝒫, 𝒬, counter = s.x.𝒫, s.x.𝒬, view(s.x.counter, :, 2)
-    xᵒ, Gᵒ = view_on_x(s), s.G
-    xᵖ, Gᵖ = get_xᵖ(xᵒ, 𝒬, param, device)
-    Δlnℒ = get_Δlnℒ_x(w, Gᵖ, Gᵒ, hτ, F)
-    Δlnℒ isa CuArray && (Δlnℒ = Array(Δlnℒ))
+function add_Δln𝒫_x₁!(
+    ln𝓇::AbstractArray{FT,3},
+    xᵒ_cu::AbstractMatrix{FT},
+    xᵖ_cu::AbstractMatrix{FT},
+    𝒫::MvNormal,
+) where {FT<:AbstractFloat}
+    xᵒ = Array(xᵒ_cu)
+    xᵖ = Array(xᵖ_cu)
+    CUDA.@allowscalar ln𝓇[1] +=
+        sum(((xᵒ .- 𝒫.μ) .^ 2 - (xᵖ .- 𝒫.μ) .^ 2) ./ (2 .* viewdiag(𝒫.Σ)))
+    return ln𝓇
+end
+
+# get_Δln𝒫_x(
+#     xᵒ::AbstractMatrix{FT},
+#     xᵖ::AbstractMatrix{FT},
+#     xᶜ::AbstractArray{FT},
+#     fourDτ::FT,
+# ) where {FT<:AbstractFloat} = get_ΔΔx²(xᵒ, xᵖ, xᶜ) / fourDτ
+
+function get_acceptance!(
+    xᵒ::AbstractArray{FT,3},
+    xᵖ::AbstractArray{FT,3},
+    ln𝓇::AbstractVector{FT},
+    fourDτ::FT,
+) where {FT<:AbstractFloat}
+    N = size(ln𝓇, 3)
     accepted = BitVector(undef, N)
     @inbounds for n in randperm(N)
-        xᵖₙ, xᵒₙ, xⁿₙ = view(xᵖ, :, :, n), view(xᵒ, :, :, n), view_neighbour(xᵒ, n, N)
-        ln𝓇 = Δlnℒ[n] + get_Δln𝒫_x(xᵖₙ, xᵒₙ, xⁿₙ, fourDτ, n == 1, 𝒫, device)
-        accepted[n] = ln𝓇 > log(rand())
-        accepted[n] && (xᵒₙ .= xᵒₙ)
+        xᵒₙ, xᵖₙ, xⁿₙ = view(xᵒ, :, :, n), view(xᵖ, :, :, n), view_neighbour(xᵒ, n, N)
+        ln𝓇[n] += sum((xᵒₙ .- xⁿₙ) .^ 2 .- (xᵖₙ .- xⁿₙ) .^ 2) / fourDτ
+        accepted[n] = ln𝓇[n] > log(rand(FT))
+        accepted[n] && (xᵒₙ .= xᵖₙ)
     end
-    counter .+= count(accepted), N
-    Gᵒ[:, :, accepted] .= view(Gᵖ, :, :, accepted)
+    return accepted
+end
+
+function copyidxto!(
+    xᵒ::AbstractArray{FT,3},
+    xᵖ::AbstractArray{FT,3},
+    idx::AbstractVector{Bool},
+) where {FT<:AbstractFloat}
+    @views xᵒ[:, :, idx] .= xᵖ[:, :, idx]
+end
+
+function copyidxto!(
+    xᵒ::AbstractArray{FT,N},
+    xᵖ::AbstractArray{FT,N},
+    idx::AbstractArray{Bool,N},
+) where {FT<:AbstractFloat,N}
+    xᵒ .= (idx .* xᵖ) .+ (.~idx .* xᵒ)
+end
+
+getindices(N::Integer) = ifelse(isodd(N), (1:2:N-2, 2:2:N-1), (1:2:N-1, 2:2:N-2))
+
+function set_Δxᵒ²!(Δxᵒ²::AbstractArray{FT}, xᵒ::AbstractArray{FT}) where {FT<:AbstractFloat}
+    @views Δxᵒ² .= (xᵒ[:, :, 2:end] .- xᵒ[:, :, 1:end-1]) .^ 2
+    return Δxᵒ²
+end
+
+function set_Δxᵖ²!(
+    Δxᵖ²::AbstractArray{FT,3},
+    xᵒ::AbstractArray{FT,3},
+    xᵖ::AbstractArray{FT,3},
+    firstidx::Integer,
+) where {FT<:AbstractFloat}
+    x1, x2 = ifelse(isone(firstidx), (xᵒ, xᵖ), (xᵖ, xᵒ))
+    @views begin
+        Δxᵖ²[:, :, 1:2:end] .= x1[:, :, 2:2:end] .- x2[:, :, 1:2:end-1]
+        Δxᵖ²[:, :, 2:2:end] .= x2[:, :, 3:2:end] .- x1[:, :, 2:2:end-1]
+    end
+    Δxᵖ² .^= 2
+    return Δxᵖ²
+end
+
+function add_ΔΔx²!(
+    ln𝓇::AbstractArray{FT,3},
+    Δxᵒ²::AbstractArray{FT,3},
+    Δxᵖ²::AbstractArray{FT,3},
+    idx1::AbstractRange,
+    idx2::AbstractRange,
+    fourDτ::FT,
+) where {FT<:AbstractFloat}
+    @views begin
+        ln𝓇[:, :, idx1] .+=
+            sum(Δxᵒ²[:, :, idx1] .- Δxᵖ²[:, :, idx1], dims = (1, 2)) ./ fourDτ
+        ln𝓇[:, :, idx2.+1] .+=
+            sum(Δxᵒ²[:, :, idx2] .- Δxᵖ²[:, :, idx2], dims = (1, 2)) ./ fourDτ
+    end
+    return ln𝓇
+end
+
+function get_acceptance!(
+    xᵒ::AbstractArray{FT,3},
+    xᵖ::AbstractArray{FT,3},
+    ln𝓇::AbstractArray{FT,3},
+    fourDτ::FT,
+) where {FT<:AbstractFloat}
+    N = size(ln𝓇, 3)
+    idx1, idx2 = getindices(N)
+    Δxᵒ² = similar(xᵒ, size(xᵒ, 1), size(xᵒ, 2), N - 1)
+    Δxᵖ² = similar(Δxᵒ²)
+    accepted = CUDA.zeros(Bool, 1, 1, N)
+    for i = 1:2
+        set_Δxᵒ²!(Δxᵒ², xᵒ)
+        set_Δxᵖ²!(Δxᵖ², xᵒ, xᵖ, i)
+        add_ΔΔx²!(ln𝓇, Δxᵒ², Δxᵖ², idx1, idx2, fourDτ)
+        @views accepted[:, :, i:2:end] .=
+            ln𝓇[:, :, i:2:end] .> log.(CUDA.rand(FT, 1, 1, length(i:2:N)))
+        copyidxto!(xᵒ, xᵖ, accepted)
+        idx1, idx2 = idx2, idx1
+    end
+    return accepted
+end
+
+function update_on_x!(
+    s::ChainStatus,
+    𝐖::AbstractArray{Bool,3},
+    param::ExperimentalParameter,
+    device::CPU,
+)
+    N = param.length
+    xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
+    xᵖ = propose_x(xᵒ, s.x.𝒬, device)
+    𝐔ᵖ = get_px_intensity(
+        xᵖ,
+        param.pxboundsx,
+        param.pxboundsy,
+        s.h.value * param.period,
+        param.darkcounts,
+        param.PSF,
+    )
+    ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
+    ln𝓇[1] += add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.x.𝒫)
+    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
+    s.x.counter[:, 2] .+= count(accepted), N
+    copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
+    return s
+end
+
+function update_on_x!(
+    s::ChainStatus,
+    𝐖::AbstractArray{Bool,3},
+    param::ExperimentalParameter,
+    device::GPU,
+)
+    N = param.length
+    xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
+    xᵖ = propose_x(xᵒ, s.x.𝒬, device)
+    𝐔ᵖ = get_px_intensity(
+        xᵖ,
+        param.pxboundsx,
+        param.pxboundsy,
+        s.h.value * param.period,
+        param.darkcounts,
+        param.PSF,
+    )
+    ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
+    add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.x.𝒫)
+    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
+    s.x.counter[:, 2] .+= count(accepted), N
+    copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
+    return s
 end
 
 update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
@@ -101,7 +248,7 @@ update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
 
 function update_x!(s::ChainStatus, v::Video, device::Device)
     update_off_x!(s, v.param, device)
-    update_on_x!(s, v, device)
+    update_on_x!(s, v.data, v.param, device)
     return s
 end
 
