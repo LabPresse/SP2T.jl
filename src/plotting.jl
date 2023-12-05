@@ -83,7 +83,7 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
     x = gt.x
     B = size(x, 2)
 
-    g = get_pxPSF(gt.x, p.pxboundsx, p.pxboundsy, p.PSF)
+    g = get_px_PSF(gt.x, p.pxboundsx, p.pxboundsy, p.PSF)
 
     # t = range(start = 0, step = p.period, length = p.length)
     t = 1:p.length
@@ -207,7 +207,7 @@ function my_theme()
     )
 end
 
-function trajcount(M::Matrix{<:Real}, y::AbstractArray{<:Real})
+function trajcount(M::AbstractMatrix{<:Real}, y::AbstractArray{<:Real})
     counts = Matrix{Int64}(undef, length(y), size(M, 2))
     yedges = Vector{eltype(y)}(undef, length(y) + 1)
     yedges[2:end-1] = (y[1:end-1] + y[2:+end]) / 2
@@ -240,7 +240,10 @@ function visualize(
         Axis(fig[1, 2], xlabel = "Resolution (nm)"),
     ]
 
-    x, y, z = get_x(s)
+    all_trajectories = get_x(s)
+    x = view(all_trajectories, :, :, 1)
+    y = view(all_trajectories, :, :, 2)
+    z = view(all_trajectories, :, :, 3)
     t = collect(1:v.param.length)
 
     B = size(x, 1)
