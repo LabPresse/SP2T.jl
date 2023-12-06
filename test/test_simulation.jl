@@ -21,7 +21,7 @@ param = ExperimentalParameter(
 
 groundtruth = simulate_sample(
     param = param,
-    emitter_number = 1,
+    emitter_number = 2,
     diffusion_coefficient = 0.05,
     emission_rate = 200,
 )

@@ -34,7 +34,7 @@ export visualize
 export ftypeof
 
 # The files in the first "include" block ONLY contains struct definitions, basic constructors, and simple utility functions.
-include("psf.jl")
+include("detection_model.jl")
 include("data.jl")
 include("sample.jl")
 include("annealing.jl")
@@ -46,12 +46,13 @@ include("constructors.jl")
 
 include("samplers.jl")
 # include("priors.jl")
-include("forward.jl")
+include("main_fxns.jl")
 include("plotting.jl")
 
 include("likelihood.jl")
 include("diffusion.jl")
 include("trajectory.jl")
+include("number.jl")
 include("brightness.jl")
 include("posterior.jl")
 
