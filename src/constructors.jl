@@ -4,7 +4,7 @@ Prior(param::ExperimentalParameter{FT}) where {FT} = Prior{FT}(
 )
 
 Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
-    Array(s.x.value[:, s.b.value, :]),
+    Array(s.x.value[:, 1:s.M.value, :]),
     s.D.value,
     s.h.value,
     s.i,
@@ -41,6 +41,8 @@ function set_x(
     return MHTrajectory(newx, dynamics, 𝒫, 𝒬)
 end
 
+set_M(M::Integer, 𝒫::Distribution) = DSIID(M, 𝒫)
+
 set_D(D::Real, 𝒫::Distribution) = DSIID(D, 𝒫)
 
 set_h(h::Real, 𝒫::Distribution, 𝒬::Distribution) = MHIID(h, 𝒫, 𝒬)
@@ -52,25 +54,32 @@ set_h(h::Real, 𝒫::Distribution, 𝒬::Distribution) = MHIID(h, 𝒫, 𝒬)
 
 function ChainStatus(
     s::Sample{FT},
-    M::Integer,
+    ℳ::Integer,
     exp_param::ExperimentalParameter{FT},
     prior_param::PriorParameter{FT},
 ) where {FT<:AbstractFloat}
     (~, B, N) = size(s.x)
-    b = set_b(B, M, Step(), Bernoulli(prior_param.pb))
     x = set_x(
         s.x,
         B,
-        M,
+        ℳ,
         N,
         Brownian(),
         MvNormal(prior_param.μx, prior_param.σx),
         MvNormal([exp_param.PSF.σ_ref, exp_param.PSF.σ_ref, exp_param.PSF.z_ref] ./ 2),
     )
+    M = set_M(size(s.x, 2), Geometric(1 - prior_param.qM))
     D = set_D(s.D, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
     h = set_h(s.h, Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh), Beta())
-    G = get_pxPSF(s.x, exp_param.pxboundsx, exp_param.pxboundsy, exp_param.PSF)
-    return ChainStatus(b, x, D, h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
+    𝐔 = get_px_intensity(
+        s.x,
+        exp_param.pxboundsx,
+        exp_param.pxboundsy,
+        s.h * exp_param.period,
+        exp_param.darkcounts,
+        exp_param.PSF,
+    )
+    return ChainStatus(x, M, D, h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     #TODO initialize 𝑇 and ln𝒫 better
 end
 
@@ -99,9 +108,9 @@ end
 function Video(p::ExperimentalParameter, s::Sample)
     ftypeof(p) ≡ ftypeof(s) ||
         @warn "Float type mismatch between the experimental parameter and the sample!"
-    G = get_pxPSF(s.x, p.pxboundsx, p.pxboundsy, p.PSF)
-    data = simulate_w(G, s.h * p.period, p.darkcounts)
-    return Video(data, p)
+    𝐔 = get_px_intensity(s.x, p.pxboundsx, p.pxboundsy, s.h * p.period, p.darkcounts, p.PSF)
+    𝐖 = intensity2frame(𝐔)
+    return Video(𝐖, p)
 end
 
 function Chain(;

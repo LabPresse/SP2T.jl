@@ -6,6 +6,7 @@ struct PriorParameter{FT<:AbstractFloat}
     χD::FT
     ϕh::FT
     ψh::FT
+    qM::FT
     PriorParameter(
         FT::DataType;
         pb::Real,
@@ -15,45 +16,46 @@ struct PriorParameter{FT<:AbstractFloat}
         χD::Real,
         ϕh::Real,
         ψh::Real,
-    ) = new{FT}(pb, μx, σx, ϕD, χD, ϕh, ψh)
+        qM::Real,
+    ) = new{FT}(pb, μx, σx, ϕD, χD, ϕh, ψh, qM)
 end
 
 ftypeof(p::PriorParameter{FT}) where {FT} = FT
 
 # ChainStatus contains auxiliary variables
 mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
-    b::DSTrajectory
     x::MHTrajectory{AT}
+    M::DSIID{Int}
     D::DSIID{FT}
     h::MHIID{FT}
-    G::AbstractArray{FT,3}
+    𝐔::AbstractArray{FT,3}
     i::Int # iteration
     𝑇::FT # temperature
     ln𝒫::FT # log posterior
     lnℒ::FT # log likelihood
     ChainStatus(
-        b::DSTrajectory{<:AbstractVector{Bool}},
         x::MHTrajectory{AT},
+        M::DSIID{Int},
         D::DSIID{FT},
         h::MHIID{FT},
-        G::AbstractArray{FT,3},
+        𝐔::AbstractArray{FT,3},
         i::Int = 0,
         𝑇::FT = 1.0,
         ln𝒫::FT = NaN,
         lnℒ::FT = NaN,
     ) where {FT<:AbstractFloat,AT<:AbstractArray{FT}} =
-        new{FT,AT}(b, x, D, h, G, i, 𝑇, ln𝒫, lnℒ)
+        new{FT,AT}(x, M, D, h, 𝐔, i, 𝑇, ln𝒫, lnℒ)
 end
 
-get_B(s::ChainStatus) = count(s.b.value)
+# get_B(s::ChainStatus) = count(s.b.value)
 
 get_M(s::ChainStatus) = size(s.x.value, 2)
 
 ftypeof(s::ChainStatus{FT}) where {FT} = FT
 
-view_on_x(s::ChainStatus) = @view s.x.value[:, 1:get_B(s), :]
+view_on_x(s::ChainStatus) = view(s.x.value, :, 1:s.M.value, :)
 
-view_off_x(s::ChainStatus) = @view s.x.value[:, get_B(s)+1:end, :]
+view_off_x(s::ChainStatus) = @view s.x.value[:, s.M.value+1:end, :]
 
 viewdiag(M::AbstractMatrix) = view(M, diagind(M))
 
@@ -79,19 +81,15 @@ ftypeof(c::Chain{FT}) where {FT} = FT
 isfull(c::Chain) = chainlength(c) > c.sizelimit
 
 function get_x(S::AbstractVector{Sample{FT}}) where {FT}
-    ℬ = sum(get_B.(S))
+    M = get_B.(S)
     N = size(S[1].x, 3)
-    x = Matrix{FT}(undef, ℬ, N)
-    y = Matrix{FT}(undef, ℬ, N)
-    z = Matrix{FT}(undef, ℬ, N)
-    𝒷 = 1
-    for s in S, m in get_B(s)
-        x[𝒷, :] = s.x[1, m, :]
-        y[𝒷, :] = s.x[2, m, :]
-        z[𝒷, :] = s.x[3, m, :]
-        𝒷 += 1
+    x = Array{FT}(undef, sum(M), N, 3)
+    𝒷 = 0
+    @views for (s, m) in zip(S, M)
+        permutedims!(x[𝒷.+(1:m), :, :], s.x, (2, 3, 1))
+        𝒷 += m
     end
-    return x, y, z
+    return x
 end
 
 get_D(S::AbstractVector{Sample{FT}}) where {FT} = [s.D for s in S]
@@ -121,10 +119,11 @@ end
 
 function to_cpu!(c::Chain)
     s = c.status
-    b = DSTrajectory(Array(s.b.value), s.b.dynamics, s.b.𝒫)
+    # b = DSTrajectory(Array(s.b.value), s.b.dynamics, s.b.𝒫)
     x = MHTrajectory(Array(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
-    G = Array(s.G)
-    c.status = ChainStatus(b, x, s.D, s.h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
+    𝐔 = Array(s.𝐔)
+    # c.status = ChainStatus(b, x, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
+    c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
     return c
 end
 
@@ -143,10 +142,11 @@ end
 
 function to_gpu!(c::Chain)
     s = c.status
-    b = DSTrajectory(CuArray(s.b.value), s.b.dynamics, s.b.𝒫)
+    # b = DSTrajectory(CuArray(s.b.value), s.b.dynamics, s.b.𝒫)
     x = MHTrajectory(CuArray(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
-    G = CuArray(s.G)
-    c.status = ChainStatus(b, x, s.D, s.h, G, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
+    𝐔 = CuArray(s.𝐔)
+    # c.status = ChainStatus(b, x, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
+    c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
 end
 
@@ -183,8 +183,9 @@ function run_MCMC!(
 
     @showprogress 1 "Computing..." for iter = 1:num_iter
         c.status.i = iter
-        # update_D!(c.status, v.param)
         update_x!(c.status, v, device)
+        update_M!(c.status, v, device)
+        update_D!(c.status, v.param)
         update_ln𝒫!(c.status, v, device)
         if mod(iter, c.stride) == 0
             extend!(c)
