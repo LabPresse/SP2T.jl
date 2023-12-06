@@ -65,6 +65,8 @@ get_ln𝒫(𝒫::MvNormal, x::AbstractVector{<:AbstractFloat}) = logpdf(𝒫, x)
 
 get_ln𝒫(𝒫::MvNormal, x::AbstractMatrix{<:AbstractFloat}) = sum(logpdf(𝒫, x))
 
+get_ln𝒫(𝒫::Geometric, M::Integer) = logpdf(𝒫, M)
+
 get_ln𝒫(x::IID) = get_ln𝒫(x.𝒫, x.value)
 
 function get_ln𝒫(
@@ -97,36 +99,17 @@ get_ln𝒫(x::Trajectory, dynRV::RealNumOrVec, B::Integer, device::Device) =
 #     The log pdf of a n-D Brownian motion trajectory (`x`) with diffusion coefficient `D`. As 'D' is often inferred, the D-dependence in the normalization factor is not dropped. The number of dimemsions, n, is `x`'s number of rows.
 # """
 
-function get_lnℒ(
-    w::AbstractArray{Bool,3},
-    G::AbstractArray{FT,3},
-    hτ::FT,
-    F::AbstractMatrix{FT},
-    ::GPU,
-) where {FT<:AbstractFloat}
-    u = F .+ hτ .* G
-    return dot(w, logexpm1.(u)) - dot(CUDA.ones(eltype(u), size(u)), u)
-end
+# get_lnℒ(w::AbstractArray{Bool,3}, 𝐔::AbstractArray{FT,3}, ::GPU) where {FT<:AbstractFloat} =
+#     dot(w, logexpm1.(𝐔)) - dot(CUDA.ones(eltype(𝐔), size(𝐔)), 𝐔)
 
-function get_lnℒ(
-    w::AbstractArray{Bool,3},
-    G::AbstractArray{FT,3},
-    hτ::FT,
-    F::AbstractMatrix{FT},
-    ::CPU,
-) where {FT<:AbstractFloat}
-    u = F .+ hτ .* G
-    return sum(logexpm1.(u[w])) - sum(u)
-end
+# get_lnℒ(w::AbstractArray{Bool,3}, 𝐔::AbstractArray{FT,3}, ::CPU) where {FT<:AbstractFloat} =
+#     sum(logexpm1.(𝐔[w])) - sum(𝐔)
 
-function update_ln𝒫!(
-    s::ChainStatus,
-    v::Video,
-    device::Device,
-)
+function update_ln𝒫!(s::ChainStatus, v::Video, device::Device)
     s.ln𝒫 =
-        get_lnℒ(v.data, s.G, s.h.value * v.param.period, v.param.darkcounts, device) +
-        get_ln𝒫(s.x, s.D.value * v.param.fourτ, get_B(s), device) +
+        get_lnℒ(v.data, s.𝐔, device) +
+        get_ln𝒫(s.x, s.D.value * v.param.fourτ, device) +
+        get_ln𝒫(s.M) +
         get_ln𝒫(s.D) +
         get_ln𝒫(s.h)
     return s
