@@ -80,7 +80,7 @@ function ChainStatus(
         exp_param.PSF,
     )
     return ChainStatus(x, M, D, h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
-    #TODO initialize 𝑇 and ln𝒫 better
+    #TODO initialize 𝑇 better
 end
 
 # function Sample(
