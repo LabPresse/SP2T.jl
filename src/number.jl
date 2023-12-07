@@ -61,14 +61,18 @@ function sample_M(
     return randc(ln𝒫) - 1
 end
 
-function shuffle!(x::AbstractArray, M::Integer)
-    new_idx = vcat(randperm(M), M .+ randperm(size(x, 2) - M))
-    @views x = x[:, new_idx, :]
+function shuffle!(x::AbstractArray{<:Real,3}, B::Integer, ::CPU)
+    x[:, 1:B, :] = x[:, randperm(B), :]
+    return x
+end
+
+function shuffle!(x::AbstractArray{<:Real,3}, B::Integer, ::GPU)
+    x[:, 1:B, :] = view(x, :, randperm(B), :)
     return x
 end
 
 function update_M!(s::ChainStatus, v::Video, device::Device)
-    shuffle!(s.x.value, s.M.value)
+    shuffle!(s.x.value, s.M.value, device)
     s.M.value = sample_M(
         v.data,
         s.x.value,
