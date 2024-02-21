@@ -10,6 +10,7 @@ Single-photon single-particle tracking (SP²T) is the first offline single-parti
 ## Installation
 
 ## BNP-Track Framework
+
 The conceptual basis of SP²T is the same as the BNP-Track method we presented in this paper.
 
 ## Citation
