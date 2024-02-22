@@ -124,6 +124,7 @@ function Chain(;
     isnothing(annealing) && (annealing = PolynomialAnnealing{FT}())
     to_cpu!(video)
     status = ChainStatus(initial_guess, max_emitter_num, video.param, prior_param)
+    update_off_x!(status, video.param, CPU())
     update_ln𝒫!(status, video, CPU())
     chain = Chain{FT}(status, Sample{FT}[], annealing, 1, sizelimit)
     extend!(chain)
