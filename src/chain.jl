@@ -119,11 +119,9 @@ end
 
 function to_cpu!(c::Chain)
     s = c.status
-    # b = DSTrajectory(Array(s.b.value), s.b.dynamics, s.b.𝒫)
     x = MHTrajectory(Array(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
     𝐔 = Array(s.𝐔)
-    # c.status = ChainStatus(b, x, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
-    c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫)
+    c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
 end
 
@@ -142,10 +140,8 @@ end
 
 function to_gpu!(c::Chain)
     s = c.status
-    # b = DSTrajectory(CuArray(s.b.value), s.b.dynamics, s.b.𝒫)
     x = MHTrajectory(CuArray(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
     𝐔 = CuArray(s.𝐔)
-    # c.status = ChainStatus(b, x, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
 end
@@ -172,15 +168,6 @@ function run_MCMC!(
         to_gpu!(v)
         device = GPU()
     end
-    # while isnothing(num_iter) || iter < num_iter
-    #     iter += 1
-    #     # update_off_x!(c.status, c.prior.x, v.param)
-    #     # update_D!(c.status, v.param)
-    #     update_on_x!(c.status, v.data, v.param)
-    #     c.status.i += 1
-    #     extend!(c)
-    # end
-
     @showprogress 1 "Computing..." for iter = 1:num_iter
         c.status.i = iter
         update_x!(c.status, v, device)
