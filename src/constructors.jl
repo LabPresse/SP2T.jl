@@ -13,8 +13,6 @@ Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
     s.lnℒ,
 )
 
-# Sample(s::ChainStatus) = Sample(s.x[:, 1:get_B(s), :], s.D, s.h, s.F, s.i, s.T, s.ln𝒫)
-
 function set_b(B::Integer, M::Integer, dynamics::Dynamics, 𝒫::Distribution)
     b = BitVector(zeros(Bool, M))
     b[1:B] .= true
@@ -47,11 +45,6 @@ set_D(D::Real, 𝒫::Distribution) = DSIID(D, 𝒫)
 
 set_h(h::Real, 𝒫::Distribution, 𝒬::Distribution) = MHIID(h, 𝒫, 𝒬)
 
-# load_prior = Bernoulli{FloatType}(0.5)
-# init_pos_prior = default_init_pos_prior(param)
-# diffusion_prior = InverseGamma{FloatType}(1, 1 * 1)
-# emission_prior = Gamma{FloatType}(1, 1 / 1)
-
 function ChainStatus(
     s::Sample{FT},
     ℳ::Integer,
@@ -82,28 +75,6 @@ function ChainStatus(
     return ChainStatus(x, M, D, h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     #TODO initialize 𝑇 better
 end
-
-# function Sample(
-#     FloatType::DataType;
-#     param::ExperimentalParameter,
-#     prior::Prior,
-#     emitter_number::Integer,
-#     diffusion_coefficient::Real,
-#     emission_rate::Real,
-# )
-#     ftypeof(param) ≡ FloatType ||
-#         @warn "The float type in the argument is different from that of the experimental parameter!"
-#     B, N, T, D, h, F = emitter_number,
-#     param.length,
-#     FloatType(param.period),
-#     FloatType(diffusion_coefficient),
-#     FloatType(emission_rate),
-#     param.darkcounts
-
-#     x = Array{FloatType,3}(undef, 3, B, N)
-#     simulate!(x, prior.x, D, T)
-#     return Sample(x, D, h, F)
-# end
 
 function Video(p::ExperimentalParameter, s::Sample)
     ftypeof(p) ≡ ftypeof(s) ||
