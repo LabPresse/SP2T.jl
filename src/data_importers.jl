@@ -22,25 +22,7 @@ function read_files(
     return frames
 end
 
-function read_files(
-    path::String,
-    type::String;
-    framewidth::Integer,
-    frameheight::Integer,
-    ROIbounds::AbstractMatrix{T} = [1 1 1; typemax(Int) typemax(Int) typemax(Int)],
-) where {T<:Integer}
-    files = get_file_list(path, type)
-    full_indices = if type == "bin"
-        read_binary_files(files; width = framewidth, height = frameheight)
-    end
-    ROIbounds[2, 1] = min(ROIbounds[2, 1], framewidth)
-    ROIbounds[2, 2] = min(ROIbounds[2, 2], frameheight)
-    ROIbounds[2, 3] = min(ROIbounds[2, 3], full_indices[end-1, 4])
-    full_indices2 = extract_ROI(full_indices, ROIbounds)
-    frames = falses((diff(ROIbounds, dims = 1) .+ 1)...)
-    form_frames!(frames, full_indices2)
-    return frames
-end
+
 
 function get_file_list(path::String, type::String)
     files = if isfile(path)
