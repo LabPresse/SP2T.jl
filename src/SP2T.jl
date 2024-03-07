@@ -1,4 +1,4 @@
-module SpBNPTrack
+module SP2T
 
 #* This code is optizmized for GPU.
 
@@ -14,6 +14,9 @@ using CUDA
 
 # # IO
 # using JLD2
+
+#
+using StatsBase: counts
 
 # For visualization
 using GLMakie
@@ -52,7 +55,7 @@ include("constructors.jl")
 include("samplers.jl")
 # include("priors.jl")
 include("main_fxns.jl")
-include("plotting.jl")
+include("visualization.jl")
 
 include("likelihood.jl")
 include("diffusion.jl")
