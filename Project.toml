@@ -1,4 +1,4 @@
-name = "SpBNPTrack"
+name = "SP2T"
 uuid = "34fb1bd2-35c9-4575-83d4-13ca8a095b37"
 authors = ["lanceXwq <lance.xwq@gmail.com> and contributors"]
 version = "1.0.0-DEV"
@@ -16,6 +16,7 @@ MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 julia = "1"
