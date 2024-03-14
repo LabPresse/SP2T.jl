@@ -25,16 +25,17 @@ function view_frames(
 )
     isnothing(max_intensity) && (max_intensity = maximum(frames))
     framewidth, frameheight, framecount = size(frames)
-    set_theme!(theme_data_viewer)
+    widthrange, heightrange = 1:framewidth, 1:frameheight
 
+    set_theme!(theme_data_viewer)
     fig = Figure(; size = (1000, 300))
     axes = [Axis(fig[1, 1]), Axis(fig[1, 3][1, 1]), Axis(fig[1, 3][2, 1])]
 
     widthslider =
-        IntervalSlider(fig[2, 1], range = 1:framewidth, startvalues = (1, framewidth))
+        IntervalSlider(fig[2, 1], range = widthrange, startvalues = (1, framewidth))
     heightslider = IntervalSlider(
         fig[1, 2],
-        range = 1:frameheight,
+        range = heightrange,
         startvalues = (1, frameheight),
         horizontal = false,
     )
@@ -50,8 +51,10 @@ function view_frames(
     )
     textbox = Textbox(
         fig[2, 3][1, 2],
+        halign = :right,
         placeholder = "start frame, end frame",
         validator = range_validator,
+        width = 150,
     )
     lowerindex = Observable(1)
     upperindex = Observable(framecount)
@@ -73,8 +76,8 @@ function view_frames(
 
     # color points differently if they are within the two intervals
 
-    # pointsx = rand(1:framewidth, 100)
-    # pointsy = rand(1:frameheight, 100)
+    # pointsx = rand(widthrange, 100)
+    # pointsy = rand(heightrange, 100)
 
     # colors = lift(widthslider.interval, heightslider.interval) do h_int, v_int
     #     @. (h_int[1] <= pointsx <= h_int[2]) & (v_int[1] <= pointsy <= v_int[2])
@@ -90,9 +93,9 @@ function view_frames(
     ymin = @lift ($(heightslider.interval)[1] - 1) / framewidth
     ymax = @lift $(heightslider.interval)[2] / framewidth
 
-    heatmap!(axes[1], 1:framewidth, 1:frameheight, mainframe, colormap = :bone)
-    heatmap!(axes[2], 1:framewidth, 1:frameheight, startframe, colormap = :bone)
-    heatmap!(axes[3], 1:framewidth, 1:frameheight, endframe, colormap = :bone)
+    heatmap!(axes[1], widthrange, heightrange, mainframe, colormap = :bone)
+    heatmap!(axes[2], widthrange, heightrange, startframe, colormap = :bone)
+    heatmap!(axes[3], widthrange, heightrange, endframe, colormap = :bone)
 
     limits!.(axes, 0.5, framewidth + 0.5, 0.5, frameheight + 0.5)
 
@@ -108,7 +111,7 @@ function view_frames(
 
     Label(fig[0, 1:2], "Frame viewer")
     Label(fig[0, 3], "Range viewer")
-    Label(fig[2, 3][1, 1], rangetag, justification = :left)
+    Label(fig[2, 3][1, 1], rangetag, halign = :left)
 
     colsize!(fig.layout, 1, Relative(2 / 3))
     colsize!(fig.layout, 3, Relative(1 / 3))
