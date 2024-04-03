@@ -29,21 +29,24 @@ getrect(w_sl, h_sl) = @lift Rect(
 
 getvertices(rect) = (@lift $(rect).origin), (@lift $(rect).origin .+ $(rect).widths)
 
-function view_frames(
-    frames::AbstractArray{<:Integer};
-    max_intensity::Union{Integer,Nothing} = nothing,
-)
-    isnothing(max_intensity) && (max_intensity = maximum(frames))
+function view_frames(frames::AbstractArray{<:Integer}, bits::Integer)
     w, h, c = size(frames)
 
     set_theme!(theme_data_viewer)
     fig = Figure(; size = (1000, 300))
     axes = [Axis(fig[1, 1]), Axis(fig[1, 3][1, 1]), Axis(fig[1, 3][2, 1])]
 
-    w_sl = IntervalSlider(fig[2, 1], range = 1:w, startvalues = (1, w))
     h_sl = IntervalSlider(fig[1, 2], range = 1:h, startvalues = (1, h), horizontal = false)
+    w_sl = IntervalSlider(fig[2, 1], range = 1:w, startvalues = (1, w))
+    range_tb = Textbox(
+        fig[2, 3][1, 2],
+        halign = :right,
+        placeholder = "start frame, end frame",
+        validator = range_validator,
+        width = 150,
+    )
     f_sl = SliderGrid(
-        fig[3, :],
+        fig[3, :][1, 1],
         (
             label = "Current\nframe",
             range = 1:c,
@@ -52,13 +55,8 @@ function view_frames(
             format = x -> "$x/$c",
         ),
     )
-    range_tb = Textbox(
-        fig[2, 3][1, 2],
-        halign = :right,
-        placeholder = "start frame, end frame",
-        validator = range_validator,
-        width = 150,
-    )
+    button = Button(fig[3, :][1, 2], label = "print")
+
     lowerindex = Observable(1)
     upperindex = Observable(c)
 
@@ -77,18 +75,15 @@ function view_frames(
     startframe = @lift view(frames, :, :, $lowerindex)
     endframe = @lift view(frames, :, :, $upperindex)
 
-    # color points differently if they are within the two intervals
+    on(button.clicks) do n
+        println(
+            "Bits summed:\t$bits\nROI:\t$(sl_tags[1][])--$(sl_tags[2][])\nFrame range:\t$(lowerindex[])--$(upperindex[])",
+        )
+    end
 
-    # pointsx = rand(widthrange, 100)
-    # pointsy = rand(heightrange, 100)
-
-    # colors = lift(widthslider.interval, heightslider.interval) do h_int, v_int
-    #     @. (h_int[1] <= pointsx <= h_int[2]) & (v_int[1] <= pointsy <= v_int[2])
-    # end
-
-    heatmap!(axes[1], 1:w, 1:h, mainframe, colormap = :bone)
-    heatmap!(axes[2], 1:w, 1:h, startframe, colormap = :bone)
-    heatmap!(axes[3], 1:w, 1:h, endframe, colormap = :bone)
+    heatmap!(axes[1], 1:w, 1:h, mainframe, colormap = :bone, colorrange = (0, bits))
+    heatmap!(axes[2], 1:w, 1:h, startframe, colormap = :bone, colorrange = (0, bits))
+    heatmap!(axes[3], 1:w, 1:h, endframe, colormap = :bone, colorrange = (0, bits))
     limits!.(axes, 0.5, w + 0.5, 0.5, h + 0.5)
 
     rect = getrect(w_sl, h_sl)
@@ -97,8 +92,8 @@ function view_frames(
     end
 
     verts = getvertices(rect)
-    text!(axes[1], verts[1], align = (:left, :bottom), text = sl_tags[1])
-    text!(axes[1], verts[2], align = (:right, :top), text = sl_tags[2])
+    text!(axes[1], verts[1], align = (:left, :bottom), text = sl_tags[1], color = :white)
+    text!(axes[1], verts[2], align = (:right, :top), text = sl_tags[2], color = :white)
 
     Label(fig[0, 1:2], "Frame viewer")
     Label(fig[0, 3], "Range viewer")
