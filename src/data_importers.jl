@@ -2,116 +2,59 @@
 
 # Both signed and unsigned integers would work, as the number of pixels is much fewer than the upper limit of either type.
 
-function read_file(path::String; framewidth::Integer, frameheight::Integer)
-    file = isfile(path) ? [path] : throw(SystemError(path))
-    linear_indices = read_binary_files(file, framewidth, frameheight)
-    return linear_indices
+function readbin(
+    path::AbstractString;
+    framewidth::Integer = 512,
+    frameheight::Integer = 512,
+)
+    files = checkpath(path)
+    println("Found the following binary file(s):\n$files")
+    return _readbin(files, framewidth, frameheight)
 end
 
-# full_indices2 = extract_ROI(full_indices, ROIbounds)
-# frames = falses((diff(ROIbounds, dims = 1) .+ 1)...)
-# form_frames!(frames, full_indices2)
-
-function read_dir(path::String, type::String; framewidth::Integer, frameheight::Integer)
-    files =
-        isdir(path) ? get_file_list(path::String, type::String) : throw(SystemError(path))
-    print("Found the following $type files in $path:\n$files")
-    linear_indices = read_binary_files(files, framewidth, frameheight)
-    return linear_indices
-end
-
-# full_indices2 = extract_ROI(full_indices, ROIbounds)
-# frames = falses((diff(ROIbounds, dims = 1) .+ 1)...)
-# form_frames!(frames, full_indices2)
-
-function read_files(path::String, type::String; framewidth::Integer, frameheight::Integer)
-    files = get_file_list(path, type)
-    read_binary_files(files, framewidth, frameheight)
-    full_indices2 = extract_ROI(full_indices, ROIbounds)
-    frames = falses((diff(ROIbounds, dims = 1) .+ 1)...)
-    form_frames!(frames, full_indices2)
-    return frames
-end
-
-# function read_files(
-#     path::String,
-#     type::String;
-#     framewidth::Integer,
-#     frameheight::Integer,
-#     ROIbounds::AbstractMatrix{T} = [1 1 1; typemax(Int) typemax(Int) typemax(Int)],
-# ) where {T<:Integer}
-#     files = get_file_list(path, type)
-#     full_indices = if type == "bin"
-#         read_binary_files(files; width = framewidth, height = frameheight)
-#     end
-#     ROIbounds[2, 1] = min(ROIbounds[2, 1], framewidth)
-#     ROIbounds[2, 2] = min(ROIbounds[2, 2], frameheight)
-#     ROIbounds[2, 3] = min(ROIbounds[2, 3], full_indices[end-1, 4])
-#     full_indices2 = extract_ROI(full_indices, ROIbounds)
-#     frames = falses((diff(ROIbounds, dims = 1) .+ 1)...)
-#     form_frames!(frames, full_indices2)
-#     return frames
+# function readdir(path::AbstractString; framewidth::Integer, frameheight::Integer)
+#     files = isdir(path) ? listbins(path::AbstractString) : throw(SystemError(path))
+#     println("Found the following binary files in $path:\n$files")
+#     return readbins(files, framewidth, frameheight)
 # end
 
-# function get_file_list(path::String, type::String)
-#     files = if isfile(path)
-#         get_file_from_file(path, type)
-#     elseif isdir(path)
-#         get_file_from_dir(path, type)
-#     else
-#         error("No binary (.$type) files in the input path")
-#     end
-#     return files
-# end
-
-# get_file_from_file(path::String, type::String) =
-#     if endswith(path, "." * type)
-#         [path]
-#     else
-#         error("No .$type files in $path")
-#     end
-
-function get_file_list(dir::String, type::String)
-    files = filter(f -> endswith(f, "." * type), readdir(dir))
-    if isempty(files)
-        error_prefix = dir * (endswith(dir, "/") ? "*.$type" : "/*.$type")
-        throw(SystemError(error_prefix))
+checkpath(path) =
+    if isbinfile(path)
+        [path]
+    elseif isbindir(path)
+        listbins(path::AbstractString)
+    else
+        throw(ErrorException("Cannot find any binary file in $path."))
     end
-    return files
-end
 
-function read_binary_files(files::AbstractVector{String}, width::Integer, height::Integer)
-    number_of_signals = count_signals(files)
+isbinfile(path) = isfile(path) && endswith(path, ".bin")
+
+isbindir(path) = isdir(path) && any(f -> endswith(f, ".bin"), readdir(path))
+
+listbins(dir) = filter(f -> endswith(f, ".bin"), readdir(dir, join = true))
+
+function _readbin(files::AbstractVector{String}, width::Integer, height::Integer)
+    number_of_signals = countsignals(files)
     signals = Vector{UInt32}(undef, sum(number_of_signals))
-    read_signals!(files, signals, number_of_signals)
-    linear_indices = signal2linear!(signals, width * height)
-    return linear_indices
+    readsignals!(files, signals, number_of_signals)
+    return signal2linear!(signals, width * height)
 end
 
-# width_indices = fld1.(linear_indices, height)
-# height_indices = mod1.(linear_indices, height)
-# frame_indices = fld1.(linear_indices, framesize)
-# , width_indices, height_indices, frame_indices
-
-function count_signals(files::AbstractVector{String})
+function countsignals(files::AbstractVector{String})
     sizes = filesize.(files) # sizes in bytes
-    number_of_signals = Vector{Int}(undef, length(files))
-    number_of_signals .= div.(sizes, 4)
-    checksize(files, sizes)
-    return number_of_signals
-end
-
-function checksize(files::AbstractVector{String}, sizes::AbstractVector{<:Integer})
-    corrupted = findfirst(!=(0), rem.(sizes, 4))
-    isnothing(corrupted) || throw(
+    corrupted = iscorrupted.(sizes)
+    any(corrupted) && throw(
         DomainError(
             sizes[corrupted],
-            "File size is not divisible by 4 in $files[$corrupted]",
+            "File size is not divisible by 4 in $(files[corrupted])",
         ),
     )
+    return div.(sizes, 4)
 end
 
-function read_signals!(
+iscorrupted(sizeinbyte) = rem(sizeinbyte, 4) != 0
+
+function readsignals!(
     files::AbstractVector{String},
     signals::Vector{<:Integer},
     number_of_signals::AbstractVector{<:Integer},
@@ -125,29 +68,29 @@ function read_signals!(
 end
 
 function signal2linear!(signals::Vector{<:Integer}, framesize::Integer)
-    delimiters = pop_delimiters!(signals, framesize)
-    linear = convert(Vector{Int}, signals)
-    fill_linear!(linear, delimiters, framesize)
-    return linear
+    frameindices = popdelimiters!(signals, framesize)
+    indices = convert(Vector{Int}, signals)
+    addframeshift!(indices, frameindices, framesize)
+    return indices
 end
 
-function pop_delimiters!(signals::Vector{<:Integer}, framesize::Integer)
-    delimiters = findall(>(framesize), signals)
-    delimiters[end] != length(signals) && @warn "The last signal is not a delimiter."
-    deleteat!(signals, delimiters)
-    delimiters .-= 1:length(delimiters)
-    return delimiters
+function popdelimiters!(signals::Vector{<:Integer}, framesize::Integer)
+    indices = findall(>(framesize), signals)
+    indices[end] != length(signals) && @warn "The last signal is not a delimiter."
+    deleteat!(signals, indices)
+    indices .-= 1:length(indices)
+    return indices
 end
 
-function fill_linear!(
-    linear::Vector{<:Integer},
+function addframeshift!(
+    indices::Vector{<:Integer},
     delimiters::Vector{<:Integer},
     framesize::Integer,
 )
     @inbounds for i = 1:length(delimiters)-1
-        linear[delimiters[i]+1:delimiters[i+1]] .+= i * framesize
+        indices[delimiters[i]+1:delimiters[i+1]] .+= i * framesize
     end
-    return linear
+    return indices
 end
 
 get_cartesian_indices(
@@ -155,23 +98,6 @@ get_cartesian_indices(
     height::Integer,
     frame_count::Integer,
 ) = fld1.(linear, height), mod1.(linear, height), fld1.(linear, frame_count)
-
-# get_width_indices(linear::AbstractVector{<:Integer}, height::Integer) =
-#     fld1.(linear, height)
-
-# get_height_indices(linear::AbstractVector{<:Integer}, height::Integer) =
-#     mod1.(linear, height)
-
-# function get_frame_indices(
-#     linear::AbstractVector{<:Integer},
-#     delimiters::AbstractVector{<:Integer},
-# )
-#     frame_indices = similar(linear)
-#     @inbounds for i = 1:length(delimiters)-1
-#         frame_indices[delimiters[i]+1:delimiters[i+1]] .= i
-#     end
-#     return frame_indices
-# end
 
 function extract_ROI(
     full_indices::AbstractMatrix{<:Integer},

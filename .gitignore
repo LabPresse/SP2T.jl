@@ -1,0 +1,13 @@
+.vscode
+.JuliaFormatter.toml
+.VSCodeCounter
+example
+Manifest.toml
+test/scrach*
+test/benchmark*
+backup
+*.pb.gz
+extra
+*.mp4
+*.png
+.DS_Store
