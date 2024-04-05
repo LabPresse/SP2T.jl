@@ -29,7 +29,7 @@ getrect(w_sl, h_sl) = @lift Rect(
 
 getvertices(rect) = (@lift $(rect).origin), (@lift $(rect).origin .+ $(rect).widths)
 
-function view_frames(frames::AbstractArray{<:Integer}, bits::Integer)
+function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
     w, h, c = size(frames)
 
     set_theme!(theme_data_viewer)
@@ -46,7 +46,7 @@ function view_frames(frames::AbstractArray{<:Integer}, bits::Integer)
         width = 150,
     )
     f_sl = SliderGrid(
-        fig[3, :][1, 1],
+        fig[3, :],
         (
             label = "Current\nframe",
             range = 1:c,
@@ -55,7 +55,17 @@ function view_frames(frames::AbstractArray{<:Integer}, bits::Integer)
             format = x -> "$x/$c",
         ),
     )
-    button = Button(fig[3, :][1, 2], label = "print")
+    c_sl = SliderGrid(
+        fig[4, :][1, 1],
+        (
+            label = "Contrast",
+            range = 1:batchsize,
+            startvalue = batchsize,
+            snap = false,
+            format = x -> "$x/$batchsize",
+        ),
+    )
+    button = Button(fig[4, :][1, 2], label = "print")
 
     lowerindex = Observable(1)
     upperindex = Observable(c)
@@ -71,19 +81,23 @@ function view_frames(frames::AbstractArray{<:Integer}, bits::Integer)
     rangetag =
         @lift "Frame range: $(min($lowerindex,$upperindex))-$(max($lowerindex,$upperindex))"
 
+    colorrange = @lift (0, $(c_sl.sliders[1].value))
+
     mainframe = @lift view(frames, :, :, $(f_sl.sliders[1].value))
     startframe = @lift view(frames, :, :, $lowerindex)
     endframe = @lift view(frames, :, :, $upperindex)
 
     on(button.clicks) do n
         println(
-            "Bits summed:\t$bits\nROI:\t$(sl_tags[1][])--$(sl_tags[2][])\nFrame range:\t$(lowerindex[])--$(upperindex[])",
+            "Bits summed:\t$batchsize\nROI:\t$(sl_tags[1][])--$(sl_tags[2][])\nFrame range:\t$(lowerindex[])--$(upperindex[])",
         )
     end
 
-    heatmap!(axes[1], 1:w, 1:h, mainframe, colormap = :bone, colorrange = (0, bits))
-    heatmap!(axes[2], 1:w, 1:h, startframe, colormap = :bone, colorrange = (0, bits))
-    heatmap!(axes[3], 1:w, 1:h, endframe, colormap = :bone, colorrange = (0, bits))
+    @show c_sl.sliders[1].value
+
+    heatmap!(axes[1], 1:w, 1:h, mainframe, colormap = :bone, colorrange = colorrange)
+    heatmap!(axes[2], 1:w, 1:h, startframe, colormap = :bone, colorrange = colorrange)
+    heatmap!(axes[3], 1:w, 1:h, endframe, colormap = :bone, colorrange = colorrange)
     limits!.(axes, 0.5, w + 0.5, 0.5, h + 0.5)
 
     rect = getrect(w_sl, h_sl)
