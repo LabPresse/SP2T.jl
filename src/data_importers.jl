@@ -8,7 +8,10 @@ function readbin(
     frameheight::Integer = 512,
 )
     files = checkpath(path)
-    println("Found the following binary file(s):\n$files")
+    println("Found the following binary file(s):")
+    for f in files
+        println(f)
+    end
     return _readbin(files, framewidth, frameheight)
 end
 
@@ -49,10 +52,10 @@ function countsignals(files::AbstractVector{String})
             "File size is not divisible by 4 in $(files[corrupted])",
         ),
     )
-    return div.(sizes, 4)
+    return sizes .÷ 4
 end
 
-iscorrupted(sizeinbyte) = rem(sizeinbyte, 4) != 0
+iscorrupted(sizeinbyte) = sizeinbyte % 4 != 0
 
 function readsignals!(
     files::AbstractVector{String},
@@ -93,11 +96,53 @@ function addframeshift!(
     return indices
 end
 
+indices2video(
+    indices::AbstractVector{<:Integer};
+    framewidth::Integer = 512,
+    frameheight::Integer = 512,
+    bits::Integer = 8,
+) = indices2video(
+    indices,
+    framewidth = framewidth,
+    frameheight = frameheight,
+    batchsize = getbatchsize(bits),
+)
+
+getbatchsize(bits::Integer)::Integer = 2^bits - 1
+
+function indices2video(
+    indices::AbstractVector{<:Integer};
+    framewidth::Integer = 512,
+    frameheight::Integer = 512,
+    batchsize::Integer = 255,
+)
+    framesize = framewidth * frameheight
+    framecount, framesleft = countframes(indices[end], framesize, batchsize)
+    @show framesleft
+    framesleft != 0 &&
+        @warn "The number of binary frames is not divisible by the merge count provided."
+    frames = mergebinframes(indices, framesize, batchsize, framecount)
+    return reshape(frames, framewidth, frameheight, framecount)
+end
+
+countframes(lastindex::Integer, framesize::Integer, batchsize::Integer) =
+    divrem(fld1(lastindex, framesize), batchsize)
+
+mergebinframes(
+    indices::AbstractVector{<:Integer},
+    framesize::Integer,
+    batchsize::Integer,
+    framecount::Integer,
+) = counts(batchindices(indices, framesize, batchsize), 1:framesize*framecount) # See StatsBase.counts
+
+batchindices(indices::AbstractVector{<:Integer}, framesize::Integer, batchsize::Integer) =
+    @. (indices - 1) ÷ (framesize * batchsize) * framesize + mod1(indices, framesize)
+
 get_cartesian_indices(
     linear::AbstractVector{<:Integer},
     height::Integer,
-    frame_count::Integer,
-) = fld1.(linear, height), mod1.(linear, height), fld1.(linear, frame_count)
+    framecount::Integer,
+) = fld1.(linear, height), mod1.(linear, height), fld1.(linear, framecount)
 
 function extract_ROI(
     full_indices::AbstractMatrix{<:Integer},
@@ -139,80 +184,3 @@ function pixel2frame!(frame::AbstractArray{Bool,3}, pixels::AbstractVector{<:Int
     frame[pixels] .= true
     return frame
 end
-
-# function form_frams1(i::AbstractArray{<:Integer})
-#     f = falses(512, 512, 255)
-#     f[i] .= true
-#     return sum(f, dims = 3)
-# end
-
-# function form_frams2(i::AbstractArray{<:Integer})
-#     framesize = 512^2
-#     j = mod1.(i, framesize)
-#     f = counts(j, 1:framesize)
-#     return reshape(f, 512, 512)
-# end
-
-function indices2video(
-    linear_indices::AbstractVector{<:Integer};
-    framewidth::Integer,
-    frameheight::Integer,
-    bits::Integer,
-)
-    checkbits(bits)
-    return indices2video(
-        linear_indices,
-        framewidth = framewidth,
-        frameheight = frameheight,
-        merge_count = bits2number(bits),
-    )
-end
-
-function checkbits(bits::Integer)
-    bits <= 0 && throw(DomainError(bits, "The number of bits must be positive."))
-    bits > Sys.WORD_SIZE &&
-        @warn "The number of bits is greater than the system word size " *
-              string(Sys.WORD_SIZE) *
-              " overflow may happen."
-end
-
-bits2number(bits::Integer) = 2^bits - 1
-
-function indices2video(
-    linear_indices_1bit::AbstractVector{<:Integer};
-    framewidth::Integer,
-    frameheight::Integer,
-    merge_count::Integer,
-)
-    px_per_frame = framewidth * frameheight
-    frames, frame_count = get_merged_frames(linear_indices_1bit, px_per_frame, merge_count)
-    frames = reshape(frames, framewidth, frameheight, frame_count)
-end
-
-function get_merged_frames(
-    linear_indices_1bit::AbstractVector{<:Integer},
-    px_per_frame::Integer,
-    merge_count::Integer,
-)
-    number_of_1bit_frames = get_1bit_frame_count(linear_indices_1bit[end], px_per_frame)
-    frame_count = get_merged_frame_count(number_of_1bit_frames, merge_count)
-    linear_indices = rearrange_indices(linear_indices_1bit, px_per_frame, merge_count)
-    frames = counts(linear_indices, 1:px_per_frame*frame_count)
-    return frames, frame_count
-end
-
-get_1bit_frame_count(last_signal_index::Integer, px_per_frame::Integer) =
-    fld1(last_signal_index, px_per_frame)
-
-function get_merged_frame_count(frame_count_1bit::Integer, merge_count::Integer)
-    iszero(frame_count_1bit % merge_count) &&
-        @warn "The number of binary frames is not divisible by the merge count provided."
-    return frame_count_1bit ÷ merge_count
-end
-
-rearrange_indices(
-    indices::AbstractVector{<:Integer},
-    px_per_frame::Integer,
-    merge_count::Integer,
-) = @. (indices - 1) ÷ (px_per_frame * merge_count) * px_per_frame +
-   mod1(indices, px_per_frame)
