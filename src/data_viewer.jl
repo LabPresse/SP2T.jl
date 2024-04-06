@@ -30,33 +30,35 @@ getrect(w_sl, h_sl) = @lift Rect(
 getvertices(rect) = (@lift $(rect).origin), (@lift $(rect).origin .+ $(rect).widths)
 
 function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
-    w, h, c = size(frames)
+    framewidth, frameheight, framecount = size(frames)
 
     set_theme!(theme_data_viewer)
     fig = Figure(; size = (1000, 300))
     axes = [Axis(fig[1, 1]), Axis(fig[1, 3][1, 1]), Axis(fig[1, 3][2, 1])]
 
-    h_sl = IntervalSlider(fig[1, 2], range = 1:h, startvalues = (1, h), horizontal = false)
-    w_sl = IntervalSlider(fig[2, 1], range = 1:w, startvalues = (1, w))
-    range_tb = Textbox(
+    h_sl = IntervalSlider(
+        fig[1, 2],
+        range = 1:frameheight,
+        startvalues = (1, frameheight),
+        horizontal = false,
+    )
+    w_sl = IntervalSlider(fig[2, 1], range = 1:framewidth, startvalues = (1, framewidth))
+    tb = Textbox(
         fig[2, 3][1, 2],
         halign = :right,
         placeholder = "start frame, end frame",
         validator = range_validator,
         width = 150,
     )
-    f_sl = SliderGrid(
-        fig[3, :],
+    slgrid = SliderGrid(
+        fig[3, :][1, 1],
         (
-            label = "Current\nframe",
-            range = 1:c,
+            label = "Frame",
+            range = 1:framecount,
             startvalue = 1,
             snap = false,
-            format = x -> "$x/$c",
+            format = x -> "$x/$framecount",
         ),
-    )
-    c_sl = SliderGrid(
-        fig[4, :][1, 1],
         (
             label = "Contrast",
             range = 1:batchsize,
@@ -65,15 +67,15 @@ function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
             format = x -> "$x/$batchsize",
         ),
     )
-    button = Button(fig[4, :][1, 2], label = "print")
+    button = Button(fig[3, :][1, 2], label = "print")
 
     lowerindex = Observable(1)
-    upperindex = Observable(c)
+    upperindex = Observable(framecount)
 
-    on(range_tb.stored_string) do str
+    on(tb.stored_string) do str
         interval = sort!(parse.(Int64, split(str, ',')))
-        lowerindex[] = ifelse(1 <= interval[1] <= c, interval[1], lowerindex[])
-        upperindex[] = ifelse(1 <= interval[2] <= c, interval[2], upperindex[])
+        lowerindex[] = ifelse(1 <= interval[1] <= framecount, interval[1], lowerindex[])
+        upperindex[] = ifelse(1 <= interval[2] <= framecount, interval[2], upperindex[])
     end
 
     sl_tags = (@lift "($($(w_sl.interval)[1]), $($(h_sl.interval)[1]))"),
@@ -81,9 +83,9 @@ function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
     rangetag =
         @lift "Frame range: $(min($lowerindex,$upperindex))-$(max($lowerindex,$upperindex))"
 
-    colorrange = @lift (0, $(c_sl.sliders[1].value))
+    colorrange = @lift (0, $(slgrid.sliders[2].value))
 
-    mainframe = @lift view(frames, :, :, $(f_sl.sliders[1].value))
+    mainframe = @lift view(frames, :, :, $(slgrid.sliders[1].value))
     startframe = @lift view(frames, :, :, $lowerindex)
     endframe = @lift view(frames, :, :, $upperindex)
 
@@ -93,12 +95,31 @@ function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
         )
     end
 
-    @show c_sl.sliders[1].value
-
-    heatmap!(axes[1], 1:w, 1:h, mainframe, colormap = :bone, colorrange = colorrange)
-    heatmap!(axes[2], 1:w, 1:h, startframe, colormap = :bone, colorrange = colorrange)
-    heatmap!(axes[3], 1:w, 1:h, endframe, colormap = :bone, colorrange = colorrange)
-    limits!.(axes, 0.5, w + 0.5, 0.5, h + 0.5)
+    heatmap!(
+        axes[1],
+        1:framewidth,
+        1:frameheight,
+        mainframe,
+        colormap = :bone,
+        colorrange = colorrange,
+    )
+    heatmap!(
+        axes[2],
+        1:framewidth,
+        1:frameheight,
+        startframe,
+        colormap = :bone,
+        colorrange = colorrange,
+    )
+    heatmap!(
+        axes[3],
+        1:framewidth,
+        1:frameheight,
+        endframe,
+        colormap = :bone,
+        colorrange = colorrange,
+    )
+    limits!.(axes, 0.5, framewidth + 0.5, 0.5, frameheight + 0.5)
 
     rect = getrect(w_sl, h_sl)
     for ax in axes
@@ -115,7 +136,7 @@ function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
 
     colsize!(fig.layout, 1, Relative(2 / 3))
     colsize!(fig.layout, 3, Relative(1 / 3))
-    rowsize!(fig.layout, 1, Aspect(1, h / w))
+    rowsize!(fig.layout, 1, Aspect(1, frameheight / framewidth))
     resize_to_layout!(fig)
     display(fig)
     set_theme!()
