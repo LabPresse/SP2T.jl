@@ -39,7 +39,7 @@ export simulate_sample
 export visualize
 export ftypeof
 
-export read_files
+export readbin, getframes, getROIindices, viewframes
 
 # The files in the first "include" block ONLY contains struct definitions, basic constructors, and simple utility functions.
 include("detection_model.jl")
