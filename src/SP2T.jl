@@ -65,7 +65,7 @@ include("brightness.jl")
 include("permutation.jl")
 include("posterior.jl")
 
-include("data_importers.jl")
+include("import.jl")
 include("data_viewer.jl")
 
 end
