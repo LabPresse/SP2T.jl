@@ -1,4 +1,4 @@
-theme_data_viewer = Theme(
+theme_dataviewer = Theme(
     Axis = (
         aspect = DataAspect(),
         bottomspinevisible = false,
@@ -15,7 +15,7 @@ theme_data_viewer = Theme(
     Poly = (strokecolor = ColorSchemes.tab10[1], strokewidth = 2),
 )
 
-function range_validator(s::String)
+function validaterange(s::String)
     parsed_vec = tryparse.(Int64, split(s, ','))
     return eltype(parsed_vec) == Int64 && length(parsed_vec) == 2
 end
@@ -29,10 +29,10 @@ getrect(w_sl, h_sl) = @lift Rect(
 
 getvertices(rect) = (@lift $(rect).origin), (@lift $(rect).origin .+ $(rect).widths)
 
-function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
+function viewframes(frames::AbstractArray{<:Integer}; batchsize::Integer)
     framewidth, frameheight, framecount = size(frames)
 
-    set_theme!(theme_data_viewer)
+    set_theme!(theme_dataviewer)
     fig = Figure(; size = (1000, 300))
     axes = [Axis(fig[1, 1]), Axis(fig[1, 3][1, 1]), Axis(fig[1, 3][2, 1])]
 
@@ -47,7 +47,7 @@ function view_frames(frames::AbstractArray{<:Integer}, batchsize::Integer)
         fig[2, 3][1, 2],
         halign = :right,
         placeholder = "start frame, end frame",
-        validator = range_validator,
+        validator = validaterange,
         width = 150,
     )
     slgrid = SliderGrid(
