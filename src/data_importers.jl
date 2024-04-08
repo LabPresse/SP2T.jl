@@ -2,45 +2,40 @@
 
 # Both signed and unsigned integers would work, as the number of pixels is much fewer than the upper limit of either type.
 
-function readbin(
-    path::AbstractString;
-    framewidth::Integer = 512,
-    frameheight::Integer = 512,
-)
+function readbin(path::AbstractString; width::Integer = 512, height::Integer = 512)
     files = checkpath(path)
-    println("Found the following binary file(s):")
-    for f in files
-        println(f)
-    end
-    return _readbin(files, framewidth, frameheight)
+    printfilelist(files)
+    signals = _readbin(files)
+    return signal2indices!(signals, width * height)
 end
 
-# function readdir(path::AbstractString; framewidth::Integer, frameheight::Integer)
-#     files = isdir(path) ? listbins(path::AbstractString) : throw(SystemError(path))
-#     println("Found the following binary files in $path:\n$files")
-#     return readbins(files, framewidth, frameheight)
-# end
-
-checkpath(path) =
+checkpath(path::AbstractString) =
     if isbinfile(path)
         [path]
     elseif isbindir(path)
-        listbins(path::AbstractString)
+        listbins(path)
     else
         throw(ErrorException("Cannot find any binary file in $path."))
     end
 
-isbinfile(path) = isfile(path) && endswith(path, ".bin")
+isbinfile(path::AbstractString) = isfile(path) && endswith(path, ".bin")
 
-isbindir(path) = isdir(path) && any(f -> endswith(f, ".bin"), readdir(path))
+isbindir(path::AbstractString) = isdir(path) && any(f -> endswith(f, ".bin"), readdir(path))
 
-listbins(dir) = filter(f -> endswith(f, ".bin"), readdir(dir, join = true))
+listbins(dir::AbstractString) = filter(f -> endswith(f, ".bin"), readdir(dir, join = true))
 
-function _readbin(files::AbstractVector{String}, width::Integer, height::Integer)
+function printfilelist(files::AbstractVector{<:AbstractString})
+    println("Found the following binary file(s):")
+    for f in files
+        println(f)
+    end
+end
+
+function _readbin(files::AbstractVector{String})
     number_of_signals = countsignals(files)
-    signals = Vector{UInt32}(undef, sum(number_of_signals))
+    signals = Vector{Int32}(undef, sum(number_of_signals))
     readsignals!(files, signals, number_of_signals)
-    return signal2linear!(signals, width * height)
+    return signals
 end
 
 function countsignals(files::AbstractVector{String})
@@ -70,22 +65,21 @@ function readsignals!(
     return signals .+= 1
 end
 
-function signal2linear!(signals::Vector{<:Integer}, framesize::Integer)
-    frameindices = popdelimiters!(signals, framesize)
-    indices = convert(Vector{Int}, signals)
-    addframeshift!(indices, frameindices, framesize)
-    return indices
+function signal2indices!(indices::Vector{<:Integer}, framesize::Integer)
+    delimiters = popdelimiters!(indices, framesize)
+    indices = convert(Vector{Int}, indices)
+    return shiftindices!(indices, delimiters, framesize)
 end
 
 function popdelimiters!(signals::Vector{<:Integer}, framesize::Integer)
-    indices = findall(>(framesize), signals)
-    indices[end] != length(signals) && @warn "The last signal is not a delimiter."
-    deleteat!(signals, indices)
-    indices .-= 1:length(indices)
-    return indices
+    delimiters = findall(>(framesize), signals)
+    delimiters[end] != length(signals) && @warn "The last signal is not a delimiter."
+    deleteat!(signals, delimiters)
+    delimiters .-= 1:length(delimiters)
+    return delimiters
 end
 
-function addframeshift!(
+function shiftindices!(
     indices::Vector{<:Integer},
     delimiters::Vector{<:Integer},
     framesize::Integer,
@@ -96,91 +90,107 @@ function addframeshift!(
     return indices
 end
 
-indices2video(
+function getframes(
     indices::AbstractVector{<:Integer};
-    framewidth::Integer = 512,
-    frameheight::Integer = 512,
-    bits::Integer = 8,
-) = indices2video(
-    indices,
-    framewidth = framewidth,
-    frameheight = frameheight,
-    batchsize = getbatchsize(bits),
+    width::Integer,
+    height::Integer,
+    batchsize::Integer,
 )
-
-getbatchsize(bits::Integer)::Integer = 2^bits - 1
-
-function indices2video(
-    indices::AbstractVector{<:Integer};
-    framewidth::Integer = 512,
-    frameheight::Integer = 512,
-    batchsize::Integer = 255,
-)
-    framesize = framewidth * frameheight
-    framecount, framesleft = countframes(indices[end], framesize, batchsize)
-    @show framesleft
+    framesize = width * height
+    count, framesleft = countframes(indices[end], framesize, batchsize)
     framesleft != 0 &&
-        @warn "The number of binary frames is not divisible by the merge count provided."
-    frames = mergebinframes(indices, framesize, batchsize, framecount)
-    return reshape(frames, framewidth, frameheight, framecount)
+        @warn "The last batch contains $framesleft frames, fewer than the batchsize provided."
+    frames = _getframes(indices, framesize, batchsize, count)
+    return reshape(frames, width, height, count)
 end
 
-countframes(lastindex::Integer, framesize::Integer, batchsize::Integer) =
-    divrem(fld1(lastindex, framesize), batchsize)
+function countframes(lastindex::Integer, framesize::Integer, batchsize::Integer)
+    numofbinframe = fld1(lastindex, framesize)
+    return ifelse(batchsize == 1, (numofbinframe, 0), divrem(numofbinframe, batchsize))
+end
 
-mergebinframes(
+function _getframes(
     indices::AbstractVector{<:Integer},
     framesize::Integer,
     batchsize::Integer,
-    framecount::Integer,
-) = counts(batchindices(indices, framesize, batchsize), 1:framesize*framecount) # See StatsBase.counts
+    count::Integer,
+)
+    numofpx = framesize * count
+    if batchsize == 1
+        frames = falses(numofpx)
+        frames[indices] .= true
+    else
+        frames = counts(batchindices(indices, framesize, batchsize), 1:numofpx) # See StatsBase.counts
+    end
+    return frames
+end
 
 batchindices(indices::AbstractVector{<:Integer}, framesize::Integer, batchsize::Integer) =
     @. (indices - 1) ÷ (framesize * batchsize) * framesize + mod1(indices, framesize)
 
-get_cartesian_indices(
-    linear::AbstractVector{<:Integer},
+function getROIindices(
+    indices::AbstractVector{<:Integer},
+    ROIbounds::AbstractMatrix{<:Integer},
+    width::Integer,
     height::Integer,
-    framecount::Integer,
-) = fld1.(linear, height), mod1.(linear, height), fld1.(linear, framecount)
+)
+    newwidth, newheight =
+        ROIbounds[2, 1] - ROIbounds[1, 1] + 1, ROIbounds[2, 2] - ROIbounds[1, 2] + 1
+    cartesianindices = cartesianize(indices, width, width * height)
+    ROIcartesianindices = extractROI!(cartesianindices, ROIbounds)
+    return linearize(ROIcartesianindices, newwidth, newheight)
+end
 
-function extract_ROI(
-    full_indices::AbstractMatrix{<:Integer},
+function cartesianize(
+    indices::AbstractVector{<:Integer},
+    width::Integer,
+    framesize::Integer,
+)
+    cartesianindices = Matrix{eltype(indices)}(undef, length(indices), 3)
+    return cartesianize!(cartesianindices, indices, width, framesize)
+end
+
+function cartesianize!(
+    cartesianindices::AbstractMatrix{<:Integer},
+    indices::AbstractVector{<:Integer},
+    width::Integer,
+    framesize::Integer,
+)
+    cartesianindices[:, 1] .= mod1.(indices, width)
+    cartesianindices[:, 2] .= fld1.(mod1.(indices, framesize), width)
+    cartesianindices[:, 3] .= fld1.(indices, framesize)
+    return cartesianindices
+end
+
+function extractROI!(
+    cartesianindices::AbstractMatrix{<:Integer},
     ROIbounds::AbstractMatrix{<:Integer},
 )
-    inROI = trues(size(full_indices, 1))
-    @views begin
-        applybounds!(inROI, full_indices[:, 2], ROIbounds[:, 1])
-        applybounds!(inROI, full_indices[:, 3], ROIbounds[:, 2])
-        applybounds!(inROI, full_indices[:, 4], ROIbounds[:, 3])
-    end
-    return full_indices[inROI, :]
+    newupperbounds = view(ROIbounds, 1:1, :) .- 1
+    cartesianindices .-= newupperbounds
+    newupperbounds .= view(ROIbounds, 2:2, :) .- newupperbounds
+    inROI = vec(all(0 .< cartesianindices .≤ newupperbounds, dims = 2))
+    return cartesianindices[inROI, :]
 end
 
-function applybounds!(
-    inROI::AbstractVector{Bool},
+function linearize(
+    cartesianindices::AbstractMatrix{<:Integer},
+    width::Integer,
+    height::Integer,
+)
+    indices = similar(cartesianindices, axes(cartesianindices, 1))
+    return linearize!(indices, cartesianindices, height, width)
+end
+
+function linearize!(
     indices::AbstractVector{<:Integer},
-    bounds::AbstractVector{<:Integer},
+    cartesianindices::AbstractMatrix{<:Integer},
+    width::Integer,
+    height::Integer,
 )
-    @. inROI &= bounds[1] <= indices <= bounds[end]
-    indices .-= (bounds[1] - 1)
-    return inROI
-end
-
-function form_frames!(
-    frames::AbstractArray{Bool,3},
-    signal_indices::AbstractMatrix{<:Integer},
-)
-    height, width, ~ = size(frames)
-    @views @. signal_indices[:, 1] =
-        (signal_indices[:, 4] - 1) * height * width +
-        (signal_indices[:, 3] - 1) * height +
-        signal_indices[:, 2]
-    pixel2frame!(frames, view(signal_indices, :, 1))
-    return frames
-end
-
-function pixel2frame!(frame::AbstractArray{Bool,3}, pixels::AbstractVector{<:Integer})
-    frame[pixels] .= true
-    return frame
+    @views @. indices =
+        (cartesianindices[:, 3] - 1) * height * width +
+        (cartesianindices[:, 2] - 1) * height +
+        cartesianindices[:, 1]
+    return indices
 end
