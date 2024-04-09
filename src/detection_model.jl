@@ -3,7 +3,7 @@ abstract type AbstractPSF{T} end
 struct CircularGaussianLorentzian{FT<:AbstractFloat} <: AbstractPSF{FT}
     z₀::FT # [length] std of PSF along z (optical axis)
     σ₀::FT # [length] std of PSF along xy (image plane)
-    σ₀_sqrt2::FT # [length] std of PSF along xy (image plane)
+    σ₀_sqrt2::FT # σ₀√2
 end
 
 function CircularGaussianLorentzian{FT}(;
@@ -35,9 +35,9 @@ get_σ_sqrt2(
 function geterf(
     x::AbstractArray{FT},
     xᵖ::AbstractArray{FT},
-    σ::AbstractArray{FT},
+    σ_sqrt2::AbstractArray{FT},
 ) where {FT<:AbstractFloat}
-    𝐗 = (xᵖ .- x) ./ σ
+    𝐗 = (xᵖ .- x) ./ σ_sqrt2
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end
 
