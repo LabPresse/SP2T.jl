@@ -1,4 +1,4 @@
-using SpBNPTrack
+using SP2T
 using Random
 
 using JLD2
