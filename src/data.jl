@@ -50,7 +50,7 @@ mutable struct ExperimentalParameter{FT<:AbstractFloat}
         NA,
         nᵣ,
         λ,
-        CircularGaussianLorenzian{FT}(NA, nᵣ, λ),
+        CircularGaussianLorentzian{FT}(NA, nᵣ, λ),
     )
 end
 
