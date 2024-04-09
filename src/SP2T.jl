@@ -9,7 +9,7 @@ using LinearAlgebra
 using Random
 
 # GPU 
-using Flux
+using Flux: batched_mul, batched_mul!, batched_transpose
 using CUDA
 
 # # IO
