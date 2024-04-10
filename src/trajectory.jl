@@ -248,7 +248,7 @@ update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
 
 function update_x!(s::ChainStatus, v::Video, device::Device)
     update_off_x!(s, v.param, device)
-    update_on_x!(s, v.data, v.param, device)
+    update_on_x!(s, v.frames, v.param, device)
     return s
 end
 

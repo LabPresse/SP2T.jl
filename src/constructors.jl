@@ -59,7 +59,7 @@ function ChainStatus(
         N,
         Brownian(),
         MvNormal(prior_param.μx, prior_param.σx),
-        MvNormal([exp_param.PSF.σ_ref, exp_param.PSF.σ_ref, exp_param.PSF.z_ref] ./ 2),
+        MvNormal([exp_param.PSF.σ₀, exp_param.PSF.σ₀, exp_param.PSF.z₀] ./ 2),
     )
     M = set_M(size(s.x, 2), Geometric(1 - prior_param.qM))
     D = set_D(s.D, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
@@ -76,12 +76,12 @@ function ChainStatus(
     #TODO initialize 𝑇 better
 end
 
-function Video(p::ExperimentalParameter, s::Sample)
+function Video(p::ExperimentalParameter, s::Sample, meta::Dict{String,Any})
     ftypeof(p) ≡ ftypeof(s) ||
         @warn "Float type mismatch between the experimental parameter and the sample!"
     𝐔 = get_px_intensity(s.x, p.pxboundsx, p.pxboundsy, s.h * p.period, p.darkcounts, p.PSF)
     𝐖 = intensity2frame(𝐔)
-    return Video(𝐖, p)
+    return Video(𝐖, p, meta)
 end
 
 function Chain(;

@@ -36,10 +36,10 @@ function get_localization_error(S::AbstractVector, gt::Sample)
 end
 
 function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
-    if isa(v.data, CuArray)
+    if isa(v.frames, CuArray)
         to_cpu!(v)
     end
-    data = v.data
+    data = v.frames
     p = v.param
     x = gt.x
     B = size(x, 2)
@@ -185,7 +185,7 @@ function visualize(
     num_grid::Integer = 500,
     burn_in::Integer = 0,
 ) where {FT}
-    if isa(v.data, CuArray)
+    if isa(v.frames, CuArray)
         to_cpu!(v)
     end
     histcolor =

@@ -134,7 +134,7 @@ end
 
 function to_cpu!(v::Video)
     to_cpu!(v.param)
-    v.data = Array(v.data)
+    v.frames = Array(v.frames)
     return v
 end
 
@@ -150,7 +150,7 @@ function to_gpu!(v::Video)
     v.param.pxboundsx = CuArray(v.param.pxboundsx)
     v.param.pxboundsy = CuArray(v.param.pxboundsy)
     v.param.darkcounts = CuArray(v.param.darkcounts)
-    v.data = CuArray(v.data)
+    v.frames = CuArray(v.frames)
     return v
 end
 
@@ -171,7 +171,7 @@ function run_MCMC!(
     @showprogress 1 "Computing..." for iter = 1:num_iter
         c.status.i = iter
         update_x!(c.status, v, device)
-        update_M!(c.status, v, device)
+        # update_M!(c.status, v, device)
         update_D!(c.status, v.param)
         update_ln𝒫!(c.status, v, device)
         if mod(iter, c.stride) == 0

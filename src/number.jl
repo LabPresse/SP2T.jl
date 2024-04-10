@@ -74,7 +74,7 @@ end
 function update_M!(s::ChainStatus, v::Video, device::Device)
     shuffle_on_x!(s.x.value, s.M.value, device)
     s.M.value = sample_M(
-        v.data,
+        v.frames,
         s.x.value,
         v.param.pxboundsx,
         v.param.pxboundsy,

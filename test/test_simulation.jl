@@ -6,6 +6,13 @@ using JLD2
 Random.seed!(9)
 FloatType = Float32
 
+metadata = Dict{String,Any}(
+    "units" => ("μm", "s"),
+    "numerical aperture" => 1.45,
+    "refractive index" => 1.515,
+    "wavelength" => 0.665,
+)
+
 param = ExperimentalParameter(
     FloatType,
     units = ("μm", "s"),
@@ -13,9 +20,9 @@ param = ExperimentalParameter(
     period = 0.0033,
     pxsize = 0.133,
     darkcounts = fill(1e-3, (50, 50)),
-    NA = 1.45,
-    nᵣ = 1.515,
-    λ = 0.665,
+    NA = metadata["numerical aperture"],
+    nᵣ = metadata["refractive index"],
+    λ = metadata["wavelength"],
 )
 
 groundtruth = simulate_sample(
