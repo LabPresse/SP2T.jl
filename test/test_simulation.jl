@@ -11,7 +11,6 @@ param = ExperimentalParameter(
     units = ("μm", "s"),
     length = 255 * 3,
     period = 0.0033,
-    # exposure = 0.003,
     pxsize = 0.133,
     darkcounts = fill(1e-3, (50, 50)),
     NA = 1.45,
