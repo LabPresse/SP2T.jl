@@ -9,7 +9,6 @@ mutable struct ExperimentalParameter{FT<:AbstractFloat}
     length::Int
     period::FT
     fourτ::FT
-    # exposure::FT
     pxboundsx::AbstractVector{FT}
     pxboundsy::AbstractVector{FT}
     pxnumx::Int
@@ -21,38 +20,62 @@ mutable struct ExperimentalParameter{FT<:AbstractFloat}
     nᵣ::FT
     λ::FT
     PSF::AbstractPSF{FT}
-    ExperimentalParameter(
-        FT::DataType;
-        units::Tuple{String,String} = ("μm", "s"),
-        length::Integer,
-        period::Real,
-        # exposure::Real,
-        pxsize::Real,
-        darkcounts::AbstractMatrix{<:Real},
-        NA::Real,
-        nᵣ::Real,
-        λ::Real,
-        offsetx::Real = 0,
-        offsety::Real = 0,
-    ) = new{FT}(
-        units,
-        length,
-        period,
-        4 * period,
-        # exposure,
-        range(offsetx, step = pxsize, length = size(darkcounts, 1) + 1),
-        range(offsety, step = pxsize, length = size(darkcounts, 2) + 1),
-        size(darkcounts, 1),
-        size(darkcounts, 2),
-        pxsize,
-        pxsize^2,
-        darkcounts,
-        NA,
-        nᵣ,
-        λ,
-        CircularGaussianLorentzian{FT}(NA, nᵣ, λ),
-    )
 end
+
+ExperimentalParameter(
+    FT::DataType;
+    units::Tuple{String,String} = ("μm", "s"),
+    length::Integer,
+    period::Real,
+    pxsize::Real,
+    darkcounts::AbstractMatrix{<:Real},
+    NA::Real,
+    nᵣ::Real,
+    λ::Real,
+) = ExperimentalParameter{FT}(
+    units,
+    length,
+    period,
+    4 * period,
+    range(0, step = pxsize, length = size(darkcounts, 1) + 1),
+    range(0, step = pxsize, length = size(darkcounts, 2) + 1),
+    size(darkcounts, 1),
+    size(darkcounts, 2),
+    pxsize,
+    pxsize^2,
+    darkcounts,
+    NA,
+    nᵣ,
+    λ,
+    CircularGaussianLorentzian{FT}(NA, nᵣ, λ),
+)
+
+ExperimentalParameter(
+    FT::DataType;
+    units::Tuple{String,String} = ("μm", "s"),
+    length::Integer,
+    period::Real,
+    pxsize::Real,
+    darkcounts::AbstractMatrix{<:Real},
+    z₀::Real,
+    σ₀::Real,
+) = ExperimentalParameter{FT}(
+    units,
+    length,
+    period,
+    4 * period,
+    range(0, step = pxsize, length = size(darkcounts, 1) + 1),
+    range(0, step = pxsize, length = size(darkcounts, 2) + 1),
+    size(darkcounts, 1),
+    size(darkcounts, 2),
+    pxsize,
+    pxsize^2,
+    darkcounts,
+    Inf,
+    Inf,
+    Inf,
+    CircularGaussianLorentzian{FT}(z₀, σ₀, sqrt(2) * σ₀),
+)
 
 ftypeof(p::ExperimentalParameter{FT}) where {FT} = FT
 
