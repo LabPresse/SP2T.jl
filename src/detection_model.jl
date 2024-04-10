@@ -80,4 +80,4 @@ function get_px_intensity(
     return 𝐔
 end
 
-intensity2frame(𝐔::AbstractArray) = rand(eltype(𝐔), size(𝐔)) .< -expm1.(-𝐔)
+_getframes(𝐔::AbstractArray{<:Real}) = rand(eltype(𝐔), size(𝐔)) .< -expm1.(-𝐔)

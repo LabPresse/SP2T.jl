@@ -80,7 +80,7 @@ function Video(p::ExperimentalParameter, s::Sample, meta::Dict{String,Any})
     ftypeof(p) ≡ ftypeof(s) ||
         @warn "Float type mismatch between the experimental parameter and the sample!"
     𝐔 = get_px_intensity(s.x, p.pxboundsx, p.pxboundsy, s.h * p.period, p.darkcounts, p.PSF)
-    𝐖 = intensity2frame(𝐔)
+    𝐖 = _getframes(𝐔)
     return Video(𝐖, p, meta)
 end
 
