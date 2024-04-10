@@ -34,7 +34,7 @@ ExperimentalParameter(
     size(darkcounts, 2),
     pxsize,
     darkcounts,
-    CircularGaussianLorentzian{FT}(NA, nᵣ, λ),
+    CircularGaussianLorentzian{FT}(NA = NA, nᵣ = nᵣ, λ = λ),
 )
 
 ExperimentalParameter(
@@ -54,7 +54,7 @@ ExperimentalParameter(
     size(darkcounts, 2),
     pxsize,
     darkcounts,
-    CircularGaussianLorentzian{FT}(z₀, σ₀, sqrt(2) * σ₀),
+    CircularGaussianLorentzian{FT}(z₀, σ₀),
 )
 
 ftypeof(p::ExperimentalParameter{FT}) where {FT} = FT

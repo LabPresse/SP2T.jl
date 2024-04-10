@@ -3,7 +3,6 @@ abstract type AbstractPSF{T} end
 struct CircularGaussianLorentzian{FT<:AbstractFloat} <: AbstractPSF{FT}
     z₀::FT # [length] std of PSF along z (optical axis)
     σ₀::FT # [length] std of PSF along xy (image plane)
-    σ₀_sqrt2::FT # σ₀√2
 end
 
 function CircularGaussianLorentzian{FT}(;
@@ -15,7 +14,7 @@ function CircularGaussianLorentzian{FT}(;
     b = getratio(NA, nᵣ)
     z₀ = a * b
     σ₀ = sqrt(a * z₀) / 2
-    return CircularGaussianLorentzian{FT}(z₀, σ₀, sqrt(2) * σ₀)
+    return CircularGaussianLorentzian{FT}(z₀, σ₀)
 end
 
 function getratio(NA::Real, nᵣ::Real)
@@ -27,17 +26,17 @@ end
 
 getsemiangle(NA::Real, nᵣ::Real) = asin(NA / nᵣ)
 
-get_σ_sqrt2(
+getσ(
     z::AbstractArray{FT,3},
     PSF::CircularGaussianLorentzian{FT},
-) where {FT<:AbstractFloat} = @. PSF.σ₀_sqrt2 * √(1 + (z / PSF.z₀)^2)
+) where {FT<:AbstractFloat} = @. sqrt(2) * PSF.σ₀ * √(1 + (z / PSF.z₀)^2)
 
 function geterf(
     x::AbstractArray{FT},
     xᵖ::AbstractArray{FT},
-    σ_sqrt2::AbstractArray{FT},
+    σ::AbstractArray{FT},
 ) where {FT<:AbstractFloat}
-    𝐗 = (xᵖ .- x) ./ σ_sqrt2
+    𝐗 = (xᵖ .- x) ./ (sqrt(2) * σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end
 
@@ -50,9 +49,9 @@ function add_px_intensity!(
     hτ::FT,
     β::Integer = 1,
 ) where {FT<:AbstractFloat}
-    σ_sqrt2 = get_σ_sqrt2(view(x, 3:3, :, :), PSF)
-    𝐗 = geterf(view(x, 1:1, :, :), xᵖ, σ_sqrt2)
-    𝐘 = geterf(view(x, 2:2, :, :), yᵖ, σ_sqrt2)
+    σ = getσ(view(x, 3:3, :, :), PSF)
+    𝐗 = geterf(view(x, 1:1, :, :), xᵖ, σ)
+    𝐘 = geterf(view(x, 2:2, :, :), yᵖ, σ)
     return batched_mul!(𝐔, 𝐗, batched_transpose(𝐘), hτ, β)
 end
 
