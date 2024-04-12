@@ -29,14 +29,14 @@ getsemiangle(NA::Real, nᵣ::Real) = asin(NA / nᵣ)
 getσ(
     z::AbstractArray{FT,3},
     PSF::CircularGaussianLorentzian{FT},
-) where {FT<:AbstractFloat} = @. sqrt(2) * PSF.σ₀ * √(1 + (z / PSF.z₀)^2)
+) where {FT<:AbstractFloat} = @. √2 * PSF.σ₀ * √(1 + (z / PSF.z₀)^2)
 
 function geterf(
     x::AbstractArray{FT},
     xᵖ::AbstractArray{FT},
     σ::AbstractArray{FT},
 ) where {FT<:AbstractFloat}
-    𝐗 = (xᵖ .- x) ./ (sqrt(2) * σ)
+    𝐗 = @. (xᵖ - x) / (√2 * σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end
 

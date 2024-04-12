@@ -1,21 +1,21 @@
 #* Forward functions
-function set_init_x!(x::AbstractArray{FT}, 𝒫::Distribution, ::CPU) where {FT<:AbstractFloat}
+function setinitx!(x::AbstractArray{FT}, 𝒫::Distribution, ::CPU) where {FT<:AbstractFloat}
     x .= rand(𝒫, size(x, 2))
     return x
 end
 
-function set_init_x!(x::AbstractArray{FT}, 𝒫::Distribution, ::GPU) where {FT<:AbstractFloat}
+function setinitx!(x::AbstractArray{FT}, 𝒫::Distribution, ::GPU) where {FT<:AbstractFloat}
     x .= CuArray(rand(𝒫, size(x, 2)))
     return x
 end
 
-function set_Δx!(x::AbstractArray{FT,3}, σ::FT, ::CPU) where {FT<:AbstractFloat}
+function setΔx!(x::AbstractArray{FT,3}, σ::FT, ::CPU) where {FT<:AbstractFloat}
     x .= randn(FT, size(x)...)
     x .*= σ
     return x
 end
 
-function set_Δx!(x::AbstractArray{FT,3}, σ::FT, ::GPU) where {FT<:AbstractFloat}
+function setΔx!(x::AbstractArray{FT,3}, σ::FT, ::GPU) where {FT<:AbstractFloat}
     CUDA.randn!(x)
     x .*= σ
     return x
@@ -29,8 +29,8 @@ function simulate!(
     device::Device,
 ) where {FT<:AbstractFloat}
     @views begin
-        set_init_x!(x[:, :, 1], 𝒫, device)
-        set_Δx!(x[:, :, 2:end], √(2 * D * τ), device)
+        setinitx!(x[:, :, 1], 𝒫, device)
+        setΔx!(x[:, :, 2:end], √(2 * D * τ), device)
     end
     cumsum!(x, x, dims = 3)
     return x
@@ -199,7 +199,6 @@ function update_on_x!(
     param::ExperimentalParameter,
     device::CPU,
 )
-    N = param.length
     xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
     xᵖ = propose_x(xᵒ, s.x.𝒬, device)
     𝐔ᵖ = get_px_intensity(
@@ -213,7 +212,7 @@ function update_on_x!(
     ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
     ln𝓇[1] += add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.x.𝒫)
     accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
-    s.x.counter[:, 2] .+= count(accepted), N
+    s.x.counter[:, 2] .+= count(accepted), length(accepted)
     copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
     return s
 end
@@ -224,7 +223,6 @@ function update_on_x!(
     param::ExperimentalParameter,
     device::GPU,
 )
-    N = param.length
     xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
     xᵖ = propose_x(xᵒ, s.x.𝒬, device)
     𝐔ᵖ = get_px_intensity(
@@ -238,7 +236,7 @@ function update_on_x!(
     ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
     add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.x.𝒫)
     accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
-    s.x.counter[:, 2] .+= count(accepted), N
+    s.x.counter[:, 2] .+= count(accepted), length(accepted)
     copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
     return s
 end
@@ -285,7 +283,7 @@ end
 #     xᵖ, Gᵖ = get_xᵖ(xᵒ, CuArray(diag(x.𝒬.Σ)), param)
 #     diff_lnℒ = get_Δlnℒ_x(w, s.h.value, Gᵖ, Gᵒ, param.darkcounts, device) |> cpu
 #     accepted = BitVector(undef, N)
-#     for n in randperm(param.length)
+#     for n in randperm(size(w, 3))
 #         ln𝓊 = log(rand())
 #         ln𝓇, sum_Δxᵖ² = get_Δln𝒫_x(xᵖ, xᵒ, n, τ, sum_Δxᵒ², s.D.𝒫, x.𝒫, device)
 #         ln𝓇 += diff_lnℒ[n]
