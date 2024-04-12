@@ -16,8 +16,8 @@ initial_guess = simulate_sample(
 prior_param = PriorParameter(
     ftypeof(video),
     pb = 0.1,
-    μx = [video.param.pxnumx, video.param.pxnumy, 0] .* (video.param.pxsize / 2),
-    σx = [1, 1, 1] .* (video.param.pxsize * 2),
+    μx = [video.param.pxboundsx[end], video.param.pxboundsy[end], 0] ./ 2,
+    σx = [1, 1, 1] .* (getpxsize(param) * 2),
     ϕD = 1,
     χD = 0.1,
     ϕh = 1,

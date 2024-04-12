@@ -43,10 +43,11 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
     p = v.param
     x = gt.x
     B = size(x, 2)
+    pxsize = getpxsize(p)
 
     g = get_px_PSF(gt.x, p.pxboundsx, p.pxboundsy, p.PSF)
 
-    t = 1:p.length
+    t = 1:_length(v)
     fig = Figure()
     ax = [
         Axis3(fig[1:3, 1], zlabel = "t"),
@@ -59,7 +60,7 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
         lines!(ax[2], t, view(x, 3, m, :))
     end
 
-    sl_x = Slider(fig[5, 1], range = 1:p.length, startvalue = 1)
+    sl_x = Slider(fig[5, 1], range = 1:_length(v), startvalue = 1)
 
     frame1 = lift(sl_x.value) do x
         view(g, :, :, x)
@@ -87,7 +88,7 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
     heatmap!(
         ax[3],
         p.pxboundsx,
-        p.pxboundsy .+ (4 * p.pxsize + 2 * p.pxboundsy[end]),
+        p.pxboundsy .+ (4 * pxsize + 2 * p.pxboundsy[end]),
         frame1,
         colormap = :grays,
     )
@@ -95,7 +96,7 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
         text!(
             ax[3],
             p.pxboundsx[1],
-            p.pxboundsy[end] + (4 * p.pxsize + 1 * p.pxboundsy[end]),
+            p.pxboundsy[end] + (4 * pxsize + 1 * p.pxboundsy[end]),
             text = "asdasd",
             fontsize = 20,
         ),
@@ -107,7 +108,7 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
     heatmap!(
         ax[3],
         p.pxboundsx,
-        p.pxboundsy .+ (2 * p.pxsize + p.pxboundsy[end]),
+        p.pxboundsy .+ (2 * pxsize + p.pxboundsy[end]),
         frame2,
         colormap = :grays,
         colorrange = (false, true),
@@ -204,7 +205,7 @@ function visualize(
     x = view(all_trajectories, :, :, 1)
     y = view(all_trajectories, :, :, 2)
     z = view(all_trajectories, :, :, 3)
-    t = collect(1:v.param.length)
+    t = 1:_length(v)
     @show ~, MAP_idx = findmax([i.ln𝒫 for i in s])
 
     B = size(x, 1)
@@ -346,4 +347,3 @@ function visualize(
     display(fig)
     set_theme!()
 end
-

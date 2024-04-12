@@ -1,6 +1,6 @@
 Prior(param::ExperimentalParameter{FT}) where {FT} = Prior{FT}(
-    μₓ = [param.pxnumx * param.pxsize / 2, param.pxnumy * param.pxsize / 2, 0],
-    σₓ = [param.pxsize * 2, param.pxsize * 2, 0],
+    μₓ = [param.pxboundsx[end], param.pxboundsy[end], 0] ./ 2,
+    σₓ = getpxsize(param) .* [2, 2, 0],
 )
 
 Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(

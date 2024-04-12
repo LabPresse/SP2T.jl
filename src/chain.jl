@@ -59,12 +59,10 @@ view_off_x(s::ChainStatus) = @view s.x.value[:, s.M.value+1:end, :]
 
 viewdiag(M::AbstractMatrix) = view(M, diagind(M))
 
-function default_init_pos_prior(param::ExperimentalParameter)
-    Nx, Ny, a = param.pxnumx, param.pxnumy, param.pxsize
-    μₓ = [Nx * a / 2, Ny * a / 2, 0]
-    σₓ = [a * 2, a * 2, 0]
-    return MvNormal(μₓ, σₓ)
-end
+default_init_pos_prior(param::ExperimentalParameter) = MvNormal(
+    [param.pxboundsx[end], param.pxboundsy[end], 0] ./ 2,
+    getpxsize(param) .* [2, 2, 0],
+)
 
 mutable struct Chain{FT<:AbstractFloat}
     status::ChainStatus{FT}

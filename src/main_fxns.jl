@@ -1,20 +1,17 @@
 function simulate_sample(;
     param::ExperimentalParameter{FT},
-    emitter_number::Integer,
+    framecount::Integer,
+    emittercount::Integer,
     diffusion_coefficient::Real,
-    emission_rate::Real,
+    brightness::Real,
     init_pos_prior::Union{Missing,MultivariateDistribution} = missing,
     device::Device = CPU(),
 ) where {FT}
-    B, N, τ, D, h = emitter_number,
-    param.length,
-    param.period,
-    FT(diffusion_coefficient),
-    FT(emission_rate)
+    D = FT(diffusion_coefficient)
     if ismissing(init_pos_prior)
         init_pos_prior = default_init_pos_prior(param)
     end
-    x = Array{FT,3}(undef, 3, B, N)
-    simulate!(x, init_pos_prior, D, τ, device)
-    return Sample(x, D, h)
+    x = Array{FT,3}(undef, 3, emittercount, framecount)
+    simulate!(x, init_pos_prior, D, param.period, device)
+    return Sample(x, D, FT(brightness))
 end
