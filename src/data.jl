@@ -19,30 +19,34 @@ ExperimentalParameter(
     period::Real,
     pxsize::Real,
     darkcounts::AbstractMatrix{<:Real},
-    NA::Real,
-    nᵣ::Real,
-    λ::Real,
+    numericalaperture::Real,
+    refractiveindex::Real,
+    wavelength::Real,
 ) = ExperimentalParameter{FT}(
     period,
     range(0, step = pxsize, length = size(darkcounts, 1) + 1),
     range(0, step = pxsize, length = size(darkcounts, 2) + 1),
     darkcounts,
-    CircularGaussianLorentzian{FT}(NA = NA, nᵣ = nᵣ, λ = λ),
+    CircularGaussianLorentzian{FT}(
+        NA = numericalaperture,
+        nᵣ = refractiveindex,
+        λ = wavelength,
+    ),
 )
 
 ExperimentalParameter(
-    FT::DataType;
+    FT::DataType,
+    σ₀::Real,
+    z₀::Real;
     period::Real,
     pxsize::Real,
     darkcounts::AbstractMatrix{<:Real},
-    z₀::Real,
-    σ₀::Real,
 ) = ExperimentalParameter{FT}(
     period,
     range(0, step = pxsize, length = size(darkcounts, 1) + 1),
     range(0, step = pxsize, length = size(darkcounts, 2) + 1),
     darkcounts,
-    CircularGaussianLorentzian{FT}(z₀, σ₀),
+    CircularGaussianLorentzian{FT}(σ₀, z₀),
 )
 
 ftypeof(p::ExperimentalParameter{FT}) where {FT} = FT

@@ -1,8 +1,8 @@
 abstract type AbstractPSF{T} end
 
 struct CircularGaussianLorentzian{FT<:AbstractFloat} <: AbstractPSF{FT}
-    z₀::FT # [length] std of PSF along z (optical axis)
     σ₀::FT # [length] std of PSF along xy (image plane)
+    z₀::FT # [length] std of PSF along z (optical axis)
 end
 
 function CircularGaussianLorentzian{FT}(;
@@ -14,7 +14,7 @@ function CircularGaussianLorentzian{FT}(;
     b = getratio(NA, nᵣ)
     z₀ = a * b
     σ₀ = sqrt(a * z₀) / 2
-    return CircularGaussianLorentzian{FT}(z₀, σ₀)
+    return CircularGaussianLorentzian{FT}(σ₀, z₀)
 end
 
 function getratio(NA::Real, nᵣ::Real)
