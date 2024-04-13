@@ -106,7 +106,7 @@ get_ln𝒫(x::Trajectory, dynRV::RealNumOrVec, B::Integer, device::Device) =
 #     sum(logexpm1.(𝐔[w])) - sum(𝐔)
 
 function update_ln𝒫!(s::ChainStatus, v::Video, device::Device)
-    s.ln𝒫 =
+    s.logposterior =
         get_lnℒ(v.frames, s.𝐔, device) +
         get_ln𝒫(s.tracks, 4 * s.diffusivity.value * v.param.period, device) +
         get_ln𝒫(s.emittercount) +

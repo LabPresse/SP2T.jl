@@ -9,7 +9,7 @@ Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
     s.brightness.value,
     s.iteration,
     s.temperature,
-    s.ln𝒫,
+    s.logposterior,
     s.lnℒ,
 )
 
