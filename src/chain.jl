@@ -20,7 +20,7 @@ struct PriorParameter{FT<:AbstractFloat}
     ) = new{FT}(pb, μx, σx, ϕD, χD, ϕh, ψh, qM)
 end
 
-ftypeof(p::PriorParameter{FT}) where {FT} = FT
+_eltype(p::PriorParameter{FT}) where {FT} = FT
 
 # ChainStatus contains auxiliary variables
 mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
@@ -51,7 +51,7 @@ end
 
 get_M(s::ChainStatus) = size(s.x.value, 2)
 
-ftypeof(s::ChainStatus{FT}) where {FT} = FT
+_eltype(s::ChainStatus{FT}) where {FT} = FT
 
 view_on_x(s::ChainStatus) = view(s.x.value, :, 1:s.M.value, :)
 
@@ -74,7 +74,7 @@ end
 
 chainlength(c::Chain) = length(c.samples)
 
-ftypeof(c::Chain{FT}) where {FT} = FT
+_eltype(c::Chain{FT}) where {FT} = FT
 
 isfull(c::Chain) = chainlength(c) > c.sizelimit
 
