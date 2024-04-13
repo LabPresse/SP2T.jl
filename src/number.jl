@@ -72,10 +72,10 @@ function shuffle_on_x!(x::AbstractArray{<:Real,3}, B::Integer, ::GPU)
 end
 
 function update_M!(s::ChainStatus, v::Video, device::Device)
-    shuffle_on_x!(s.x.value, s.M.value, device)
+    shuffle_on_x!(s.tracks.value, s.M.value, device)
     s.M.value = sample_M(
         v.frames,
-        s.x.value,
+        s.tracks.value,
         v.param.pxboundsx,
         v.param.pxboundsy,
         s.h.value * v.param.period,

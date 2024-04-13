@@ -24,7 +24,7 @@ _eltype(p::PriorParameter{FT}) where {FT} = FT
 
 # ChainStatus contains auxiliary variables
 mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
-    x::MHTrajectory{AT}
+    tracks::MHTrajectory{AT}
     M::DSIID{Int}
     D::DSIID{FT}
     h::MHIID{FT}
@@ -49,13 +49,13 @@ end
 
 # get_B(s::ChainStatus) = count(s.b.value)
 
-get_M(s::ChainStatus) = size(s.x.value, 2)
+get_M(s::ChainStatus) = size(s.tracks.value, 2)
 
 _eltype(s::ChainStatus{FT}) where {FT} = FT
 
-view_on_x(s::ChainStatus) = view(s.x.value, :, 1:s.M.value, :)
+view_on_x(s::ChainStatus) = view(s.tracks.value, :, 1:s.M.value, :)
 
-view_off_x(s::ChainStatus) = @view s.x.value[:, s.M.value+1:end, :]
+view_off_x(s::ChainStatus) = @view s.tracks.value[:, s.M.value+1:end, :]
 
 viewdiag(M::AbstractMatrix) = view(M, diagind(M))
 
@@ -117,7 +117,7 @@ end
 
 function to_cpu!(c::Chain)
     s = c.status
-    x = MHTrajectory(Array(s.x.value), s.x.dynamics, s.x.prior, s.x.proposal)
+    x = MHTrajectory(Array(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
     𝐔 = Array(s.𝐔)
     c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
@@ -138,7 +138,7 @@ end
 
 function to_gpu!(c::Chain)
     s = c.status
-    x = MHTrajectory(CuArray(s.x.value), s.x.dynamics, s.x.prior, s.x.proposal)
+    x = MHTrajectory(CuArray(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
     𝐔 = CuArray(s.𝐔)
     c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c

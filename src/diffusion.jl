@@ -16,6 +16,6 @@ end
 
 function update_D!(s::ChainStatus, param::ExperimentalParameter)
     # s.D.value = sample_D(view_on_x(s), s.D.𝒫, param.period, s.𝑇)
-    s.D.value = sample_D(s.x.value, s.D.prior, param.period, s.𝑇)
+    s.D.value = sample_D(s.tracks.value, s.D.prior, param.period, s.𝑇)
     return s
 end

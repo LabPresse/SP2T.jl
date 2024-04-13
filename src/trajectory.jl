@@ -200,7 +200,7 @@ function update_on_x!(
     device::CPU,
 )
     xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
-    xᵖ = propose_x(xᵒ, s.x.proposal, device)
+    xᵖ = propose_x(xᵒ, s.tracks.proposal, device)
     𝐔ᵖ = get_px_intensity(
         xᵖ,
         param.pxboundsx,
@@ -210,9 +210,9 @@ function update_on_x!(
         param.PSF,
     )
     ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
-    ln𝓇[1] += add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.x.prior)
+    ln𝓇[1] += add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.tracks.prior)
     accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
-    s.x.counter[:, 2] .+= count(accepted), length(accepted)
+    s.tracks.counter[:, 2] .+= count(accepted), length(accepted)
     copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
     return s
 end
@@ -224,7 +224,7 @@ function update_on_x!(
     device::GPU,
 )
     xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
-    xᵖ = propose_x(xᵒ, s.x.proposal, device)
+    xᵖ = propose_x(xᵒ, s.tracks.proposal, device)
     𝐔ᵖ = get_px_intensity(
         xᵖ,
         param.pxboundsx,
@@ -234,15 +234,15 @@ function update_on_x!(
         param.PSF,
     )
     ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
-    add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.x.prior)
+    add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.tracks.prior)
     accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
-    s.x.counter[:, 2] .+= count(accepted), length(accepted)
+    s.tracks.counter[:, 2] .+= count(accepted), length(accepted)
     copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
     return s
 end
 
 update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
-    simulate!(view_off_x(s), s.x.prior, s.D.value, param.period, device)
+    simulate!(view_off_x(s), s.tracks.prior, s.D.value, param.period, device)
 
 function update_x!(s::ChainStatus, v::Video, device::Device)
     update_off_x!(s, v.param, device)
