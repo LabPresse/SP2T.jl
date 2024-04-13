@@ -4,7 +4,7 @@ abstract type DirectlySampled{T} <: RandomVariable{T} end
 
 abstract type MHSampled{T} <: RandomVariable{T} end
 
-RealNumOrVec = Union{Real,AbstractArray{<:Real}}
+RealNumberOrArray = Union{Real,AbstractArray{<:Real}}
 
 abstract type Dynamics end
 
@@ -12,14 +12,14 @@ struct Brownian <: Dynamics end
 
 struct Step <: Dynamics end
 
-mutable struct DSIID{T<:RealNumOrVec} <: DirectlySampled{T}
+mutable struct DSIID{T<:RealNumberOrArray} <: DirectlySampled{T}
     value::T
     prior::Distribution
 end
 
 ftypeof(rv::DSIID{T}) where {T} = T
 
-mutable struct MHIID{T<:RealNumOrVec} <: MHSampled{T}
+mutable struct MHIID{T<:RealNumberOrArray} <: MHSampled{T}
     value::T
     prior::Distribution
     proposal::Distribution
