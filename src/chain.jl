@@ -117,7 +117,7 @@ end
 
 function to_cpu!(c::Chain)
     s = c.status
-    x = MHTrajectory(Array(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
+    x = MHTrajectory(Array(s.x.value), s.x.dynamics, s.x.prior, s.x.𝒬)
     𝐔 = Array(s.𝐔)
     c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
@@ -138,7 +138,7 @@ end
 
 function to_gpu!(c::Chain)
     s = c.status
-    x = MHTrajectory(CuArray(s.x.value), s.x.dynamics, s.x.𝒫, s.x.𝒬)
+    x = MHTrajectory(CuArray(s.x.value), s.x.dynamics, s.x.prior, s.x.𝒬)
     𝐔 = CuArray(s.𝐔)
     c.status = ChainStatus(x, s.M, s.D, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c

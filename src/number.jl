@@ -81,7 +81,7 @@ function update_M!(s::ChainStatus, v::Video, device::Device)
         s.h.value * v.param.period,
         v.param.darkcounts,
         v.param.PSF,
-        s.M.𝒫,
+        s.M.prior,
         s.𝑇,
         device,
     )

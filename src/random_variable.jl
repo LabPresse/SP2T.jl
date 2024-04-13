@@ -14,14 +14,14 @@ struct Step <: Dynamics end
 
 mutable struct DSIID{T<:RealNumOrVec} <: DirectlySampled{T}
     value::T
-    𝒫::Distribution
+    prior::Distribution
 end
 
 ftypeof(rv::DSIID{T}) where {T} = T
 
 mutable struct MHIID{T<:RealNumOrVec} <: MHSampled{T}
     value::T
-    𝒫::Distribution
+    prior::Distribution
     𝒬::Distribution
     counter::Matrix{Int}
     batchsize::Int
@@ -34,7 +34,7 @@ ftypeof(rv::MHIID{FT}) where {FT} = FT
 mutable struct DSTrajectory{AT<:AbstractArray{<:Real}} <: DirectlySampled{AT}
     value::AT
     dynamics::Dynamics
-    𝒫::Distribution
+    prior::Distribution
     DSTrajectory(value::T, dynamics::Dynamics, 𝒫::Distribution) where {T} =
         new{T}(value, dynamics, 𝒫)
 end
@@ -44,7 +44,7 @@ ftypeof(rv::DSTrajectory{AT}) where {AT} = AT
 mutable struct MHTrajectory{AT<:AbstractArray{<:Real}} <: MHSampled{AT}
     value::AT
     dynamics::Dynamics
-    𝒫::Distribution
+    prior::Distribution
     𝒬::Distribution
     counter::Matrix{Int}
     batchsize::Int

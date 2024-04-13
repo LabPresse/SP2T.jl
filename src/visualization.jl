@@ -309,7 +309,7 @@ function visualize(
     lines!(
         ax[4],
         D_range,
-        pdf.(c.status.D.𝒫, D_range),
+        pdf.(c.status.D.prior, D_range),
         color = ColorSchemes.tab10[4],
         linewidth = 3,
     )
