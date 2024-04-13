@@ -32,7 +32,7 @@ mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
     iteration::Int # iteration
     temperature::FT # temperature
     logposterior::FT # log posterior
-    lnℒ::FT # log likelihood
+    loglikelihood::FT # log likelihood
     ChainStatus(
         x::MHTrajectory{AT},
         M::DSIID{Int},
@@ -119,7 +119,7 @@ function to_cpu!(c::Chain)
     s = c.status
     x = MHTrajectory(Array(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
     𝐔 = Array(s.𝐔)
-    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.iteration) ? 1 : s.iteration, s.temperature, s.logposterior, s.lnℒ)
+    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.iteration) ? 1 : s.iteration, s.temperature, s.logposterior, s.loglikelihood)
     return c
 end
 
@@ -140,7 +140,7 @@ function to_gpu!(c::Chain)
     s = c.status
     x = MHTrajectory(CuArray(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
     𝐔 = CuArray(s.𝐔)
-    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.iteration) ? 1 : s.iteration, s.temperature, s.logposterior, s.lnℒ)
+    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.iteration) ? 1 : s.iteration, s.temperature, s.logposterior, s.loglikelihood)
     return c
 end
 

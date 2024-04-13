@@ -10,7 +10,7 @@ Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
     s.iteration,
     s.temperature,
     s.logposterior,
-    s.lnℒ,
+    s.loglikelihood,
 )
 
 function set_b(B::Integer, M::Integer, dynamics::Dynamics, 𝒫::Distribution)
