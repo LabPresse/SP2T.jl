@@ -4,7 +4,7 @@ Prior(param::ExperimentalParameter{FT}) where {FT} = Prior{FT}(
 )
 
 Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
-    Array(s.tracks.value[:, 1:s.M.value, :]),
+    Array(s.tracks.value[:, 1:s.emittercount.value, :]),
     s.D.value,
     s.h.value,
     s.i,
