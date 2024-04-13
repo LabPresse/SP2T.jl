@@ -11,3 +11,4 @@ extra
 *.mp4
 *.png
 .DS_Store
+data/beads
