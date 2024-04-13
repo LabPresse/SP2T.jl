@@ -200,7 +200,7 @@ function update_on_x!(
     device::CPU,
 )
     xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
-    xᵖ = propose_x(xᵒ, s.x.𝒬, device)
+    xᵖ = propose_x(xᵒ, s.x.proposal, device)
     𝐔ᵖ = get_px_intensity(
         xᵖ,
         param.pxboundsx,
@@ -224,7 +224,7 @@ function update_on_x!(
     device::GPU,
 )
     xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
-    xᵖ = propose_x(xᵒ, s.x.𝒬, device)
+    xᵖ = propose_x(xᵒ, s.x.proposal, device)
     𝐔ᵖ = get_px_intensity(
         xᵖ,
         param.pxboundsx,

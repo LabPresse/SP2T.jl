@@ -22,7 +22,7 @@ ftypeof(rv::DSIID{T}) where {T} = T
 mutable struct MHIID{T<:RealNumOrVec} <: MHSampled{T}
     value::T
     prior::Distribution
-    𝒬::Distribution
+    proposal::Distribution
     counter::Matrix{Int}
     batchsize::Int
     MHIID(value::T, 𝒫::Distribution, 𝒬::Distribution) where {T} =
@@ -45,7 +45,7 @@ mutable struct MHTrajectory{AT<:AbstractArray{<:Real}} <: MHSampled{AT}
     value::AT
     dynamics::Dynamics
     prior::Distribution
-    𝒬::Distribution
+    proposal::Distribution
     counter::Matrix{Int}
     batchsize::Int
     MHTrajectory(
