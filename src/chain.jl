@@ -27,7 +27,7 @@ mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
     tracks::MHTrajectory{AT}
     emittercount::DSIID{Int}
     diffusivity::DSIID{FT}
-    h::MHIID{FT}
+    brightness::MHIID{FT}
     𝐔::AbstractArray{FT,3}
     i::Int # iteration
     𝑇::FT # temperature
@@ -119,7 +119,7 @@ function to_cpu!(c::Chain)
     s = c.status
     x = MHTrajectory(Array(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
     𝐔 = Array(s.𝐔)
-    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
+    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
 end
 
@@ -140,7 +140,7 @@ function to_gpu!(c::Chain)
     s = c.status
     x = MHTrajectory(CuArray(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
     𝐔 = CuArray(s.𝐔)
-    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
+    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
     return c
 end
 

@@ -111,6 +111,6 @@ function update_ln𝒫!(s::ChainStatus, v::Video, device::Device)
         get_ln𝒫(s.tracks, 4 * s.diffusivity.value * v.param.period, device) +
         get_ln𝒫(s.emittercount) +
         get_ln𝒫(s.diffusivity) +
-        get_ln𝒫(s.h)
+        get_ln𝒫(s.brightness)
     return s
 end

@@ -205,7 +205,7 @@ function update_on_x!(
         xᵖ,
         param.pxboundsx,
         param.pxboundsy,
-        s.h.value * param.period,
+        s.brightness.value * param.period,
         param.darkcounts,
         param.PSF,
     )
@@ -229,7 +229,7 @@ function update_on_x!(
         xᵖ,
         param.pxboundsx,
         param.pxboundsy,
-        s.h.value * param.period,
+        s.brightness.value * param.period,
         param.darkcounts,
         param.PSF,
     )

@@ -78,7 +78,7 @@ function update_M!(s::ChainStatus, v::Video, device::Device)
         s.tracks.value,
         v.param.pxboundsx,
         v.param.pxboundsy,
-        s.h.value * v.param.period,
+        s.brightness.value * v.param.period,
         v.param.darkcounts,
         v.param.PSF,
         s.emittercount.prior,
