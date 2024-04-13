@@ -211,7 +211,7 @@ function update_on_x!(
     )
     ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
     ln𝓇[1] += add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.tracks.prior)
-    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
+    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.diffusivity.value * param.period)
     s.tracks.counter[:, 2] .+= count(accepted), length(accepted)
     copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
     return s
@@ -235,14 +235,14 @@ function update_on_x!(
     )
     ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
     add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.tracks.prior)
-    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.D.value * param.period)
+    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.diffusivity.value * param.period)
     s.tracks.counter[:, 2] .+= count(accepted), length(accepted)
     copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
     return s
 end
 
 update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
-    simulate!(view_off_x(s), s.tracks.prior, s.D.value, param.period, device)
+    simulate!(view_off_x(s), s.tracks.prior, s.diffusivity.value, param.period, device)
 
 function update_x!(s::ChainStatus, v::Video, device::Device)
     update_off_x!(s, v.param, device)
