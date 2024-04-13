@@ -8,7 +8,7 @@ Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
     s.diffusivity.value,
     s.brightness.value,
     s.iteration,
-    s.𝑇,
+    s.temperature,
     s.ln𝒫,
     s.lnℒ,
 )

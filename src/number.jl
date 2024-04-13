@@ -82,7 +82,7 @@ function update_M!(s::ChainStatus, v::Video, device::Device)
         v.param.darkcounts,
         v.param.PSF,
         s.emittercount.prior,
-        s.𝑇,
+        s.temperature,
         device,
     )
     return s
