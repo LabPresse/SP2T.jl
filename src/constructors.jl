@@ -7,7 +7,7 @@ Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
     Array(s.tracks.value[:, 1:s.emittercount.value, :]),
     s.diffusivity.value,
     s.brightness.value,
-    s.i,
+    s.iteration,
     s.𝑇,
     s.ln𝒫,
     s.lnℒ,
