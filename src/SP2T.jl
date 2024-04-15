@@ -45,7 +45,7 @@ include("detection_model.jl")
 include("data.jl")
 include("sample.jl")
 include("annealing.jl")
-include("random_variable.jl")
+include("variable.jl")
 include("chain.jl")
 
 # This file contains the outer constructors (constructors users should call). These constructor methods are placed in a separate file as they take structs as arguments. If these constructors are distributed to the files above, the order of inclusion will be a problem.
@@ -56,7 +56,7 @@ include("visualization.jl")
 
 include("likelihood.jl")
 include("diffusion.jl")
-include("trajectory.jl")
+include("track.jl")
 include("number.jl")
 include("brightness.jl")
 include("permutation.jl")
