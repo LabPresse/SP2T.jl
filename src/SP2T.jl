@@ -35,7 +35,7 @@ export Prior
 export Sample
 export Chain
 
-export simulate_sample
+export simulate
 export visualize
 
 export readbin, getframes, getROIindices, viewframes, getpxsize

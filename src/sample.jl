@@ -31,7 +31,7 @@ get_B(s::Sample) = size(s.tracks, 2)
 
 _eltype(s::Sample{FT}) where {FT} = FT
 
-function simulate_sample(;
+function simulate(;
     param::ExperimentalParameter{FT},
     framecount::Integer,
     emittercount::Integer,

@@ -1,21 +1,29 @@
 #* Forward functions
-function setinitx!(x::AbstractArray{FT}, 𝒫::Distribution, ::CPU) where {FT<:AbstractFloat}
-    x .= rand(𝒫, size(x, 2))
+function sampleinitx!(
+    x::AbstractArray{FT},
+    prior::Distribution,
+    ::CPU,
+) where {FT<:AbstractFloat}
+    x .= rand(prior, size(x, 2))
     return x
 end
 
-function setinitx!(x::AbstractArray{FT}, 𝒫::Distribution, ::GPU) where {FT<:AbstractFloat}
-    x .= CuArray(rand(𝒫, size(x, 2)))
+function sampleinitx!(
+    x::AbstractArray{FT},
+    prior::Distribution,
+    ::GPU,
+) where {FT<:AbstractFloat}
+    x .= CuArray(rand(prior, size(x, 2)))
     return x
 end
 
-function setΔx!(x::AbstractArray{FT,3}, σ::FT, ::CPU) where {FT<:AbstractFloat}
+function sampleΔx!(x::AbstractArray{FT,3}, σ::FT, ::CPU) where {FT<:AbstractFloat}
     x .= randn(FT, size(x)...)
     x .*= σ
     return x
 end
 
-function setΔx!(x::AbstractArray{FT,3}, σ::FT, ::GPU) where {FT<:AbstractFloat}
+function sampleΔx!(x::AbstractArray{FT,3}, σ::FT, ::GPU) where {FT<:AbstractFloat}
     CUDA.randn!(x)
     x .*= σ
     return x
@@ -29,12 +37,27 @@ function simulate!(
     device::Device,
 ) where {FT<:AbstractFloat}
     @views begin
-        setinitx!(x[:, :, 1], 𝒫, device)
-        setΔx!(x[:, :, 2:end], √(2 * D * τ), device)
+        sampleinitx!(x[:, :, 1], 𝒫, device)
+        sampleΔx!(x[:, :, 2:end], √(2 * D * τ), device)
     end
     cumsum!(x, x, dims = 3)
     return x
 end
+
+# function simulate(
+#     x::AbstractArray{FT,3},
+#     𝒫::Distribution,
+#     D::FT,
+#     τ::FT,
+#     device::Device,
+# ) where {FT<:AbstractFloat}
+#     @views begin
+#         setinitx!(x[:, :, 1], 𝒫, device)
+#         setΔx!(x[:, :, 2:end], √(2 * D * τ), device)
+#     end
+#     cumsum!(x, x, dims = 3)
+#     return x
+# end
 
 #* Inverse functions
 propose_x(xᵒ::AbstractArray{FT,3}, 𝒬::MvNormal, ::CPU) where {FT<:AbstractFloat} =
