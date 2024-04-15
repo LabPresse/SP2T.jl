@@ -29,7 +29,26 @@ end
 
 get_B(s::Sample) = size(s.tracks, 2)
 
-ftypeof(s::Sample{FT}) where {FT} = FT
+_eltype(s::Sample{FT}) where {FT} = FT
+
+function simulate_sample(;
+    param::ExperimentalParameter{FT},
+    framecount::Integer,
+    emittercount::Integer,
+    diffusivity::Real,
+    brightness::Real,
+    init_pos_prior::Union{Missing,MultivariateDistribution} = missing,
+    device::Device = CPU(),
+) where {FT}
+    diffusivity = convert(FT, diffusivity)
+    brightness = convert(FT, brightness)
+    if ismissing(init_pos_prior)
+        init_pos_prior = default_init_pos_prior(param)
+    end
+    tracks = Array{FT,3}(undef, 3, emittercount, framecount)
+    simulate!(tracks, init_pos_prior, diffusivity, param.period, device)
+    return Sample(tracks, diffusivity, brightness)
+end
 
 # # FullSample contains auxiliary variables
 # mutable struct FullSample{FT<:AbstractFloat} <: AbstractSample

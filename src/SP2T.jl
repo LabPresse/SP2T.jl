@@ -37,7 +37,6 @@ export Chain
 
 export simulate_sample
 export visualize
-export ftypeof
 
 export readbin, getframes, getROIindices, viewframes, getpxsize
 
@@ -53,7 +52,6 @@ include("chain.jl")
 include("constructors.jl")
 
 include("samplers.jl")
-include("main_fxns.jl")
 include("visualization.jl")
 
 include("likelihood.jl")
