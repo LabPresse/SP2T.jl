@@ -35,19 +35,19 @@ function get_localization_error(S::AbstractVector, gt::Sample)
     return localization_errors, order_errors
 end
 
-function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
-    if isa(v.frames, CuArray)
-        to_cpu!(v)
+function visualize(video::Video{FT}, groundtruth::Sample{FT}) where {FT}
+    if isa(video.frames, CuArray)
+        to_cpu!(video)
     end
-    data = v.frames
-    p = v.param
-    x = gt.tracks
-    B = size(x, 2)
+    frames = video.frames
+    p = video.param
+    x = groundtruth.tracks
+    emittercount = size(x, 2)
     pxsize = getpxsize(p)
 
-    g = get_px_PSF(gt.tracks, p.pxboundsx, p.pxboundsy, p.PSF)
+    g = get_px_PSF(groundtruth.tracks, p.pxboundsx, p.pxboundsy, p.PSF)
 
-    t = 1:_length(v)
+    t = 1:_length(video)
     fig = Figure()
     ax = [
         Axis3(fig[1:3, 1], zlabel = "t"),
@@ -55,26 +55,26 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
         Axis(fig[1:4, 2], aspect = DataAspect()),
     ]
 
-    for m = 1:B
+    for m = 1:emittercount
         lines!(ax[1], view(x, 1, m, :), view(x, 2, m, :), t)
         lines!(ax[2], t, view(x, 3, m, :))
     end
 
-    sl_x = Slider(fig[5, 1], range = 1:_length(v), startvalue = 1)
+    sl_x = Slider(fig[5, 1], range = 1:_length(video), startvalue = 1)
 
     frame1 = lift(sl_x.value) do x
         view(g, :, :, x)
     end
 
     frame2 = lift(sl_x.value) do x
-        view(data, :, :, x)
+        view(frames, :, :, x)
     end
 
     f = lift(sl_x.value) do x
         x
     end
 
-    collected_frame = dropdims(sum(data, dims = 3), dims = 3)
+    collected_frame = dropdims(sum(frames, dims = 3), dims = 3)
 
     hm = heatmap!(ax[1], p.pxboundsx, p.pxboundsy, frame1, colormap = (:grays, 0.7))
 

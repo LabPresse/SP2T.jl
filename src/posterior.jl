@@ -87,10 +87,10 @@ function get_ln𝒫(
     return ln𝒫
 end
 
-get_ln𝒫(x::Trajectory, dynRV::RealNumOrVec, device::Device) =
+get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray, device::Device) =
     get_ln𝒫(x.dynamics, dynRV, x.𝒫, x.value, device)
 
-get_ln𝒫(x::Trajectory, dynRV::RealNumOrVec, B::Integer, device::Device) =
+get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray, B::Integer, device::Device) =
     get_ln𝒫(x.dynamics, dynRV, x.𝒫, view(x.value, :, 1:B, :), device)
 
 # """

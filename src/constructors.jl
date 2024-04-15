@@ -51,14 +51,14 @@ set_D(D::Real, prior::Distribution) = DSIID(D, prior)
 set_h(h::Real, prior::Distribution, proposal::Distribution) = MHIID(h, prior, proposal)
 
 function ChainStatus(
-    s::Sample{FT},
+    sample::Sample{FT},
     maxcount::Integer,
     param::ExperimentalParameter{FT},
     prior_param::PriorParameter{FT},
 ) where {FT<:AbstractFloat}
-    (~, B, N) = size(s.tracks)
+    (~, B, N) = size(sample.tracks)
     tracks = set_x(
-        s.tracks,
+        sample.tracks,
         B,
         maxcount,
         N,
@@ -66,16 +66,21 @@ function ChainStatus(
         MvNormal(prior_param.μx, prior_param.σx),
         MvNormal([param.PSF.σ₀, param.PSF.σ₀, param.PSF.z₀] ./ 2),
     )
-    M = set_M(size(s.tracks, 2), Geometric(1 - prior_param.qM))
-    diffusivity =
-        set_D(s.diffusivity, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
-    brightness =
-        set_h(s.brightness, Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh), Beta())
+    M = set_M(size(sample.tracks, 2), Geometric(1 - prior_param.qM))
+    diffusivity = set_D(
+        sample.diffusivity,
+        InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD),
+    )
+    brightness = set_h(
+        sample.brightness,
+        Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh),
+        Beta(),
+    )
     𝐔 = get_px_intensity(
-        s.tracks,
+        sample.tracks,
         param.pxboundsx,
         param.pxboundsy,
-        s.brightness * param.period,
+        sample.brightness * param.period,
         param.darkcounts,
         param.PSF,
     )
@@ -85,27 +90,27 @@ function ChainStatus(
         diffusivity,
         brightness,
         𝐔,
-        iszero(s.iteration) ? 1 : s.iteration,
-        s.temperature,
-        s.logposterior,
-        s.loglikelihood,
+        iszero(sample.iteration) ? 1 : sample.iteration,
+        sample.temperature,
+        sample.logposterior,
+        sample.loglikelihood,
     )
     #TODO initialize 𝑇 better
 end
 
-function Video(p::ExperimentalParameter, s::Sample, meta::Dict{String,Any})
-    _eltype(p) ≡ _eltype(s) ||
+function Video(param::ExperimentalParameter, groundtruth::Sample, meta::Dict{String,Any})
+    _eltype(param) ≡ _eltype(groundtruth) ||
         @warn "Float type mismatch between the experimental parameter and the sample!"
     𝐔 = get_px_intensity(
-        s.tracks,
-        p.pxboundsx,
-        p.pxboundsy,
-        s.brightness * p.period,
-        p.darkcounts,
-        p.PSF,
+        groundtruth.tracks,
+        param.pxboundsx,
+        param.pxboundsy,
+        groundtruth.brightness * param.period,
+        param.darkcounts,
+        param.PSF,
     )
     frames = _getframes(𝐔)
-    return Video(frames, p, meta)
+    return Video(frames, param, meta)
 end
 
 function Chain(;
