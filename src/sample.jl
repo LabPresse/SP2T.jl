@@ -1,13 +1,13 @@
 abstract type AbstractSample end
 
 mutable struct Sample{FT<:AbstractFloat} <: AbstractSample
-    x::Array{FT,3}
-    D::FT
-    h::FT
-    i::Int # iteration
-    𝑇::FT # temperature
-    ln𝒫::FT # log posterior
-    lnℒ::FT # log likelihood
+    tracks::Array{FT,3}
+    diffusivity::FT
+    brightness::FT
+    iteration::Int # iteration
+    temperature::FT # temperature
+    logposterior::FT # log posterior
+    loglikelihood::FT # log likelihood
     Sample(x::Array{FT,3}, D::FT, h::FT) where {FT<:AbstractFloat} =
         new{FT}(x, D, h, 0, 1, FT(NaN))
     Sample(;
@@ -27,7 +27,7 @@ mutable struct Sample{FT<:AbstractFloat} <: AbstractSample
     ) where {FT<:AbstractFloat} = new{FT}(x, D, h, i, 𝑇, ln𝒫, lnℒ)
 end
 
-get_B(s::Sample) = size(s.x, 2)
+get_B(s::Sample) = size(s.tracks, 2)
 
 ftypeof(s::Sample{FT}) where {FT} = FT
 

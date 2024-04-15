@@ -2,9 +2,9 @@ get_limits(px::AbstractVector{<:Real}, x::AbstractMatrix{<:Real}) =
     (min(px[1], minimum(x)), max(px[end], maximum(x)))
 
 function get_localization_error(S::AbstractVector, gt::Sample)
-    X_gnd = view(gt.x, 1, :, :)
-    Y_gnd = view(gt.x, 2, :, :)
-    ~, B_gnd, N = size(gt.x)
+    X_gnd = view(gt.tracks, 1, :, :)
+    Y_gnd = view(gt.tracks, 2, :, :)
+    ~, B_gnd, N = size(gt.tracks)
     localization_errors = Vector{Float64}()
     order_matrix = Matrix{Int64}(undef, N, B_gnd)
     order_errors = Vector{Int64}()
@@ -41,11 +41,11 @@ function visualize(v::Video{FT}, gt::Sample{FT}) where {FT}
     end
     data = v.frames
     p = v.param
-    x = gt.x
+    x = gt.tracks
     B = size(x, 2)
     pxsize = getpxsize(p)
 
-    g = get_px_PSF(gt.x, p.pxboundsx, p.pxboundsy, p.PSF)
+    g = get_px_PSF(gt.tracks, p.pxboundsx, p.pxboundsy, p.PSF)
 
     t = 1:_length(v)
     fig = Figure()
@@ -245,14 +245,14 @@ function visualize(
         lines!(
             ax[1],
             t,
-            view(gt.x, 1, j, :),
+            view(gt.tracks, 1, j, :),
             color = ColorSchemes.tab10[2],
             linewidth = 1.5,
         )
         lines!(
             ax[2],
             t,
-            view(gt.x, 2, j, :),
+            view(gt.tracks, 2, j, :),
             color = ColorSchemes.tab10[2],
             linewidth = 1.5,
         )
@@ -313,7 +313,7 @@ function visualize(
         color = ColorSchemes.tab10[4],
         linewidth = 3,
     )
-    vlines!(ax[4], gt.D, color = ColorSchemes.tab10[2], linewidth = 3)
+    vlines!(ax[4], gt.diffusivity, color = ColorSchemes.tab10[2], linewidth = 3)
     xlims!(ax[4], 0.04, 0.12)
     ylims!(ax[4], 0, nothing)
 

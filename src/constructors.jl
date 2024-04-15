@@ -13,75 +13,99 @@ Sample(s::ChainStatus{FT}) where {FT} = Sample{FT}(
     s.loglikelihood,
 )
 
-function set_b(B::Integer, M::Integer, dynamics::Dynamics, 𝒫::Distribution)
-    b = BitVector(zeros(Bool, M))
-    b[1:B] .= true
-    return DSTrajectory(b, dynamics, 𝒫)
+function set_b(
+    emittercount::Integer,
+    maxcount::Integer,
+    dynamics::Dynamics,
+    prior::Distribution,
+)
+    b = BitVector(zeros(Bool, maxcount))
+    b[1:emittercount] .= true
+    return DSTrajectory(b, dynamics, prior)
 end
 
-function set_b(B::Integer, M::Integer, 𝒫::Distribution)
-    b = BitVector(zeros(Bool, M))
-    b[1:B] .= true
-    return DSIID(b, 𝒫)
+function set_b(emittercount::Integer, maxcount::Integer, prior::Distribution)
+    b = BitVector(zeros(Bool, maxcount))
+    b[1:emittercount] .= true
+    return DSIID(b, prior)
 end
 
 function set_x(
-    x::AbstractArray{FT,3},
-    B::Integer,
-    M::Integer,
-    N::Integer,
+    tracks::AbstractArray{FT,3},
+    emittercount::Integer,
+    maxcount::Integer,
+    framecount::Integer,
     dynamics::Dynamics,
-    𝒫::Distribution,
-    𝒬::Distribution,
+    prior::Distribution,
+    proposal::Distribution,
 ) where {FT}
-    newx = Array{FT,3}(undef, 3, M, N)
-    newx[:, 1:B, :] = x
-    return MHTrajectory(newx, dynamics, 𝒫, 𝒬)
+    newx = Array{FT,3}(undef, 3, maxcount, framecount)
+    newx[:, 1:emittercount, :] = tracks
+    return MHTrajectory(newx, dynamics, prior, proposal)
 end
 
-set_M(M::Integer, 𝒫::Distribution) = DSIID(M, 𝒫)
+set_M(M::Integer, prior::Distribution) = DSIID(M, prior)
 
-set_D(D::Real, 𝒫::Distribution) = DSIID(D, 𝒫)
+set_D(D::Real, prior::Distribution) = DSIID(D, prior)
 
-set_h(h::Real, 𝒫::Distribution, 𝒬::Distribution) = MHIID(h, 𝒫, 𝒬)
+set_h(h::Real, prior::Distribution, proposal::Distribution) = MHIID(h, prior, proposal)
 
 function ChainStatus(
     s::Sample{FT},
-    ℳ::Integer,
-    exp_param::ExperimentalParameter{FT},
+    maxcount::Integer,
+    param::ExperimentalParameter{FT},
     prior_param::PriorParameter{FT},
 ) where {FT<:AbstractFloat}
-    (~, B, N) = size(s.x)
-    x = set_x(
-        s.x,
+    (~, B, N) = size(s.tracks)
+    tracks = set_x(
+        s.tracks,
         B,
-        ℳ,
+        maxcount,
         N,
         Brownian(),
         MvNormal(prior_param.μx, prior_param.σx),
-        MvNormal([exp_param.PSF.σ₀, exp_param.PSF.σ₀, exp_param.PSF.z₀] ./ 2),
+        MvNormal([param.PSF.σ₀, param.PSF.σ₀, param.PSF.z₀] ./ 2),
     )
-    M = set_M(size(s.x, 2), Geometric(1 - prior_param.qM))
-    D = set_D(s.D, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
-    h = set_h(s.h, Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh), Beta())
+    M = set_M(size(s.tracks, 2), Geometric(1 - prior_param.qM))
+    diffusivity =
+        set_D(s.diffusivity, InverseGamma(prior_param.ϕD, prior_param.ϕD * prior_param.χD))
+    brightness =
+        set_h(s.brightness, Gamma(prior_param.ϕh, prior_param.ψh / prior_param.ϕh), Beta())
     𝐔 = get_px_intensity(
-        s.x,
-        exp_param.pxboundsx,
-        exp_param.pxboundsy,
-        s.h * exp_param.period,
-        exp_param.darkcounts,
-        exp_param.PSF,
+        s.tracks,
+        param.pxboundsx,
+        param.pxboundsy,
+        s.brightness * param.period,
+        param.darkcounts,
+        param.PSF,
     )
-    return ChainStatus(x, M, D, h, 𝐔, iszero(s.i) ? 1 : s.i, s.𝑇, s.ln𝒫, s.lnℒ)
+    return ChainStatus(
+        tracks,
+        M,
+        diffusivity,
+        brightness,
+        𝐔,
+        iszero(s.iteration) ? 1 : s.iteration,
+        s.temperature,
+        s.logposterior,
+        s.loglikelihood,
+    )
     #TODO initialize 𝑇 better
 end
 
 function Video(p::ExperimentalParameter, s::Sample, meta::Dict{String,Any})
     _eltype(p) ≡ _eltype(s) ||
         @warn "Float type mismatch between the experimental parameter and the sample!"
-    𝐔 = get_px_intensity(s.x, p.pxboundsx, p.pxboundsy, s.h * p.period, p.darkcounts, p.PSF)
-    𝐖 = _getframes(𝐔)
-    return Video(𝐖, p, meta)
+    𝐔 = get_px_intensity(
+        s.tracks,
+        p.pxboundsx,
+        p.pxboundsy,
+        s.brightness * p.period,
+        p.darkcounts,
+        p.PSF,
+    )
+    frames = _getframes(𝐔)
+    return Video(frames, p, meta)
 end
 
 function Chain(;
