@@ -17,7 +17,7 @@ mutable struct DSIID{T<:RealNumberOrArray} <: DirectlySampled{T}
     prior::Distribution
 end
 
-ftypeof(rv::DSIID{T}) where {T} = T
+_eltype(rv::DSIID{T}) where {T} = T
 
 mutable struct MHIID{T<:RealNumberOrArray} <: MHSampled{T}
     value::T
@@ -29,7 +29,7 @@ mutable struct MHIID{T<:RealNumberOrArray} <: MHSampled{T}
         new{T}(value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
 end
 
-ftypeof(rv::MHIID{FT}) where {FT} = FT
+_eltype(rv::MHIID{FT}) where {FT} = FT
 
 mutable struct DSTrajectory{AT<:AbstractArray{<:Real}} <: DirectlySampled{AT}
     value::AT
@@ -39,7 +39,7 @@ mutable struct DSTrajectory{AT<:AbstractArray{<:Real}} <: DirectlySampled{AT}
         new{T}(value, dynamics, 𝒫)
 end
 
-ftypeof(rv::DSTrajectory{AT}) where {AT} = AT
+_eltype(rv::DSTrajectory{AT}) where {AT} = AT
 
 mutable struct MHTrajectory{AT<:AbstractArray{<:Real}} <: MHSampled{AT}
     value::AT
@@ -56,7 +56,7 @@ mutable struct MHTrajectory{AT<:AbstractArray{<:Real}} <: MHSampled{AT}
     ) where {AT} = new{AT}(value, dynamics, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
 end
 
-ftypeof(rv::MHTrajectory{AT}) where {AT} = AT
+_eltype(rv::MHTrajectory{AT}) where {AT} = AT
 
 Trajectory = Union{DSTrajectory,MHTrajectory}
 

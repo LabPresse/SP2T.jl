@@ -49,7 +49,7 @@ ExperimentalParameter(
     CircularGaussianLorentzian{FT}(σ₀, z₀),
 )
 
-ftypeof(p::ExperimentalParameter{FT}) where {FT} = FT
+_eltype(p::ExperimentalParameter{FT}) where {FT} = FT
 
 struct Video{FT<:AbstractFloat}
     frames::AbstractArray{Bool,3}
@@ -57,6 +57,6 @@ struct Video{FT<:AbstractFloat}
     metadata::Dict{String,Any}
 end
 
-ftypeof(v::Video{FT}) where {FT} = FT
+_eltype(v::Video{FT}) where {FT} = FT
 
 _length(v::Video) = size(v.frames, 3)
