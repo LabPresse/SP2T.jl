@@ -1,14 +1,14 @@
-struct PriorParameter{FT<:AbstractFloat}
-    pb::FT
-    μx::AbstractArray{FT}
-    σx::AbstractArray{FT}
-    ϕD::FT
-    χD::FT
-    ϕh::FT
-    ψh::FT
-    qM::FT
+struct PriorParameter{T<:AbstractFloat}
+    pb::T
+    μx::AbstractArray{T}
+    σx::AbstractArray{T}
+    ϕD::T
+    χD::T
+    ϕh::T
+    ψh::T
+    qM::T
     PriorParameter(
-        FT::DataType;
+        T::DataType;
         pb::Real,
         μx::AbstractArray{<:Real},
         σx::AbstractArray{<:Real},
@@ -17,22 +17,23 @@ struct PriorParameter{FT<:AbstractFloat}
         ϕh::Real,
         ψh::Real,
         qM::Real,
-    ) = new{FT}(pb, μx, σx, ϕD, χD, ϕh, ψh, qM)
+    ) = new{T}(pb, μx, σx, ϕD, χD, ϕh, ψh, qM)
 end
 
-_eltype(p::PriorParameter{FT}) where {FT} = FT
+_eltype(p::PriorParameter{T}) where {T} = T
 
 # ChainStatus contains auxiliary variables
-mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
+mutable struct ChainStatus{T<:AbstractFloat,AT<:AbstractArray{T}}
     tracks::MHTrajectory{AT}
     emittercount::DSIID{Int}
-    diffusivity::DSIID{FT}
-    brightness::MHIID{FT}
-    𝐔::AbstractArray{FT,3}
+    diffusivity::DSIID{T}
+    brightness::MHIID{T}
+    𝐔::AbstractArray{T,3}
+    𝐔ᵖ::AbstractArray{T,3}
     iteration::Int # iteration
-    temperature::FT # temperature
-    logposterior::FT # log posterior
-    loglikelihood::FT # log likelihood
+    temperature::T # temperature
+    logposterior::T # log posterior
+    loglikelihood::T # log likelihood
     ChainStatus(
         x::MHTrajectory{AT},
         M::DSIID{Int},
@@ -44,14 +45,14 @@ mutable struct ChainStatus{FT<:AbstractFloat,AT<:AbstractArray{FT}}
         ln𝒫::FT = NaN,
         lnℒ::FT = NaN,
     ) where {FT<:AbstractFloat,AT<:AbstractArray{FT}} =
-        new{FT,AT}(x, M, D, h, 𝐔, i, 𝑇, ln𝒫, lnℒ)
+        new{FT,AT}(x, M, D, h, 𝐔, copy(𝐔), i, 𝑇, ln𝒫, lnℒ)
 end
 
 # get_B(s::ChainStatus) = count(s.b.value)
 
 get_M(s::ChainStatus) = size(s.tracks.value, 2)
 
-_eltype(s::ChainStatus{FT}) where {FT} = FT
+_eltype(s::ChainStatus{T}) where {T} = T
 
 view_on_x(s::ChainStatus) = view(s.tracks.value, :, 1:s.emittercount.value, :)
 
@@ -64,24 +65,24 @@ default_init_pos_prior(param::ExperimentalParameter) = MvNormal(
     getpxsize(param) .* [2, 2, 0],
 )
 
-mutable struct Chain{FT<:AbstractFloat}
-    status::ChainStatus{FT}
-    samples::Vector{Sample{FT}}
-    annealing::Annealing{FT}
+mutable struct Chain{T<:AbstractFloat}
+    status::ChainStatus{T}
+    samples::Vector{Sample{T}}
+    annealing::Annealing{T}
     stride::Int
     sizelimit::Int
 end
 
 chainlength(c::Chain) = length(c.samples)
 
-_eltype(c::Chain{FT}) where {FT} = FT
+_eltype(c::Chain{T}) where {T} = T
 
 isfull(c::Chain) = chainlength(c) > c.sizelimit
 
-function get_x(S::AbstractVector{Sample{FT}}) where {FT}
+function get_x(S::AbstractVector{Sample{T}}) where {T}
     M = get_B.(S)
     N = size(S[1].x, 3)
-    x = Array{FT}(undef, sum(M), N, 3)
+    x = Array{T}(undef, sum(M), N, 3)
     𝒷 = 0
     @views for (s, m) in zip(S, M)
         permutedims!(x[𝒷.+(1:m), :, :], s.x, (2, 3, 1))
@@ -90,9 +91,9 @@ function get_x(S::AbstractVector{Sample{FT}}) where {FT}
     return x
 end
 
-get_D(S::AbstractVector{Sample{FT}}) where {FT} = [s.D for s in S]
+get_D(S::AbstractVector{Sample{T}}) where {T} = [s.D for s in S]
 
-get_h(S::AbstractVector{Sample{FT}}) where {FT} = [s.h for s in S]
+get_h(S::AbstractVector{Sample{T}}) where {T} = [s.h for s in S]
 
 """
     shrink!(chain)
@@ -117,9 +118,24 @@ end
 
 function to_cpu!(c::Chain)
     s = c.status
-    x = MHTrajectory(Array(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
+    x = MHTrajectory(
+        Array(s.tracks.value),
+        s.tracks.dynamics,
+        s.tracks.prior,
+        s.tracks.proposal,
+    )
     𝐔 = Array(s.𝐔)
-    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.iteration) ? 1 : s.iteration, s.temperature, s.logposterior, s.loglikelihood)
+    c.status = ChainStatus(
+        x,
+        s.emittercount,
+        s.diffusivity,
+        s.brightness,
+        𝐔,
+        iszero(s.iteration) ? 1 : s.iteration,
+        s.temperature,
+        s.logposterior,
+        s.loglikelihood,
+    )
     return c
 end
 
@@ -138,9 +154,24 @@ end
 
 function to_gpu!(c::Chain)
     s = c.status
-    x = MHTrajectory(CuArray(s.tracks.value), s.tracks.dynamics, s.tracks.prior, s.tracks.proposal)
+    x = MHTrajectory(
+        CuArray(s.tracks.value),
+        s.tracks.dynamics,
+        s.tracks.prior,
+        s.tracks.proposal,
+    )
     𝐔 = CuArray(s.𝐔)
-    c.status = ChainStatus(x, s.emittercount, s.diffusivity, s.brightness, 𝐔, iszero(s.iteration) ? 1 : s.iteration, s.temperature, s.logposterior, s.loglikelihood)
+    c.status = ChainStatus(
+        x,
+        s.emittercount,
+        s.diffusivity,
+        s.brightness,
+        𝐔,
+        iszero(s.iteration) ? 1 : s.iteration,
+        s.temperature,
+        s.logposterior,
+        s.loglikelihood,
+    )
     return c
 end
 
