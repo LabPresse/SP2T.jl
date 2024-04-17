@@ -3,7 +3,7 @@ function get_ϵ(𝒬::Beta)
     return ifelse(bitrand(), ϵ, 1 / ϵ)
 end
 
-function get_hᵖ(hᵒ::FT, 𝒬::Beta{FT}) where {FT<:AbstractFloat}
+function proposebrightness(hᵒ::FT, 𝒬::Beta{FT}) where {FT<:AbstractFloat}
     ϵ = rand(𝒬)
     return ifelse(bitrand(), hᵒ * ϵ, hᵒ / ϵ)
 end
@@ -44,7 +44,7 @@ function sample_h(
     𝒬::Beta{FT},
     𝒫::Gamma{FT},
 ) where {FT<:AbstractFloat}
-    hᵖ = get_hᵖ(hᵒ, 𝒬)
+    hᵖ = proposebrightness(hᵒ, 𝒬)
     ln𝓇 = get_ln𝓇_h(w, G, hᵖ, hᵒ, F, 𝒫)
     ln𝓊 = log(rand())
     return ln𝓇 > ln𝓊 ? hᵖ : hᵒ

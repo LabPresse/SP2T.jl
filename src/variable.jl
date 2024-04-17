@@ -26,8 +26,8 @@ mutable struct MHIID{T<:RealNumberOrArray} <: MHSampled{T}
     proposal::Distribution
     counter::Matrix{Int}
     batchsize::Int
-    MHIID(value::T, 𝒫::Distribution, 𝒬::Distribution) where {T} =
-        new{T}(value, value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
+    MHIID(value::T, prior::Distribution, proposal::Distribution) where {T} =
+        new{T}(value, copy(value), prior, proposal, zeros(Int, 2, 2), 1)
 end
 
 _eltype(rv::MHIID{T}) where {T} = T
@@ -36,8 +36,8 @@ mutable struct DSTrajectory{T<:AbstractArray{<:Real}} <: DirectlySampled{T}
     value::T
     dynamics::Dynamics
     prior::Distribution
-    DSTrajectory(value::T, dynamics::Dynamics, 𝒫::Distribution) where {T} =
-        new{T}(value, dynamics, 𝒫)
+    DSTrajectory(value::T, dynamics::Dynamics, prior::Distribution) where {T} =
+        new{T}(value, dynamics, prior)
 end
 
 _eltype(rv::DSTrajectory{T}) where {T} = T
@@ -50,12 +50,8 @@ mutable struct MHTrajectory{T<:AbstractArray{<:Real}} <: MHSampled{T}
     proposal::Distribution
     counter::Matrix{Int}
     batchsize::Int
-    MHTrajectory(
-        value::T,
-        dynamics::Dynamics,
-        𝒫::Distribution,
-        𝒬::Distribution,
-    ) where {T} = new{T}(value, value, dynamics, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
+    MHTrajectory(value::T, dynamics::Dynamics, 𝒫::Distribution, 𝒬::Distribution) where {T} =
+        new{T}(value, copy(value), dynamics, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
 end
 
 _eltype(rv::MHTrajectory{T}) where {T} = T
