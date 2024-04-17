@@ -1,17 +1,11 @@
 function get_ϵ(𝒬::Beta)
     ϵ = rand(𝒬)
-    rand() < 0.5 && (ϵ = 1 / ϵ)
-    return ϵ
+    return ifelse(bitrand(), ϵ, 1 / ϵ)
 end
 
 function get_hᵖ(hᵒ::FT, 𝒬::Beta{FT}) where {FT<:AbstractFloat}
     ϵ = rand(𝒬)
-    hᵖ = if rand() > 0.5
-        hᵒ * ϵ
-    else
-        hᵒ / ϵ
-    end
-    return hᵖ
+    return ifelse(bitrand(), hᵒ * ϵ, hᵒ / ϵ)
 end
 
 function diff_lnℒ_h(
