@@ -4,7 +4,7 @@ function sampleinitx!(
     prior::Distribution,
     ::CPU,
 ) where {FT<:AbstractFloat}
-    x .= rand(prior, size(x, 2))
+    rand!(prior, view(x, :, :, 1))
     return x
 end
 
@@ -13,20 +13,24 @@ function sampleinitx!(
     prior::Distribution,
     ::GPU,
 ) where {FT<:AbstractFloat}
-    x .= CuArray(rand(prior, size(x, 2)))
+    x[:, :, 1] .= CuArray(rand(prior, size(x, 2)))
     return x
 end
 
-function sampleΔx!(x::AbstractArray{FT,3}, σ::FT, ::CPU) where {FT<:AbstractFloat}
-    x .= randn(FT, size(x)...)
-    x .*= σ
+function sampleinitx!(
+    x::AbstractArray{FT},
+    x₀::AbstractVector{FT},
+    σ₀::AbstractVector{FT},
+) where {FT<:AbstractFloat}
+    randn!(view(x, :, :, 1))
+    x[:, :, 1] .*= σ₀
+    x[:, :, 1] .+= x₀
     return x
 end
 
-function sampleΔx!(x::AbstractArray{FT,3}, σ::FT, ::GPU) where {FT<:AbstractFloat}
-    CUDA.randn!(x)
-    x .*= σ
-    return x
+function sampleΔx!(x::AbstractArray{FT,3}, D::FT, τ::FT) where {FT<:AbstractFloat}
+    randn!(@view x[:, :, 2:end])
+    return x .*= √(2 * D * τ)
 end
 
 function simulate!(
@@ -36,10 +40,21 @@ function simulate!(
     τ::FT,
     device::Device,
 ) where {FT<:AbstractFloat}
-    @views begin
-        sampleinitx!(x[:, :, 1], 𝒫, device)
-        sampleΔx!(x[:, :, 2:end], √(2 * D * τ), device)
-    end
+    sampleinitx!(x, 𝒫, device)
+    sampleΔx!(x, D, τ)
+    cumsum!(x, x, dims = 3)
+    return x
+end
+
+function simulate!(
+    x::AbstractArray{FT,3},
+    x₀::AbstractVector{FT},
+    σ₀::AbstractVector{FT},
+    D::FT,
+    τ::FT,
+) where {FT<:AbstractFloat}
+    sampleinitx!(x, x₀, σ₀)
+    sampleΔx!(x, D, τ)
     cumsum!(x, x, dims = 3)
     return x
 end
@@ -65,6 +80,19 @@ propose_x(xᵒ::AbstractArray{FT,3}, 𝒬::MvNormal, ::CPU) where {FT<:AbstractF
 
 propose_x(xᵒ::AbstractArray{FT,3}, 𝒬::MvNormal, ::GPU) where {FT<:AbstractFloat} =
     xᵒ .+ sqrt.(CuArray(diag(𝒬.Σ))) .* CUDA.randn(size(xᵒ)...)
+
+function propose_x!(
+    xᵖ::AbstractArray{FT,3},
+    xᵒ::AbstractArray{FT,3},
+    σ::AbstractVector{FT},
+) where {FT<:AbstractFloat}
+    randn!(xᵖ)
+    xᵖ .*= σ
+    return xᵖ .+= xᵒ
+end
+
+propose_x(xᵒ::AbstractArray{FT,3}, σ::AbstractVector{FT}) where {FT<:AbstractFloat} =
+    propose_x!(similar(xᵒ), xᵒ, σ)
 
 # get_ΔΔx²(
 #     xᵒ::AbstractMatrix{FT},
