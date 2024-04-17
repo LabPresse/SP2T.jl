@@ -1,7 +1,7 @@
 #* Forward functions
 function sampleinitx!(
     x::AbstractArray{FT},
-    prior::Distribution,
+    prior::DistrOrParam,
     ::CPU,
 ) where {FT<:AbstractFloat}
     rand!(prior, view(x, :, :, 1))
@@ -10,7 +10,7 @@ end
 
 function sampleinitx!(
     x::AbstractArray{FT},
-    prior::Distribution,
+    prior::DistrOrParam,
     ::GPU,
 ) where {FT<:AbstractFloat}
     x[:, :, 1] .= CuArray(rand(prior, size(x, 2)))
@@ -35,7 +35,7 @@ end
 
 function simulate!(
     x::AbstractArray{FT,3},
-    𝒫::Distribution,
+    𝒫::DistrOrParam,
     D::FT,
     τ::FT,
     device::Device,
@@ -61,7 +61,7 @@ end
 
 # function simulate(
 #     x::AbstractArray{FT,3},
-#     𝒫::Distribution,
+#     𝒫::DistrOrParam,
 #     D::FT,
 #     τ::FT,
 #     device::Device,
@@ -250,7 +250,7 @@ function update_on_x!(
     param::ExperimentalParameter,
     device::CPU,
 )
-    xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
+    xᵒ, 𝐔ᵒ, 𝐔ᵖ = view_on_x(s), s.𝐔, s.𝐔ᵖ
     xᵖ = propose_x(xᵒ, s.tracks.proposal, device)
     𝐔ᵖ = get_px_intensity(
         xᵖ,

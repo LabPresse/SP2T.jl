@@ -72,7 +72,7 @@ get_ln𝒫(x::IID) = get_ln𝒫(x.𝒫, x.value)
 function get_ln𝒫(
     ::Brownian,
     fourDτ::FT,
-    𝒫::Distribution,
+    𝒫::DistrOrParam,
     x::AbstractArray{FT,3},
     device::Device,
 ) where {FT<:AbstractFloat}

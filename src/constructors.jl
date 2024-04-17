@@ -17,14 +17,14 @@ function set_b(
     emittercount::Integer,
     maxcount::Integer,
     dynamics::Dynamics,
-    prior::Distribution,
+    prior::DistrOrParam,
 )
     b = BitVector(zeros(Bool, maxcount))
     b[1:emittercount] .= true
     return DSTrajectory(b, dynamics, prior)
 end
 
-function set_b(emittercount::Integer, maxcount::Integer, prior::Distribution)
+function set_b(emittercount::Integer, maxcount::Integer, prior::DistrOrParam)
     b = BitVector(zeros(Bool, maxcount))
     b[1:emittercount] .= true
     return DSIID(b, prior)
@@ -36,19 +36,19 @@ function set_x(
     maxcount::Integer,
     framecount::Integer,
     dynamics::Dynamics,
-    prior::Distribution,
-    proposal::Distribution,
+    prior::DistrOrParam,
+    proposal::DistrOrParam,
 ) where {FT}
     newx = Array{FT,3}(undef, 3, maxcount, framecount)
     newx[:, 1:emittercount, :] = tracks
     return MHTrajectory(newx, dynamics, prior, proposal)
 end
 
-set_M(M::Integer, prior::Distribution) = DSIID(M, prior)
+set_M(M::Integer, prior::DistrOrParam) = DSIID(M, prior)
 
-set_D(D::Real, prior::Distribution) = DSIID(D, prior)
+set_D(D::Real, prior::DistrOrParam) = DSIID(D, prior)
 
-set_h(h::Real, prior::Distribution, proposal::Distribution) = MHIID(h, prior, proposal)
+set_h(h::Real, prior::DistrOrParam, proposal::DistrOrParam) = MHIID(h, prior, proposal)
 
 function ChainStatus(
     sample::Sample{FT},
