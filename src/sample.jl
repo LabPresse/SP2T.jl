@@ -1,35 +1,39 @@
 abstract type AbstractSample end
 
-mutable struct Sample{FT<:AbstractFloat} <: AbstractSample
-    tracks::Array{FT,3}
-    diffusivity::FT
-    brightness::FT
+mutable struct Sample{T<:AbstractFloat} <: AbstractSample
+    tracks::Array{T,3}
+    diffusivity::T
+    brightness::T
     iteration::Int # iteration
-    temperature::FT # temperature
-    logposterior::FT # log posterior
-    loglikelihood::FT # log likelihood
-    Sample(x::Array{FT,3}, D::FT, h::FT) where {FT<:AbstractFloat} =
-        new{FT}(x, D, h, 0, 1, FT(NaN))
-    Sample(;
-        tracks::Array{FT,3},
-        diffusion_coefficient::FT,
-        emission_rate::FT,
-    ) where {FT<:AbstractFloat} =
-        new{FT}(tracks, diffusion_coefficient, emission_rate, 0, 1, FT(NaN))
-    Sample{FT}(
-        x::Array{FT,3},
-        D::FT,
-        h::FT,
-        i::Int,
-        𝑇::FT,
-        ln𝒫::FT,
-        lnℒ::FT,
-    ) where {FT<:AbstractFloat} = new{FT}(x, D, h, i, 𝑇, ln𝒫, lnℒ)
+    temperature::T # temperature
+    logposterior::T # log posterior
+    loglikelihood::T # log likelihood
+    Sample(tracks::Array{T,3}, diffusivity::T, brightness::T) where {T<:AbstractFloat} =
+        new{T}(tracks, diffusivity, brightness, 0, 1, T(NaN))
+    Sample(; tracks::Array{T,3}, diffusivity::T, brightness::T) where {T<:AbstractFloat} =
+        new{T}(tracks, diffusivity, brightness, 0, 1, T(NaN))
+    Sample{T}(
+        tracks::Array{T,3},
+        diffusivity::T,
+        brightness::T,
+        iteration::Int,
+        temperature::T,
+        logposterior::T,
+        loglikelihood::T,
+    ) where {T<:AbstractFloat} = new{T}(
+        tracks,
+        diffusivity,
+        brightness,
+        iteration,
+        temperature,
+        logposterior,
+        loglikelihood,
+    )
 end
 
 get_B(s::Sample) = size(s.tracks, 2)
 
-_eltype(s::Sample{FT}) where {FT} = FT
+_eltype(s::Sample{T}) where {T} = T
 
 function simulate(;
     param::ExperimentalParameter{FT},
