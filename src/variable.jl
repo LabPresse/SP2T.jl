@@ -21,42 +21,44 @@ _eltype(rv::DSIID{T}) where {T} = T
 
 mutable struct MHIID{T<:RealNumberOrArray} <: MHSampled{T}
     value::T
+    proposedvalue::T
     prior::Distribution
     proposal::Distribution
     counter::Matrix{Int}
     batchsize::Int
     MHIID(value::T, 𝒫::Distribution, 𝒬::Distribution) where {T} =
-        new{T}(value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
+        new{T}(value, value, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
 end
 
-_eltype(rv::MHIID{FT}) where {FT} = FT
+_eltype(rv::MHIID{T}) where {T} = T
 
-mutable struct DSTrajectory{AT<:AbstractArray{<:Real}} <: DirectlySampled{AT}
-    value::AT
+mutable struct DSTrajectory{T<:AbstractArray{<:Real}} <: DirectlySampled{T}
+    value::T
     dynamics::Dynamics
     prior::Distribution
     DSTrajectory(value::T, dynamics::Dynamics, 𝒫::Distribution) where {T} =
         new{T}(value, dynamics, 𝒫)
 end
 
-_eltype(rv::DSTrajectory{AT}) where {AT} = AT
+_eltype(rv::DSTrajectory{T}) where {T} = T
 
-mutable struct MHTrajectory{AT<:AbstractArray{<:Real}} <: MHSampled{AT}
-    value::AT
+mutable struct MHTrajectory{T<:AbstractArray{<:Real}} <: MHSampled{T}
+    value::T
+    proposedvalue::T
     dynamics::Dynamics
     prior::Distribution
     proposal::Distribution
     counter::Matrix{Int}
     batchsize::Int
     MHTrajectory(
-        value::AT,
+        value::T,
         dynamics::Dynamics,
         𝒫::Distribution,
         𝒬::Distribution,
-    ) where {AT} = new{AT}(value, dynamics, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
+    ) where {T} = new{T}(value, value, dynamics, 𝒫, 𝒬, zeros(Int, 2, 2), 1)
 end
 
-_eltype(rv::MHTrajectory{AT}) where {AT} = AT
+_eltype(rv::MHTrajectory{T}) where {T} = T
 
 Trajectory = Union{DSTrajectory,MHTrajectory}
 
