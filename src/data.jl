@@ -1,62 +1,67 @@
-abstract type Device end
-
-struct CPU <: Device end
-
-struct GPU <: Device end
-
-mutable struct ExperimentalParameter{FT<:AbstractFloat}
-    period::FT
-    pxboundsx::AbstractVector{FT}
-    pxboundsy::AbstractVector{FT}
-    darkcounts::AbstractMatrix{FT}
-    PSF::AbstractPSF{FT}
+mutable struct ExperimentalParameter{
+    Ts<:AbstractFloat,
+    Tv<:AbstractVector{Ts},
+    Tm<:AbstractMatrix{Ts},
+}
+    period::Ts
+    pxboundsx::Tv
+    pxboundsy::Tv
+    darkcounts::Tm
+    PSF::AbstractPSF{Ts}
 end
 
-getpxsize(param::ExperimentalParameter) = param.pxboundsx[2] - param.pxboundsx[1]
-
-ExperimentalParameter(
-    FT::DataType;
+function ExperimentalParameter(
+    T::DataType;
     period::Real,
     pxsize::Real,
     darkcounts::AbstractMatrix{<:Real},
     numericalaperture::Real,
     refractiveindex::Real,
     wavelength::Real,
-) = ExperimentalParameter{FT}(
-    period,
-    range(0, step = pxsize, length = size(darkcounts, 1) + 1),
-    range(0, step = pxsize, length = size(darkcounts, 2) + 1),
-    darkcounts,
-    CircularGaussianLorentzian{FT}(
-        NA = numericalaperture,
-        nᵣ = refractiveindex,
-        λ = wavelength,
-    ),
 )
+    period, pxsize, numericalaperture, refractiveindex, wavelength =
+        convert.(T, (period, pxsize, numericalaperture, refractiveindex, wavelength))
+    return ExperimentalParameter(
+        period,
+        range(0, step = pxsize, length = size(darkcounts, 1) + 1),
+        range(0, step = pxsize, length = size(darkcounts, 2) + 1),
+        convert(Matrix{T}, darkcounts),
+        CircularGaussianLorentzian{T}(
+            NA = numericalaperture,
+            nᵣ = refractiveindex,
+            λ = wavelength,
+        ),
+    )
+end
 
-ExperimentalParameter(
-    FT::DataType,
+function ExperimentalParameter(
+    T::DataType,
     σ₀::Real,
     z₀::Real;
     period::Real,
     pxsize::Real,
     darkcounts::AbstractMatrix{<:Real},
-) = ExperimentalParameter{FT}(
-    period,
-    range(0, step = pxsize, length = size(darkcounts, 1) + 1),
-    range(0, step = pxsize, length = size(darkcounts, 2) + 1),
-    darkcounts,
-    CircularGaussianLorentzian{FT}(σ₀, z₀),
 )
+    period, pxsize, σ₀, z₀ = convert.(T, (period, pxsize, σ₀, z₀))
+    return ExperimentalParameter(
+        period,
+        range(0, step = pxsize, length = size(darkcounts, 1) + 1),
+        range(0, step = pxsize, length = size(darkcounts, 2) + 1),
+        convert(Matrix{T}, darkcounts),
+        CircularGaussianLorentzian(σ₀, z₀),
+    )
+end
 
-_eltype(p::ExperimentalParameter{FT}) where {FT} = FT
+_eltype(::ExperimentalParameter{S,T1,T2}) where {S,T1,T2} = S
 
-struct Video{FT<:AbstractFloat}
+getpxsize(param::ExperimentalParameter) = param.pxboundsx[2] - param.pxboundsx[1]
+
+struct Video
     frames::AbstractArray{Bool,3}
-    param::ExperimentalParameter{FT}
+    param::ExperimentalParameter
     metadata::Dict{String,Any}
 end
 
-_eltype(v::Video{FT}) where {FT} = FT
+# _eltype(::Video{T}) where {T} = T
 
 _length(v::Video) = size(v.frames, 3)
