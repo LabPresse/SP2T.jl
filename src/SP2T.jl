@@ -9,7 +9,7 @@ using LinearAlgebra
 using Random
 
 # GPU 
-using Flux: batched_mul, batched_mul!, batched_transpose
+using NNlib: batched_mul, batched_mul!, batched_transpose
 
 # # IO
 # using JLD2
