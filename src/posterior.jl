@@ -72,26 +72,19 @@ get_ln𝒫(x::IID) = get_ln𝒫(x.𝒫, x.value)
 function get_ln𝒫(
     ::Brownian,
     fourDτ::FT,
-    𝒫::DistrOrParam,
+    𝒫::GeneralDistribution,
     x::AbstractArray{FT,3},
-    device::Device,
 ) where {FT<:AbstractFloat}
     num_Δx²::FT, total_Δx² = sum_Δx²(x)
     ln𝒫 = -log(fourDτ) * num_Δx² / 2 - total_Δx² / fourDτ
-    ln𝒫 += if device isa CPU
-        get_ln𝒫(𝒫, view(x, :, :, 1))
-    else
-        #? improve
-        get_ln𝒫(𝒫, Array(view(x, :, :, 1)))
-    end
+    ln𝒫 += get_ln𝒫(𝒫, view(x, :, :, 1))
     return ln𝒫
 end
 
-get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray, device::Device) =
-    get_ln𝒫(x.dynamics, dynRV, x.𝒫, x.value, device)
+get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray) = get_ln𝒫(x.dynamics, dynRV, x.𝒫, x.value)
 
-get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray, B::Integer, device::Device) =
-    get_ln𝒫(x.dynamics, dynRV, x.𝒫, view(x.value, :, 1:B, :), device)
+get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray, B::Integer) =
+    get_ln𝒫(x.dynamics, dynRV, x.𝒫, view(x.value, :, 1:B, :))
 
 # """
 #     get_ln𝒫(x, fourDτ)
@@ -107,7 +100,7 @@ get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray, B::Integer, device::Device) 
 
 function update_ln𝒫!(s::ChainStatus, v::Video, device::Device)
     s.logposterior =
-        get_lnℒ(v.frames, s.𝐔, device) +
+        get_lnℒ(v.frames, s.𝐔) +
         get_ln𝒫(s.tracks, 4 * s.diffusivity.value * v.param.period, device) +
         get_ln𝒫(s.emittercount) +
         get_ln𝒫(s.diffusivity) +
