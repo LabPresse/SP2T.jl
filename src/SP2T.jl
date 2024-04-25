@@ -10,7 +10,6 @@ using Random
 
 # GPU 
 using Flux: batched_mul, batched_mul!, batched_transpose
-using CUDA
 
 # # IO
 # using JLD2
@@ -40,9 +39,12 @@ export visualize
 
 export readbin, getframes, getROIindices, viewframes, getpxsize
 
+include("type.jl")
+
 # The files in the first "include" block ONLY contains struct definitions, basic constructors, and simple utility functions.
-include("detection_model.jl")
+
 include("data.jl")
+include("detection_model.jl")
 include("sample.jl")
 include("annealing.jl")
 include("variable.jl")
@@ -57,7 +59,7 @@ include("visualization.jl")
 include("likelihood.jl")
 include("diffusion.jl")
 include("track.jl")
-include("number.jl")
+include("emittercount.jl")
 include("brightness.jl")
 include("permutation.jl")
 include("posterior.jl")
