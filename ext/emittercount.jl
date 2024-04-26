@@ -1,4 +1,4 @@
-function add_lnℒ!(
+function SP2T.add_lnℒ!(
     ln𝒫::CuVector{T},
     𝐔::CuArray{T,3},
     𝐖::CuArray{Bool,3},
@@ -15,4 +15,9 @@ function add_lnℒ!(
         ln𝒫[m+1] += get_lnℒ!(lnℒ, 𝐖, 𝐔)
     end
     return ln𝒫
+end
+
+function SP2T.shuffle_on_x!(x::CuArray, B)
+    x[:, 1:B, :] = view(x, :, randperm(B), :)
+    return x
 end

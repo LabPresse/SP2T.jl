@@ -1,4 +1,4 @@
-function get_ln𝒫(
+function SP2T.get_ln𝒫(
     ::Brownian,
     fourDτ::FT,
     𝒫::GeneralDistribution,

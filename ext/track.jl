@@ -1,3 +1,3 @@
-function copyidxto!(xᵒ::CuArray{T,N}, xᵖ::CuArray{T,N}, idx::CuArray{Bool,N}) where {T,N}
+function SP2T.copyidxto!(xᵒ::CuArray, xᵖ::CuArray, idx::CuArray)
     xᵒ .= (idx .* xᵖ) .+ (.~idx .* xᵒ)
 end
