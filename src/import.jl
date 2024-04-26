@@ -104,7 +104,7 @@ function getframes(
     return reshape(frames, width, height, count)
 end
 
-function countframes(lastindex::Integer, framesize::Integer, batchsize::Integer)
+function countframes(lastindex, framesize, batchsize)
     numofbinframe = fld1(lastindex, framesize)
     return ifelse(batchsize == 1, (numofbinframe, 0), divrem(numofbinframe, batchsize))
 end
@@ -125,15 +125,10 @@ function _getframes(
     return frames
 end
 
-batchindices(indices::AbstractVector{<:Integer}, framesize::Integer, batchsize::Integer) =
+batchindices(indices, framesize, batchsize) =
     @. (indices - 1) ÷ (framesize * batchsize) * framesize + mod1(indices, framesize)
 
-function getROIindices(
-    indices::AbstractVector{<:Integer},
-    ROIbounds::AbstractMatrix{<:Integer},
-    width::Integer,
-    height::Integer,
-)
+function getROIindices(indices, ROIbounds, width, height)
     newwidth, newheight =
         ROIbounds[2, 1] - ROIbounds[1, 1] + 1, ROIbounds[2, 2] - ROIbounds[1, 2] + 1
     cartesianindices = cartesianize(indices, width, width * height)
@@ -141,31 +136,19 @@ function getROIindices(
     return linearize(ROIcartesianindices, newwidth, newheight)
 end
 
-function cartesianize(
-    indices::AbstractVector{<:Integer},
-    width::Integer,
-    framesize::Integer,
-)
+function cartesianize(indices, width, framesize)
     cartesianindices = Matrix{eltype(indices)}(undef, length(indices), 3)
     return cartesianize!(cartesianindices, indices, width, framesize)
 end
 
-function cartesianize!(
-    cartesianindices::AbstractMatrix{<:Integer},
-    indices::AbstractVector{<:Integer},
-    width::Integer,
-    framesize::Integer,
-)
+function cartesianize!(cartesianindices, indices, width, framesize)
     cartesianindices[:, 1] .= mod1.(indices, width)
     cartesianindices[:, 2] .= fld1.(mod1.(indices, framesize), width)
     cartesianindices[:, 3] .= fld1.(indices, framesize)
     return cartesianindices
 end
 
-function extractROI!(
-    cartesianindices::AbstractMatrix{<:Integer},
-    ROIbounds::AbstractMatrix{<:Integer},
-)
+function extractROI!(cartesianindices, ROIbounds)
     newupperbounds = view(ROIbounds, 1:1, :) .- 1
     cartesianindices .-= newupperbounds
     newupperbounds .= view(ROIbounds, 2:2, :) .- newupperbounds
@@ -173,21 +156,12 @@ function extractROI!(
     return cartesianindices[inROI, :]
 end
 
-function linearize(
-    cartesianindices::AbstractMatrix{<:Integer},
-    width::Integer,
-    height::Integer,
-)
+function linearize(cartesianindices, width, height)
     indices = similar(cartesianindices, axes(cartesianindices, 1))
     return linearize!(indices, cartesianindices, height, width)
 end
 
-function linearize!(
-    indices::AbstractVector{<:Integer},
-    cartesianindices::AbstractMatrix{<:Integer},
-    width::Integer,
-    height::Integer,
-)
+function linearize!(indices, cartesianindices, width, height)
     @views @. indices =
         (cartesianindices[:, 3] - 1) * height * width +
         (cartesianindices[:, 2] - 1) * height +
