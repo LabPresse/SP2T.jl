@@ -1,7 +1,19 @@
 get_limits(px::AbstractVector{<:Real}, x::AbstractMatrix{<:Real}) =
     (min(px[1], minimum(x)), max(px[end], maximum(x)))
 
-function get_localization_error(S::AbstractVector, gt::Sample)
+function get_x(v::AbstractVector{<:Sample})
+    ntracks = [size(s.tracks, 2) for s in v]
+    N = size(v[1].x, 3)
+    x = similar(v[1].tracks, sum(ntracks), N, 3)
+    m = 0
+    @views for (s, M) in zip(v, ntracks)
+        permutedims!(x[m.+(1:M), :, :], s.x, (2, 3, 1))
+        m += M
+    end
+    return x
+end
+
+function localization_error(S::AbstractVector, gt::Sample)
     X_gnd = view(gt.tracks, 1, :, :)
     Y_gnd = view(gt.tracks, 2, :, :)
     ~, B_gnd, N = size(gt.tracks)
@@ -35,32 +47,35 @@ function get_localization_error(S::AbstractVector, gt::Sample)
     return localization_errors, order_errors
 end
 
-function visualize(video::Video{FT}, groundtruth::Sample{FT}) where {FT}
-    if isa(video.frames, CuArray)
-        to_cpu!(video)
-    end
-    frames = video.frames
-    p = video.param
+function visualize(
+    groundtruth::Sample,
+    frames::AbstractArray{<:Integer},
+    params::ExperimentalParameters,
+)
+    # if isa(frames, CuArray)
+    #     to_cpu!(video)
+    # end
+    # expparams
     x = groundtruth.tracks
-    emittercount = size(x, 2)
-    pxsize = getpxsize(p)
+    nemitters = size(groundtruth.tracks, 2)
+    pxsizee = pxsize(params)
 
-    g = get_px_PSF(groundtruth.tracks, p.pxboundsx, p.pxboundsy, p.PSF)
+    g = get_pxPSF(groundtruth.tracks, params)
 
-    t = 1:_length(video)
+    t = 1:size(frames, 3)
     fig = Figure()
     ax = [
         Axis3(fig[1:3, 1], zlabel = "t"),
-        Axis(fig[4, 1], xticks = 0:25:300, xlabel = "t", ylabel = "z"),
+        Axis(fig[4, 1], xlabel = "t", ylabel = "z"),
         Axis(fig[1:4, 2], aspect = DataAspect()),
     ]
 
-    for m = 1:emittercount
+    for m = 1:nemitters
         lines!(ax[1], view(x, 1, m, :), view(x, 2, m, :), t)
         lines!(ax[2], t, view(x, 3, m, :))
     end
 
-    sl_x = Slider(fig[5, 1], range = 1:_length(video), startvalue = 1)
+    sl_x = Slider(fig[5, 1], range = 1:size(frames, 3), startvalue = 1)
 
     frame1 = lift(sl_x.value) do x
         view(g, :, :, x)
@@ -70,13 +85,19 @@ function visualize(video::Video{FT}, groundtruth::Sample{FT}) where {FT}
         view(frames, :, :, x)
     end
 
-    f = lift(sl_x.value) do x
-        x
-    end
+    # f = lift(sl_x.value) do x
+    #     x
+    # end
 
     collected_frame = dropdims(sum(frames, dims = 3), dims = 3)
 
-    hm = heatmap!(ax[1], p.pxboundsx, p.pxboundsy, frame1, colormap = (:grays, 0.7))
+    hm = heatmap!(
+        ax[1],
+        params.pxboundsx,
+        params.pxboundsy,
+        frame1,
+        colormap = (:grays, 0.7),
+    )
 
     vl = vlines!(ax[2], t[1])
 
@@ -87,16 +108,16 @@ function visualize(video::Video{FT}, groundtruth::Sample{FT}) where {FT}
 
     heatmap!(
         ax[3],
-        p.pxboundsx,
-        p.pxboundsy .+ (4 * pxsize + 2 * p.pxboundsy[end]),
+        params.pxboundsx,
+        params.pxboundsy .+ (4 * pxsizee + 2 * params.pxboundsy[end]),
         frame1,
         colormap = :grays,
     )
     translate!(
         text!(
             ax[3],
-            p.pxboundsx[1],
-            p.pxboundsy[end] + (4 * pxsize + 1 * p.pxboundsy[end]),
+            params.pxboundsx[1],
+            params.pxboundsy[end] + (4 * pxsizee + 1 * params.pxboundsy[end]),
             text = "asdasd",
             fontsize = 20,
         ),
@@ -107,16 +128,16 @@ function visualize(video::Video{FT}, groundtruth::Sample{FT}) where {FT}
 
     heatmap!(
         ax[3],
-        p.pxboundsx,
-        p.pxboundsy .+ (2 * pxsize + p.pxboundsy[end]),
+        params.pxboundsx,
+        params.pxboundsy .+ (2 * pxsizee + params.pxboundsy[end]),
         frame2,
         colormap = :grays,
         colorrange = (false, true),
     )
     heatmap!(
         ax[3],
-        p.pxboundsx,
-        p.pxboundsy,
+        params.pxboundsx,
+        params.pxboundsy,
         collected_frame,
         colormap = :grays,
         colorrange = (0, maximum(collected_frame)),
@@ -127,8 +148,8 @@ function visualize(video::Video{FT}, groundtruth::Sample{FT}) where {FT}
     hidedecorations!(ax[3])
     hidespines!(ax[3])
 
-    (lowerx, upperx) = get_limits(p.pxboundsx, view(x, 1, :, :))
-    (lowery, uppery) = get_limits(p.pxboundsy, view(x, 2, :, :))
+    (lowerx, upperx) = get_limits(params.pxboundsx, view(x, 1, :, :))
+    (lowery, uppery) = get_limits(params.pxboundsy, view(x, 2, :, :))
 
     xlims!(ax[1], lowerx, upperx)
     ylims!(ax[1], lowery, uppery)
@@ -180,15 +201,17 @@ function trajcount(M::AbstractMatrix{<:Real}, y::AbstractArray{<:Real})
 end
 
 function visualize(
-    v::Video{FT},
-    gt::Sample{FT},
-    c::Chain;
+    samples::AbstractVector{<:Sample},
+    frames::AbstractArray{<:Integer},
+    params::ExperimentalParameters,
+    gt::Sample,
+    # c::Chain;
     num_grid::Integer = 500,
     burn_in::Integer = 0,
-) where {FT}
-    if isa(v.frames, CuArray)
-        to_cpu!(v)
-    end
+)
+    # if isa(v.frames, CuArray)
+    #     to_cpu!(v)
+    # end
     histcolor =
         RGBAf(ColorSchemes.tab10[1].r, ColorSchemes.tab10[1].g, ColorSchemes.tab10[1].b, 1)
     set_theme!(my_theme())
@@ -200,12 +223,12 @@ function visualize(
         Axis(fig[2, 2], xlabel = "Diffusion coefficient (μm²/s)"),
     ]
 
-    s = @view c.samples[burn_in+1:end]
+    s = @view samples[burn_in+1:end]
     all_trajectories = get_x(s)
     x = view(all_trajectories, :, :, 1)
     y = view(all_trajectories, :, :, 2)
     z = view(all_trajectories, :, :, 3)
-    t = 1:_length(v)
+    t = 1:size(frames, 3)
     @show ~, MAP_idx = findmax([i.ln𝒫 for i in s])
 
     B = size(x, 1)
@@ -257,8 +280,8 @@ function visualize(
             linewidth = 1.5,
         )
     end
-    ylims!(ax[1], 2.2, 4.9)
-    ylims!(ax[2], 2.8, 4.2)
+    ylims!(ax[1], xrange[1], xrange[end])
+    ylims!(ax[2], yrange[1], yrange[end])
     for j = 1:size(s[MAP_idx].x, 2)
         lines!(
             ax[1],
@@ -292,7 +315,7 @@ function visualize(
     )
     translate!(text!(ax[2], 27, 4.2, text = "250 nm"), 0, 0, -0.1)
 
-    (localization_errors, order_errors) = get_localization_error(s, gt)
+    (localization_errors, order_errors) = localization_error(s, gt)
     hist!(
         ax[3],
         localization_errors .* 1000,
@@ -305,7 +328,7 @@ function visualize(
     D_CI = quantile(D, [0.025, 0.5, 0.975])
     vspan!(ax[4], D_CI[1], D_CI[3], color = :grey80)
     hist!(ax[4], D, color = histcolor, normalization = :pdf)
-    @show D_range = range(minimum(D), maximum(D); length = 200)
+    @show D_range = range(extrema(D)..., length = 200)
     lines!(
         ax[4],
         D_range,
@@ -314,7 +337,7 @@ function visualize(
         linewidth = 3,
     )
     vlines!(ax[4], gt.diffusivity, color = ColorSchemes.tab10[2], linewidth = 3)
-    xlims!(ax[4], 0.04, 0.12)
+    xlims!(ax[4], D_range[1], D_range[end])
     ylims!(ax[4], 0, nothing)
 
     # B_range = range(minimum(result.B), maximum(result.B); length = 200)

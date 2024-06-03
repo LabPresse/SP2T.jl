@@ -1,49 +1,61 @@
-function get_ϵ(𝒬::Beta)
-    ϵ = rand(𝒬)
-    return ifelse(bitrand(), ϵ, 1 / ϵ)
+mutable struct Brightness{T}
+    value::T
+    priorparams::NTuple{2,T}
+    proposalparam::T
 end
 
-function proposebrightness(hᵒ::FT, 𝒬::Beta{FT}) where {FT<:AbstractFloat}
+Brightness(; value, priorparams, proposalparam, scale::T) where {T} = Brightness(
+    convert(T, value * scale),
+    convert.(T, (priorparams[1], priorparams[2] * scale)),
+    convert(T, proposalparam),
+)
+
+# function get_ϵ(𝒬::Beta)
+#     ϵ = rand(𝒬)
+#     return ifelse(bitrand(), ϵ, 1 / ϵ)
+# end
+
+function proposebrightness(h::T, 𝒬::Beta{T}) where {T<:AbstractFloat}
     ϵ = rand(𝒬)
-    return ifelse(bitrand(), hᵒ * ϵ, hᵒ / ϵ)
+    return bitrand() ? h * ϵ : h / ϵ
 end
 
 function diff_lnℒ_h(
     w::AbstractArray{Bool,3},
-    G::AbstractArray{FT,3},
-    hᵖ::FT,
-    hᵒ::FT,
-    F::AbstractMatrix{FT},
-) where {FT<:AbstractFloat}
+    G::AbstractArray{T,3},
+    hᵖ::T,
+    hᵒ::T,
+    F::AbstractMatrix{T},
+) where {T<:AbstractFloat}
     uᵖ = F .+ hᵖ .* G
     uᵒ = F .+ hᵒ .* G
     lnℒ_diff = w .* (logexpm1.(uᵖ) .- logexpm1.(uᵒ)) .- (uᵖ .- uᵒ)
     return dot(CUDA.ones(eltype(lnℒ_diff), size(lnℒ_diff)), lnℒ_diff)
 end
 
-diff_ln𝒫_h(hᵖ::FT, hᵒ::FT, 𝒫::Gamma{FT}) where {FT<:AbstractFloat} =
+diff_ln𝒫_h(hᵖ::T, hᵒ::T, 𝒫::Gamma{T}) where {T<:AbstractFloat} =
     (shape(𝒫) - 1) * log(hᵖ / hᵒ) - (hᵖ - hᵒ) / scale(𝒫)
 
-diff_ln𝒬_h(hᵖ::FT, hᵒ::FT) where {FT<:AbstractFloat} = log(hᵖ / hᵒ)
+diff_ln𝒬_h(hᵖ::T, hᵒ::T) where {T<:AbstractFloat} = log(hᵖ / hᵒ)
 
 get_ln𝓇_h(
     w::AbstractArray{Bool,3},
-    G::AbstractArray{FT,3},
-    hᵖ::FT,
-    hᵒ::FT,
-    F::AbstractMatrix{FT},
-    𝒫::Gamma{FT},
-) where {FT<:AbstractFloat} =
+    G::AbstractArray{T,3},
+    hᵖ::T,
+    hᵒ::T,
+    F::AbstractMatrix{T},
+    𝒫::Gamma{T},
+) where {T<:AbstractFloat} =
     diff_lnℒ_h(w, G, hᵖ, hᵒ, F) + diff_ln𝒫_h(hᵖ, hᵒ, 𝒫) + diff_ln𝒬_h(hᵖ, hᵒ)
 
 function sample_h(
     w::AbstractArray{Bool},
-    G::AbstractArray{FT},
-    hᵒ::FT,
-    F::AbstractMatrix{FT},
-    𝒬::Beta{FT},
-    𝒫::Gamma{FT},
-) where {FT<:AbstractFloat}
+    G::AbstractArray{T},
+    hᵒ::T,
+    F::AbstractMatrix{T},
+    𝒬::Beta{T},
+    𝒫::Gamma{T},
+) where {T<:AbstractFloat}
     hᵖ = proposebrightness(hᵒ, 𝒬)
     ln𝓇 = get_ln𝓇_h(w, G, hᵖ, hᵒ, F, 𝒫)
     ln𝓊 = log(rand())

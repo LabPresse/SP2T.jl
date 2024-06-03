@@ -1,16 +1,12 @@
-function SP2T.get_lnℒ!(
-    lnℒ::AbstractArray{T,3},
-    𝐖::AbstractArray{Bool,3},
-    𝐔::AbstractArray{T,3},
-) where {T}
-    @. lnℒ = 𝐖 * logexpm1(𝐔) - 𝐔
-    return sum(lnℒ)
+function SP2T._logℒ(W::CuArray{<:Integer}, U::CuArray, ΔU::CuArray)
+    @. ΔU = W * logexpm1(U) - U
+    return sum(ΔU)
 end
 
-SP2T.get_lnℒ(𝐖::CuArray, 𝐔::CuArray) = get_lnℒ!(similar(𝐔), 𝐖, 𝐔)
+# SP2T.logℒ(W::CuArray, 𝐔::CuArray) = SP2T.logℒ!(similar(𝐔), W, 𝐔)
 
-function SP2T.get_frame_Δlnℒ(frames::CuArray, 𝐔ᵒ::CuArray, 𝐔ᵖ::CuArray)
-    ln𝓇 = similar(𝐔ᵖ, 1, 1, size(𝐔ᵖ, 3))
-    Δlnℒ = @. frames * (logexpm1(𝐔ᵖ) - logexpm1(𝐔ᵒ)) - (𝐔ᵖ - 𝐔ᵒ)
-    return sum!(ln𝓇, Δlnℒ)
+function SP2T.frame_Δlogℒ!(ΔlogL::CuArray, W, U, Uᵖ, temp, T = 1)
+    @. temp = W * (logexpm1(Uᵖ) - logexpm1(U)) - (Uᵖ - U)
+    sum!(ΔlogL, temp)
+    return ΔlogL ./= T
 end

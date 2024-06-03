@@ -1,21 +1,40 @@
-function sum_Δx²(x::AbstractArray{FT,3}) where {FT<:AbstractFloat}
-    Δx² = diff(x, dims = 3) .^ 2
-    return length(Δx²), sum(Δx²)
+mutable struct Diffusivity{T}
+    value::T
+    params::NTuple{2,T}
+    priorparams::NTuple{2,T}
 end
 
-function sample_D(
-    x::AbstractArray{FT,3},
-    𝒫::InverseGamma{FT},
-    τ::FT,
-    𝑇::FT,
-) where {FT<:AbstractFloat}
-    Δshape::FT, Δscale = sum_Δx²(x) ./ (2, 4 * τ)
-    newparams = (shape(𝒫), scale(𝒫)) .+ (Δshape, Δscale) ./ 𝑇
-    return rand(InverseGamma(newparams...))
+Diffusivity(D, priorparams) = Diffusivity(D, priorparams, priorparams)
+
+Diffusivity(; value, priorparams, scale::T) where {T} = Diffusivity(
+    convert(T, value * scale),
+    convert.(T, (priorparams[1], priorparams[2] * scale)),
+)
+
+function setparams!(D::Diffusivity{T}, Δx², 𝑇) where {T}
+    D.params = D.priorparams .+ (length(Δx²), sum(Δx²) / 2) ./ (2 * 𝑇)
+    return D
 end
 
-function update_D!(s::ChainStatus, param::ExperimentalParameter)
-    # s.D.value = sample_D(view_on_x(s), s.D.𝒫, param.period, s.𝑇)
-    s.diffusivity.value = sample_D(s.tracks.value, s.diffusivity.prior, param.period, s.temperature)
-    return s
+function sample!(D::Diffusivity)
+    D.value = rand(InverseGamma(D.params...))
+    return D
 end
+
+# function sum_Δx²(x)
+#     Δx² = diff(x, dims = 3) .^ 2
+#     return length(Δx²), sum(Δx²)
+# end
+
+# function sample_D(x::AbstractArray{T,3}, 𝒫::InverseGamma{T}, τ::T, 𝑇::T) where {T}
+#     Δshape::T, Δscale = sum_Δx²(x) ./ (2, 4 * τ)
+#     newparams = (shape(𝒫), scale(𝒫)) .+ (Δshape, Δscale) ./ 𝑇
+#     return rand(InverseGamma(newparams...))
+# end
+
+# function update_diffusivity!(s::ChainStatus, param::ExperimentalParameter)
+#     # s.D.value = sample_D(view_on_x(s), s.D.𝒫, param.period, s.𝑇)
+#     s.diffusivity.value =
+#         sample_D(s.tracks.value, s.diffusivity.prior, param.period, s.temperature)
+#     return s
+# end

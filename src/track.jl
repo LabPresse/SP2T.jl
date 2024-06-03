@@ -1,360 +1,221 @@
-#* Forward functions
-function sampleinitx!(
-    x::AbstractArray{FT},
-    prior::DistrOrParam,
-    ::CPU,
-) where {FT<:AbstractFloat}
-    rand!(prior, view(x, :, :, 1))
-    return x
+abstract type SimplifiedDistribution{T} end
+
+struct Normal₃{T} <: SimplifiedDistribution{T}
+    μ::T
+    σ::T
 end
 
-function sampleinitx!(
-    x::AbstractArray{FT},
-    prior::DistrOrParam,
-    ::GPU,
-) where {FT<:AbstractFloat}
-    x[:, :, 1] .= CuArray(rand(prior, size(x, 2)))
-    return x
+_params(n::Normal₃) = n.μ, n.σ
+struct BrownianTracks{A,V,B}
+    value::A
+    valueᵖ::A
+    # Δx²::A
+    # Δxᵖ²::A
+    prior::Normal₃{V}
+    perturbsize::V
+    logratio::A
+    logrands::A
+    accepted::B
+    counter::Matrix{Int}
 end
 
-function sampleinitx!(
-    x::AbstractArray{FT},
-    x₀::AbstractVector{FT},
-    σ₀::AbstractVector{FT},
-) where {FT<:AbstractFloat}
-    randn!(view(x, :, :, 1))
-    x[:, :, 1] .*= σ₀
-    x[:, :, 1] .+= x₀
-    return x
+function BrownianTracks(
+    x::AbstractArray{T,3},
+    xᵖ::AbstractArray{T,3},
+    # Δx²::AbstractArray{T,3},
+    prior::Normal₃{<:AbstractVector{T}},
+    perturbsize::AbstractVector{T},
+) where {T}
+    logratio = similar(x, 1, 1, axes(x, 3))
+    acceptance = fill!(similar(logratio, Bool), false)
+    # @views Δxᵖ² = (xᵖ[:, :, 2:end] .- xᵖ[:, :, 1:end-1]) .^ 2
+    return BrownianTracks(
+        x,
+        xᵖ,
+        # Δx²,
+        # Δxᵖ²,
+        prior,
+        perturbsize,
+        logratio,
+        similar(logratio),
+        acceptance,
+        zeros(Int, 2, 2),
+    )
 end
 
-function sampleΔx!(x::AbstractArray{FT,3}, D::FT, τ::FT) where {FT<:AbstractFloat}
-    randn!(@view x[:, :, 2:end])
-    return x .*= √(2 * D * τ)
+function BrownianTracks(; value, prior, perturbsize)
+    valueᵖ = similar(value)
+    # Δx² = similar(x, 3, size(x, 2), size(x, 3) - 1)
+    # Δxᵖ² = similar(Δx²)
+    logacceptance = similar(value, 1, 1, axes(value, 3))
+    # acceptance = fill!(similar(logacceptance, Bool), false)
+    acceptance = similar(logacceptance, Bool)
+    # @views Δxᵖ² = (xᵖ[:, :, 2:end] .- xᵖ[:, :, 1:end-1]) .^ 2
+    return BrownianTracks(
+        value,
+        valueᵖ,
+        # Δx²,
+        # Δxᵖ²,
+        prior,
+        perturbsize,
+        logacceptance,
+        similar(logacceptance),
+        acceptance,
+        zeros(Int, 2, 2),
+    )
 end
 
-function simulate!(
-    x::AbstractArray{FT,3},
-    𝒫::DistrOrParam,
-    D::FT,
-    τ::FT,
-    device::Device,
-) where {FT<:AbstractFloat}
-    sampleinitx!(x, 𝒫, device)
-    sampleΔx!(x, D, τ)
-    cumsum!(x, x, dims = 3)
-    return x
+# maxnemitters(tracks::BrownianTracks) = size(tracks.x, 2)
+
+# viewtracks(tracks::BrownianTracks, M) = view(tracks.x, :, 1:M, :)
+
+ontracks(x::BrownianTracks, M) = view(x.value, :, 1:M, :)
+
+# candidates(tracks::BrownianTracks, M) = view(tracks.xᵖ, :, 1:M, :)
+
+# displacements(tracks::BrownianTracks, M) =
+#     view(tracks.Δx², :, 1:M, :), view(tracks.Δxᵖ², :, 1:M, :)
+
+logrand!(x::AbstractArray) = x .= log.(rand!(x))
+
+# function logrand!(tracks::BrownianTracks)
+#     rand!(tracks.lograndnums)
+#     tracks.lograndnums .= log.(tracks.lograndnums)
+#     return tracks
+# end
+
+# diff2!(Δx², x) = @views Δx² .= (x[:, :, 2:end] .- x[:, :, 1:end-1]) .^ 2
+
+# function setΔx²!(tracks::BrownianTracks)
+#     diff2!(tracks.Δx², tracks.x)
+#     return tracks
+# end
+
+function simulate!(x, μ, σ, D)
+    randn!(x)
+    @views begin
+        x[:, :, 1] .= x[:, :, 1] .* σ .+ μ
+        x[:, :, 2:end] .*= √(2 * D)
+    end
+    return cumsum!(x, x, dims = 3)
 end
 
-function simulate!(
-    x::AbstractArray{FT,3},
-    x₀::AbstractVector{FT},
-    σ₀::AbstractVector{FT},
-    D::FT,
-    τ::FT,
-) where {FT<:AbstractFloat}
-    sampleinitx!(x, x₀, σ₀)
-    sampleΔx!(x, D, τ)
-    cumsum!(x, x, dims = 3)
-    return x
-end
-
-# function simulate(
-#     x::AbstractArray{FT,3},
-#     𝒫::DistrOrParam,
-#     D::FT,
-#     τ::FT,
-#     device::Device,
-# ) where {FT<:AbstractFloat}
-#     @views begin
-#         setinitx!(x[:, :, 1], 𝒫, device)
-#         setΔx!(x[:, :, 2:end], √(2 * D * τ), device)
-#     end
-#     cumsum!(x, x, dims = 3)
+# function simulate!(x, Δx², μ, σ, D)
+#     simulate!(x, μ, σ, D)
+#     @views Δx² .= x[:, :, 2:end] .^ 2
 #     return x
 # end
 
-#* Inverse functions
-propose_x(xᵒ::AbstractArray{FT,3}, 𝒬::MvNormal, ::CPU) where {FT<:AbstractFloat} =
-    xᵒ .+ sqrt.(viewdiag(𝒬.Σ)) .* randn(size(xᵒ)...)
+function MHinit!(x::BrownianTracks)
+    fill!(x.logratio, -Inf)
+    fill!(x.accepted, false)
+    logrand!(x.logrands)
+    return x
+end
 
-propose_x(xᵒ::AbstractArray{FT,3}, 𝒬::MvNormal, ::GPU) where {FT<:AbstractFloat} =
-    xᵒ .+ sqrt.(CuArray(diag(𝒬.Σ))) .* CUDA.randn(size(xᵒ)...)
-
-function propose_x!(
-    xᵖ::AbstractArray{FT,3},
-    xᵒ::AbstractArray{FT,3},
-    σ::AbstractVector{FT},
-) where {FT<:AbstractFloat}
+function propose!(xᵖ, x, σ)
     randn!(xᵖ)
-    xᵖ .*= σ
-    return xᵖ .+= xᵒ
+    xᵖ .= xᵖ .* σ .+ x
 end
 
-propose_x(xᵒ::AbstractArray{FT,3}, σ::AbstractVector{FT}) where {FT<:AbstractFloat} =
-    propose_x!(similar(xᵒ), xᵒ, σ)
-
-# get_ΔΔx²(
-#     xᵒ::AbstractMatrix{FT},
-#     xᵖ::AbstractMatrix{FT},
-#     neighbourx::AbstractArray{FT},
-# ) where {FT<:AbstractFloat} = sum((xᵒ .- neighbourx) .^ 2 .- (xᵖ .- neighbourx) .^ 2)
-
-# function get_Δlnℒ_x(
-#     w::AbstractArray{Bool,3},
-#     Gᵖ::AbstractArray{FT,3},
-#     Gᵒ::AbstractArray{FT,3},
-#     hτ::FT,
-#     F::AbstractMatrix{FT},
-# ) where {FT<:AbstractFloat}
-#     uᵖ = F .+ hτ .* Gᵖ
-#     uᵒ = F .+ hτ .* Gᵒ
-#     Δlnℒ = uᵒ .- uᵖ
-#     Δlnℒ[w] .+= logexpm1.(uᵖ[w]) .- logexpm1.(uᵒ[w])
-#     return sum(Δlnℒ, dims = (1, 2))
+# function propose!(tracks::BrownianTracks)
+#     propose!(tracks.xᵖ, tracks.x, tracks.perturbsize)
+#     return tracks
 # end
 
-neighbour_indices(n::Integer, N::Integer) = ifelse(n == 1, 2, n-1:2:min(n + 1, N))
+# function propose!(tracks::BrownianTracks, M)
+#     @views propose!(tracks.xᵖ[:, 1:M, :], tracks.x[:, 1:M, :], tracks.perturbsize)
+#     return tracks
+# end
 
-view_neighbour(x::AbstractArray{<:AbstractFloat,3}, n::Integer, N::Integer) =
-    view(x, :, :, neighbour_indices(n, N))
+# function set_ΔlogL!(ΔlogL, frames, 𝐔, 𝐔ᵖ, xᵖ, h, F, px, py, PSF, temperature, temp)
+#     get_px_intensity!(𝐔ᵖ, xᵖ, h, F, px, py, PSF)
+#     set_frame_Δlnℒ!(ΔlogL, frames, 𝐔, 𝐔ᵖ, temp)
+#     return ΔlogL ./= temperature
+# end
 
-function add_Δln𝒫_x₁!(
-    ln𝓇::AbstractVector{FT},
-    xᵒ::AbstractMatrix{FT},
-    xᵖ::AbstractMatrix{FT},
-    𝒫::MvNormal,
-) where {FT<:AbstractFloat}
-    ln𝓇[1] += sum(((xᵒ .- 𝒫.μ) .^ 2 - (xᵖ .- 𝒫.μ) .^ 2) ./ (2 .* viewdiag(𝒫.Σ)))
+function add_Δlog𝒫!(ln𝓇, x₁, y₁, prior::Normal₃)
+    ln𝓇 .+= sum(((x₁ .- prior.μ) .^ 2 - (y₁ .- prior.μ) .^ 2) ./ (2 .* prior.σ .^ 2))
     return ln𝓇
 end
 
-function add_Δln𝒫_x₁!(
-    ln𝓇::AbstractArray{FT,3},
-    xᵒ_cu::AbstractMatrix{FT},
-    xᵖ_cu::AbstractMatrix{FT},
-    𝒫::MvNormal,
-) where {FT<:AbstractFloat}
-    xᵒ = Array(xᵒ_cu)
-    xᵖ = Array(xᵖ_cu)
-    CUDA.@allowscalar ln𝓇[1] +=
-        sum(((xᵒ .- 𝒫.μ) .^ 2 - (xᵖ .- 𝒫.μ) .^ 2) ./ (2 .* viewdiag(𝒫.Σ)))
-    return ln𝓇
+function add_Δlog𝒫!(x::BrownianTracks, M)
+    @views add_Δlog𝒫!(x.logratio[:, :, 1], x.value[:, 1:M, 1], x.valueᵖ[:, 1:M, 1], x.prior)
+    return x
 end
 
-# get_Δln𝒫_x(
-#     xᵒ::AbstractMatrix{FT},
-#     xᵖ::AbstractMatrix{FT},
-#     xᶜ::AbstractArray{FT},
-#     fourDτ::FT,
-# ) where {FT<:AbstractFloat} = get_ΔΔx²(xᵒ, xᵖ, xᶜ) / fourDτ
+# function add_Δln𝒫_x₁!(tracks::BrownianTracks, x, xᵖ)
+#     add_Δln𝒫_x₁!(tracks.logacceptance, x, xᵖ, tracks.prior)
+#     return tracks
+# end
 
-function get_acceptance!(
-    xᵒ::AbstractArray{FT,3},
-    xᵖ::AbstractArray{FT,3},
-    ln𝓇::AbstractVector{FT},
-    fourDτ::FT,
-) where {FT<:AbstractFloat}
-    N = size(ln𝓇, 3)
-    accepted = BitVector(undef, N)
-    @inbounds for n in randperm(N)
-        xᵒₙ, xᵖₙ, xⁿₙ = view(xᵒ, :, :, n), view(xᵖ, :, :, n), view_neighbour(xᵒ, n, N)
-        ln𝓇[n] += sum((xᵒₙ .- xⁿₙ) .^ 2 .- (xᵖₙ .- xⁿₙ) .^ 2) / fourDτ
-        accepted[n] = ln𝓇[n] > log(rand(FT))
-        accepted[n] && (xᵒₙ .= xᵖₙ)
-    end
-    return accepted
+function copyidxto!(x, xᵖ, i)
+    j = vec(i)
+    @views x[:, :, j] .= xᵖ[:, :, j]
+    return x
 end
 
-function copyidxto!(
-    xᵒ::AbstractArray{FT,3},
-    xᵖ::AbstractArray{FT,3},
-    idx::AbstractVector{Bool},
-) where {FT<:AbstractFloat}
-    @views xᵒ[:, :, idx] .= xᵖ[:, :, idx]
-end
+# copyidxto!(x, xᵖ, tracks::BrownianTracks) = copyidxto!(x, xᵖ, vec(tracks.accepted))
 
-function copyidxto!(
-    xᵒ::AbstractArray{FT,N},
-    xᵖ::AbstractArray{FT,N},
-    idx::AbstractArray{Bool,N},
-) where {FT<:AbstractFloat,N}
-    xᵒ .= (idx .* xᵖ) .+ (.~idx .* xᵒ)
-end
+diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}) where {T} =
+    @views Δx² .= (x[:, :, 2:end] .- x[:, :, 1:end-1]) .^ 2
 
-getindices(N::Integer) = ifelse(isodd(N), (1:2:N-2, 2:2:N-1), (1:2:N-1, 2:2:N-2))
-
-function set_Δxᵒ²!(Δxᵒ²::AbstractArray{FT}, xᵒ::AbstractArray{FT}) where {FT<:AbstractFloat}
-    @views Δxᵒ² .= (xᵒ[:, :, 2:end] .- xᵒ[:, :, 1:end-1]) .^ 2
-    return Δxᵒ²
-end
-
-function set_Δxᵖ²!(
-    Δxᵖ²::AbstractArray{FT,3},
-    xᵒ::AbstractArray{FT,3},
-    xᵖ::AbstractArray{FT,3},
-    firstidx::Integer,
-) where {FT<:AbstractFloat}
-    x1, x2 = ifelse(isone(firstidx), (xᵒ, xᵖ), (xᵖ, xᵒ))
+function diff²!(
+    Δx²::AbstractArray{T,3},
+    x1::AbstractArray{T,3},
+    x2::AbstractArray{T,3},
+) where {T}
     @views begin
-        Δxᵖ²[:, :, 1:2:end] .= x1[:, :, 2:2:end] .- x2[:, :, 1:2:end-1]
-        Δxᵖ²[:, :, 2:2:end] .= x2[:, :, 3:2:end] .- x1[:, :, 2:2:end-1]
+        Δx²[:, :, 1:2:end] .= (x1[:, :, 2:2:end] .- x2[:, :, 1:2:end-1]) .^ 2
+        Δx²[:, :, 2:2:end] .= (x2[:, :, 3:2:end] .- x1[:, :, 2:2:end-1]) .^ 2
     end
-    Δxᵖ² .^= 2
-    return Δxᵖ²
+    return Δx²
 end
 
-function add_ΔΔx²!(
-    ln𝓇::AbstractArray{FT,3},
-    Δxᵒ²::AbstractArray{FT,3},
-    Δxᵖ²::AbstractArray{FT,3},
-    idx1::AbstractRange,
-    idx2::AbstractRange,
-    fourDτ::FT,
-) where {FT<:AbstractFloat}
+# function setΔx²!(tracks::BrownianTracks)
+#     setΔx²!(tracks.Δx², tracks.x)
+#     return tracks
+# end
+
+function add_ΔΔx²!(logr, Δx², Δy², idx1, idx2, D)
     @views begin
-        ln𝓇[:, :, idx1] .+=
-            sum(Δxᵒ²[:, :, idx1] .- Δxᵖ²[:, :, idx1], dims = (1, 2)) ./ fourDτ
-        ln𝓇[:, :, idx2.+1] .+=
-            sum(Δxᵒ²[:, :, idx2] .- Δxᵖ²[:, :, idx2], dims = (1, 2)) ./ fourDτ
+        logr[:, :, idx1] .+=
+            sum(Δx²[:, :, idx1] .- Δy²[:, :, idx1], dims = (1, 2)) ./ (4 * D)
+        logr[:, :, idx2.+1] .+=
+            sum(Δx²[:, :, idx2] .- Δy²[:, :, idx2], dims = (1, 2)) ./ (4 * D)
     end
-    return ln𝓇
+    return logr
 end
 
-function get_acceptance!(
-    xᵒ::AbstractArray{FT,3},
-    xᵖ::AbstractArray{FT,3},
-    ln𝓇::AbstractArray{FT,3},
-    fourDτ::FT,
-) where {FT<:AbstractFloat}
-    N = size(ln𝓇, 3)
-    idx1, idx2 = getindices(N)
-    Δxᵒ² = similar(xᵒ, size(xᵒ, 1), size(xᵒ, 2), N - 1)
-    Δxᵖ² = similar(Δxᵒ²)
-    accepted = CUDA.zeros(Bool, 1, 1, N)
-    for i = 1:2
-        set_Δxᵒ²!(Δxᵒ², xᵒ)
-        set_Δxᵖ²!(Δxᵖ², xᵒ, xᵖ, i)
-        add_ΔΔx²!(ln𝓇, Δxᵒ², Δxᵖ², idx1, idx2, fourDτ)
-        @views accepted[:, :, i:2:end] .=
-            ln𝓇[:, :, i:2:end] .> log.(CUDA.rand(FT, 1, 1, length(i:2:N)))
-        copyidxto!(xᵒ, xᵖ, accepted)
-        idx1, idx2 = idx2, idx1
-    end
-    return accepted
+add_odd_ΔΔx²!(logr, Δx², Δy², D) =
+    add_ΔΔx²!(logr, Δx², Δy², 1:2:size(Δx², 3), 2:2:size(Δx², 3), D)
+
+add_even_ΔΔx²!(logr, Δx², Δy², D) =
+    add_ΔΔx²!(logr, Δx², Δy², 2:2:size(Δx², 3), 1:2:size(Δx², 3), D)
+
+function update_counter!(x::BrownianTracks)
+    @views x.counter[:, 2] .+= count(x.accepted), length(x.accepted)
+    return x
 end
 
-function update_on_x!(
-    s::ChainStatus,
-    𝐖::AbstractArray{Bool,3},
-    param::ExperimentalParameter,
-    device::CPU,
-)
-    xᵒ, 𝐔ᵒ, 𝐔ᵖ = view_on_x(s), s.𝐔, s.𝐔ᵖ
-    xᵖ = propose_x(xᵒ, s.tracks.proposal, device)
-    𝐔ᵖ = get_px_intensity(
-        xᵖ,
-        param.pxboundsx,
-        param.pxboundsy,
-        s.brightness.value * param.period,
-        param.darkcounts,
-        param.PSF,
-    )
-    ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
-    ln𝓇[1] += add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.tracks.prior)
-    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.diffusivity.value * param.period)
-    s.tracks.counter[:, 2] .+= count(accepted), length(accepted)
-    copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
-    return s
-end
+# accept!(accepted::AbstractArray{Bool}, logr::AbstractArray, logu::AbstractArray) =
+#     accepted .= logr .> logu
 
-function update_on_x!(
-    s::ChainStatus,
-    𝐖::AbstractArray{Bool,3},
-    param::ExperimentalParameter,
-    device::GPU,
-)
-    xᵒ, 𝐔ᵒ = view_on_x(s), s.𝐔
-    xᵖ = propose_x(xᵒ, s.tracks.proposal, device)
-    𝐔ᵖ = get_px_intensity(
-        xᵖ,
-        param.pxboundsx,
-        param.pxboundsy,
-        s.brightness.value * param.period,
-        param.darkcounts,
-        param.PSF,
-    )
-    ln𝓇 = get_frame_Δlnℒ(𝐖, 𝐔ᵒ, 𝐔ᵖ, device)
-    add_Δln𝒫_x₁!(ln𝓇, view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), s.tracks.prior)
-    accepted = get_acceptance!(xᵒ, xᵖ, ln𝓇, 4 * s.diffusivity.value * param.period)
-    s.tracks.counter[:, 2] .+= count(accepted), length(accepted)
-    copyidxto!(𝐔ᵒ, 𝐔ᵖ, accepted)
-    return s
-end
-
-update_off_x!(s::ChainStatus, param::ExperimentalParameter, device::Device) =
-    simulate!(view_off_x(s), s.tracks.prior, s.diffusivity.value, param.period, device)
-
-function update_x!(s::ChainStatus, v::Video, device::Device)
-    update_off_x!(s, v.param, device)
-    update_on_x!(s, v.frames, v.param, device)
-    return s
-end
-
-# function get_Δln𝒫_x(
-#     xᵖ::AbstractArray{FT,3},
-#     xᵒ::AbstractArray{FT,3},
-#     n::Integer,
-#     τ::FT,
-#     sum_Δxᵒ²::FT,
-#     𝒫_D::InverseGamma{FT},
-#     𝒫_x::MvNormal,
-#     device::Device,
-# ) where {FT<:AbstractFloat}
-#     ~, B, N = size(xᵒ)
-#     ϕ, ϕχτ4 = shape(𝒫_D), 4 * τ * scale(𝒫_D)
-#     sum_Δxᵖ² =
-#         sum_Δxᵒ² +
-#         get_Δx²(view(xᵖ, :, :, n), view(xᵒ, :, :, n), view(xᵒ, :, :, get_index(n, N)))
-#     Δln𝒫 = (-1.5 * B * (N - 1) - ϕ) * log((sum_Δxᵖ² + ϕχτ4) / (sum_Δxᵒ² + ϕχτ4))
-#     n == 1 && (Δln𝒫 += get_Δln𝒫_x₁(view(xᵖ, :, :, 1), view(xᵒ, :, :, 1), 𝒫_x, device))
-#     return Δln𝒫, sum_Δxᵖ²
+# function oddaccept!(tracks::BrownianTracks)
+#     @views tracks.accepted[:, :, 1:2:end] .=
+#         tracks.logacceptance[:, :, 1:2:end] .> tracks.lograndnums[:, :, 1:2:end]
+#     return tracks
 # end
 
-# function update_on_x!(
-#     s::ChainStatus,
-#     w::AbstractArray{Bool},
-#     param::ExperimentalParameter,
-#     device::Device,
-# )
-#     x = s.x
-#     B = get_B(s)
-#     xᵒ, Gᵒ, τ = view(s.x.value, :, 1:B, :), s.G, param.period
-#     sum_Δxᵒ² = sum(diff(xᵒ, dims = 3) .^ 2)
-#     xᵖ, Gᵖ = get_xᵖ(xᵒ, CuArray(diag(x.𝒬.Σ)), param)
-#     diff_lnℒ = get_Δlnℒ_x(w, s.h.value, Gᵖ, Gᵒ, param.darkcounts, device) |> cpu
-#     accepted = BitVector(undef, N)
-#     for n in randperm(size(w, 3))
-#         ln𝓊 = log(rand())
-#         ln𝓇, sum_Δxᵖ² = get_Δln𝒫_x(xᵖ, xᵒ, n, τ, sum_Δxᵒ², s.D.𝒫, x.𝒫, device)
-#         ln𝓇 += diff_lnℒ[n]
-#         accepted[n] = ln𝓇 > ln𝓊
-#         if accepted[n]
-#             xᵒ[:, :, n] .= xᵖ[:, :, n]
-#             sum_Δxᵒ² = sum_Δxᵖ²
-#             x.count[1] += 1
-#         end
-#         x.count[2] += 1
-#     end
-#     Gᵒ[:, :, accepted] .= Gᵖ[:, :, accepted]
+# function evenaccept!(tracks::BrownianTracks)
+#     @views tracks.accepted[:, :, 2:2:end] .=
+#         tracks.logacceptance[:, :, 2:2:end] .> tracks.lograndnums[:, :, 2:2:end]
+#     return tracks
 # end
 
-# get_ln𝓇_x(
-#     w::AbstractArray{Bool,3},
-#     G::AbstractArray{FT,3},
-#     hᵖ::FT,
-#     hᵒ::FT,
-#     F::AbstractMatrix{FT},
-#     𝒫::Gamma{FT},
-# ) where {FT<:AbstractFloat} =
-#     diff_lnℒ_h(w, G, hᵖ, hᵒ, F) + diff_ln𝒫_h(hᵖ, hᵒ, 𝒫) + diff_ln𝒬_h(hᵖ, hᵒ)
+# function update_offtracks!(x::BrownianTracks, M::Integer, D::Real)
+#     @views xᵒᶠᶠ = x.value[:, M+1:end, :]
+#     μ, σ = _params(x.prior)
+#     simulate!(xᵒᶠᶠ, μ, σ, D)
+#     return x
+# end

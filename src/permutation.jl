@@ -28,6 +28,6 @@ end
 
 function permute_x!(s::ChainStatus, device::Device)
     update_off_x!(s, device)
-    update_on_x!(s, device)
+    update_ontracks!(s, device)
     return s
 end

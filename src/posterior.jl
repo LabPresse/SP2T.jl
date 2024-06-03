@@ -1,104 +1,58 @@
-# This file contains UNNORMALIZED probability density functions.
-# The goal is to make things simple and fast. 
-# For normalized pdfs use "Distributions.jl".
+_logpdf(n::Normal₃, x) = sum(@. -(x - n.μ) / (2 * n.σ^2))
 
-"""
-    get_ln𝒫(𝒫::Beta, x)
+_logpdf(x::BrownianTracks, D, aux::AuxiliaryVariables) =
+    -log(D) * length(aux.Δx²) / 2 - sum(aux.Δx²) / (4 * D) -
+    _logpdf(x.prior, view(x.value, :, :, 1))
 
-    The unnormalized log pdf of the Beta distribution.
-"""
-get_ln𝒫(𝒫::Beta, x) = (𝒫.α - 1) * log(x) + (𝒫.β - 1) * log1p(-x)
+_logpdf(D::Diffusivity) =
+    -(D.priorparams[1] + 1) * log(D.value) - D.priorparams[2] / D.value
 
-get_ln𝒫(𝒫::Beta, x::AbstractVector) = sum((𝒫.α - 1) .* log(x) .+ (𝒫.β - 1) .* log1p(-x))
+_logpdf(M::NEmitters) = M.logprior[M.value+1]
 
-"""
-    get_ln𝒫(𝒫::Gamma, x)
+_logpdf(h::Brightness) = (h.priorparams[1] - 1) * log(h.value) - h.value / h.priorparams[2]
 
-    The unnormalized log pdf of the Gamma distribution.
-"""
-get_ln𝒫(𝒫::Gamma, x) = (shape(𝒫) - 1) * log(x) - x / scale(𝒫)
+# function setlog𝒫!(
+#     chain::Chain,
+#     tracks::BrownianTracks,
+#     diffusivity::Diffusivity,
+#     nemitters::NEmitters,
+#     brightness::Brightness,
+#     frames,
+#     expparams::ExperimentalParameters,
+#     aux::AuxiliaryVariables,
+# )
+#     setΔx²!(aux, tracks.value)
+#     pxcounts!(
+#         aux.U,
+#         view(tracks.value, :, 1:nemitters.value, :),
+#         brightness.value,
+#         expparams.darkcounts,
+#         expparams.pxboundsx,
+#         expparams.pxboundsy,
+#         expparams.PSF,
+#     )
+#     chain.logℒ = logℒ(frames, aux.U, aux.ΔU)
+#     chain.log𝒫 =
+#         chain.logℒ +
+#         _logpdf(tracks, diffusivity.value, aux) +
+#         _logpdf(diffusivity) +
+#         _logpdf(nemitters) +
+#         _logpdf(brightness)
+#     return chain
+# end
 
-get_ln𝒫(𝒫::Gamma, x::AbstractVector) = sum((shape(𝒫) - 1) .* log(x) - x ./ scale(𝒫))
-
-"""
-    get_ln𝒫(𝒫::InverseGamma, x)
-
-    The unnormalized log pdf of the Inverse-Gamma distribution.
-"""
-get_ln𝒫(𝒫::InverseGamma, x) = (-shape(𝒫) - 1) * log(x) - scale(𝒫) / x
-
-get_ln𝒫(𝒫::InverseGamma, x::AbstractVector) =
-    sum((-shape(𝒫) - 1) .* log.(x) - scale(𝒫) ./ x)
-
-"""
-    get_ln𝒫(𝒫::Categorical, x)
-
-    The log pdf of a Categorical distribution with probability vector `p`. `p` does not need to be normalized.
-"""
-get_ln𝒫(𝒫::Categorical, x) = log(𝒫.p[x])
-
-get_ln𝒫(𝒫::Categorical, x::AbstractVector) = sum(log.(𝒫.p[x]))
-
-"""
-    get_ln𝒫(𝒫::Bernoulli, x)
-
-    The log pdf of a Bernoulli distribution with success probability `p`. `p` should be normalized.
-"""
-get_ln𝒫(𝒫::Bernoulli, x) = x ? log(𝒫.p) : log1p(-𝒫.p)
-
-function get_ln𝒫(𝒫::Bernoulli, x::AbstractVector)
-    n = count(x)
-    return n * log(𝒫.p) + (length(x) - n) * log1p(-𝒫.p)
-end
-
-"""
-    get_ln𝒫(𝒫::MvNormal, x)
-
-    The log pdf of a Multivariate Normal distribution.
-"""
-get_ln𝒫(𝒫::MvNormal, x::AbstractVector) = logpdf(𝒫, x)
-
-get_ln𝒫(𝒫::MvNormal, x::AbstractMatrix) = sum(logpdf(𝒫, x))
-
-get_ln𝒫(𝒫::Geometric, M) = logpdf(𝒫, M)
-
-get_ln𝒫(x::IID) = get_ln𝒫(x.𝒫, x.value)
-
-function get_ln𝒫(
-    ::Brownian,
-    fourDτ::FT,
-    𝒫::GeneralDistribution,
-    x::AbstractArray{FT,3},
-) where {FT<:AbstractFloat}
-    num_Δx²::FT, total_Δx² = sum_Δx²(x)
-    ln𝒫 = -log(fourDτ) * num_Δx² / 2 - total_Δx² / fourDτ
-    ln𝒫 += get_ln𝒫(𝒫, view(x, :, :, 1))
-    return ln𝒫
-end
-
-get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray) = get_ln𝒫(x.dynamics, dynRV, x.𝒫, x.value)
-
-get_ln𝒫(x::Trajectory, dynRV::RealNumberOrArray, B::Integer) =
-    get_ln𝒫(x.dynamics, dynRV, x.𝒫, view(x.value, :, 1:B, :))
-
-# """
-#     get_ln𝒫(x, fourDτ)
-
-#     The log pdf of a n-D Brownian motion trajectory (`x`) with diffusion coefficient `D`. As 'D' is often inferred, the D-dependence in the normalization factor is not dropped. The number of dimemsions, n, is `x`'s number of rows.
-# """
-
-# get_lnℒ(w::AbstractArray{Bool,3}, 𝐔::AbstractArray{FT,3}, ::GPU) where {FT<:AbstractFloat} =
-#     dot(w, logexpm1.(𝐔)) - dot(CUDA.ones(eltype(𝐔), size(𝐔)), 𝐔)
-
-# get_lnℒ(w::AbstractArray{Bool,3}, 𝐔::AbstractArray{FT,3}, ::CPU) where {FT<:AbstractFloat} =
-#     sum(logexpm1.(𝐔[w])) - sum(𝐔)
-
-function update_ln𝒫!(s::ChainStatus, v::Video)
-    s.logposterior =
-        get_lnℒ(v.frames, s.𝐔) +
-        get_ln𝒫(s.tracks, 4 * s.diffusivity.value * v.param.period) +
-        get_ln𝒫(s.emittercount) +
-        get_ln𝒫(s.diffusivity) +
-        get_ln𝒫(s.brightness)
-    return s
+function log𝒫logℒ(
+    x::BrownianTracks,
+    M::NEmitters,
+    D::Diffusivity,
+    h::Brightness,
+    W,
+    params::ExperimentalParameters,
+    aux::AuxiliaryVariables,
+)
+    diff²!(aux, x.value)
+    pxcounts!(aux.U, view(x.value, :, 1:M.value, :), h.value, params)
+    logℒ = _logℒ(W, aux.U, aux.ΔU)
+    log𝒫 = logℒ + _logpdf(x, D.value, aux) + _logpdf(D) + _logpdf(M) + _logpdf(h)
+    return log𝒫, logℒ
 end

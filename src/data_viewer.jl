@@ -29,8 +29,14 @@ getrect(w_sl, h_sl) = @lift Rect(
 
 getvertices(rect) = (@lift $(rect).origin), (@lift $(rect).origin .+ $(rect).widths)
 
-function viewframes(frames::AbstractArray{<:Integer}; batchsize::Integer)
+function viewframes(
+    frames::AbstractArray{<:Integer};
+    batchsize::Integer,
+    tracks::Union{Nothing,AbstractArray} = nothing,
+    pxsize::Real = 1,
+)
     framewidth, frameheight, framecount = size(frames)
+    isnothing(tracks) && (tracks = fill(NaN, (3, 1, size(frames, 3))))
 
     set_theme!(theme_dataviewer)
     fig = Figure(; size = (1000, 300))
@@ -55,7 +61,7 @@ function viewframes(frames::AbstractArray{<:Integer}; batchsize::Integer)
         (
             label = "Frame",
             range = 1:framecount,
-            startvalue = 1,
+            startvalue = 10,
             snap = false,
             format = x -> "$x/$framecount",
         ),
@@ -74,8 +80,8 @@ function viewframes(frames::AbstractArray{<:Integer}; batchsize::Integer)
 
     on(tb.stored_string) do str
         interval = sort!(parse.(Int64, split(str, ',')))
-        lowerindex[] = ifelse(1 <= interval[1] <= framecount, interval[1], lowerindex[])
-        upperindex[] = ifelse(1 <= interval[2] <= framecount, interval[2], upperindex[])
+        lowerindex[] = 1 <= interval[1] <= framecount ? interval[1] : lowerindex[]
+        upperindex[] = 1 <= interval[2] <= framecount ? interval[2] : upperindex[]
     end
 
     sl_tags = (@lift "($($(w_sl.interval)[1]), $($(h_sl.interval)[1]))"),
@@ -88,6 +94,21 @@ function viewframes(frames::AbstractArray{<:Integer}; batchsize::Integer)
     mainframe = @lift view(frames, :, :, $(slgrid.sliders[1].value))
     startframe = @lift view(frames, :, :, $lowerindex)
     endframe = @lift view(frames, :, :, $upperindex)
+
+    # trange = @lift 1:$(slgrid.sliders[1].value)
+    tracks2 = tracks ./ pxsize
+    trajs2D = []
+    for x in eachslice(view(tracks2, 1:2, :, :), dims = 2)
+        push!(trajs2D, Point2f[eachslice(x, dims = 2)...])
+    end
+    # @show typeof(trajs2D[1])
+    trajs2Dobs = []
+    foreach(x -> push!(trajs2Dobs, @lift view(x, 1:$(slgrid.sliders[1].value))), trajs2D)
+
+    # eachrow(trajs2D)
+    #     @show typeof(x)
+    #     push!(trajs2Dobs, @lift view(x, 1:$(slgrid.sliders[1].value)))
+    # end
 
     on(button.clicks) do n
         println(
@@ -120,6 +141,12 @@ function viewframes(frames::AbstractArray{<:Integer}; batchsize::Integer)
         colorrange = colorrange,
     )
     limits!.(axes, 0.5, framewidth + 0.5, 0.5, frameheight + 0.5)
+
+    foreach(x->lines!(axes[1], x), trajs2Dobs)
+    
+    # for m in eachrow(trajs2Dobs)
+    #     lines!(axes[1], m)
+    # end
 
     rect = getrect(w_sl, h_sl)
     for ax in axes

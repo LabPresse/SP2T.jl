@@ -2,14 +2,14 @@
 
 # Both signed and unsigned integers would work, as the number of pixels is much fewer than the upper limit of either type.
 
-function readbin(path::AbstractString; width::Integer = 512, height::Integer = 512)
+function readbin(path; width::Integer = 512, height::Integer = 512)
     files = checkpath(path)
     printfilelist(files)
     signals = _readbin(files)
     return signal2indices!(signals, width * height)
 end
 
-checkpath(path::AbstractString) =
+checkpath(path) =
     if isbinfile(path)
         [path]
     elseif isbindir(path)
@@ -18,27 +18,27 @@ checkpath(path::AbstractString) =
         throw(ErrorException("Cannot find any binary file in $path."))
     end
 
-isbinfile(path::AbstractString) = isfile(path) && endswith(path, ".bin")
+isbinfile(path) = isfile(path) && endswith(path, ".bin")
 
-isbindir(path::AbstractString) = isdir(path) && any(f -> endswith(f, ".bin"), readdir(path))
+isbindir(path) = isdir(path) && any(f -> endswith(f, ".bin"), readdir(path))
 
-listbins(dir::AbstractString) = filter(f -> endswith(f, ".bin"), readdir(dir, join = true))
+listbins(dir) = filter(f -> endswith(f, ".bin"), readdir(dir, join = true))
 
-function printfilelist(files::AbstractVector{<:AbstractString})
+function printfilelist(files::AbstractVector)
     println("Found the following binary file(s):")
     for f in files
         println(f)
     end
 end
 
-function _readbin(files::AbstractVector{String})
-    number_of_signals = countsignals(files)
-    signals = Vector{Int32}(undef, sum(number_of_signals))
-    readsignals!(files, signals, number_of_signals)
+function _readbin(files::AbstractVector)
+    nsignals = countsignals(files)
+    signals = Vector{Int32}(undef, sum(nsignals))
+    readsignals!(files, signals, nsignals)
     return signals
 end
 
-function countsignals(files::AbstractVector{String})
+function countsignals(files::AbstractVector)
     sizes = filesize.(files) # sizes in bytes
     corrupted = iscorrupted.(sizes)
     any(corrupted) && throw(
@@ -55,23 +55,23 @@ iscorrupted(sizeinbyte) = sizeinbyte % 4 != 0
 function readsignals!(
     files::AbstractVector{String},
     signals::Vector{<:Integer},
-    number_of_signals::AbstractVector{<:Integer},
+    nsignals::AbstractVector{<:Integer},
 )
     start = 1
-    @inbounds for (file, number) in zip(files, number_of_signals)
+    @inbounds for (file, number) in zip(files, nsignals)
         read!(file, view(signals, range(start, length = number)))
         start += number
     end
     return signals .+= 1
 end
 
-function signal2indices!(indices::Vector{<:Integer}, framesize::Integer)
+function signal2indices!(indices::AbstractVector, framesize)
     delimiters = popdelimiters!(indices, framesize)
     indices = convert(Vector{Int}, indices)
     return shiftindices!(indices, delimiters, framesize)
 end
 
-function popdelimiters!(signals::Vector{<:Integer}, framesize::Integer)
+function popdelimiters!(signals::AbstractVector, framesize)
     delimiters = findall(>(framesize), signals)
     delimiters[end] != length(signals) && @warn "The last signal is not a delimiter."
     deleteat!(signals, delimiters)
@@ -79,13 +79,9 @@ function popdelimiters!(signals::Vector{<:Integer}, framesize::Integer)
     return delimiters
 end
 
-function shiftindices!(
-    indices::Vector{<:Integer},
-    delimiters::Vector{<:Integer},
-    framesize::Integer,
-)
+function shiftindices!(indices, delimiters, framesize)
     @inbounds for i = 1:length(delimiters)-1
-        indices[delimiters[i]+1:delimiters[i+1]] .+= i * framesize
+        @views indices[delimiters[i]+1:delimiters[i+1]] .+= i * framesize
     end
     return indices
 end
@@ -105,8 +101,8 @@ function getframes(
 end
 
 function countframes(lastindex, framesize, batchsize)
-    numofbinframe = fld1(lastindex, framesize)
-    return ifelse(batchsize == 1, (numofbinframe, 0), divrem(numofbinframe, batchsize))
+    nbinframes = fld1(lastindex, framesize)
+    return batchsize == 1 ? (nbinframes, 0) : divrem(nbinframes, batchsize)
 end
 
 function _getframes(
@@ -115,12 +111,12 @@ function _getframes(
     batchsize::Integer,
     count::Integer,
 )
-    numofpx = framesize * count
+    npixels = framesize * count
     if batchsize == 1
-        frames = falses(numofpx)
+        frames = falses(npixels)
         frames[indices] .= true
     else
-        frames = counts(batchindices(indices, framesize, batchsize), 1:numofpx) # See StatsBase.counts
+        frames = counts(batchindices(indices, framesize, batchsize), 1:npixels) # See StatsBase.counts
     end
     return frames
 end
