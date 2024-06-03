@@ -12,3 +12,4 @@ extra
 *.png
 .DS_Store
 data/beads
+*.jld2
