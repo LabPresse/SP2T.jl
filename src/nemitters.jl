@@ -12,6 +12,8 @@ end
 
 maxcount(M::NEmitters) = length(M.log𝒫)
 
+anyactive(M::NEmitters) = M.value > 0
+
 # function init!(n::NEmitters)
 #     n.logposterior .= (0:length(n.logposterior)) .* log(failprob(n.prior))
 #     return n
