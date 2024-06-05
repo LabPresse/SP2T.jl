@@ -5,23 +5,40 @@
 
 # logℒ(𝐖, 𝐔) = sum(logexpm1.(𝐔[𝐖])) - sum(𝐔)
 
-_logℒ(𝐖, 𝐔, temp) = sum(logexpm1.(𝐔[𝐖])) - sum(𝐔)
+_logℒ(W::AbstractArray{<:Integer}, U::AbstractArray{T}, temp::AbstractArray{T}) where {T} =
+    sum(logexpm1.(U[W])) - sum(U)
 
-function unsafe_frame_Δlogℒ!(logacceptance, W, U, Uᵖ)
-    Δlnℒ = U .- Uᵖ
-    @. Δlnℒ[W] += logexpm1(Uᵖ[W]) - logexpm1(U[W])
-    return sum!(logacceptance, Δlnℒ, init = false)
+function unsafe_Δlogℒ!(
+    logratio::AbstractArray{T},
+    W::AbstractArray{<:Integer},
+    U::AbstractArray{T},
+    V::AbstractArray{T},
+) where {T}
+    Δlnℒ = U .- V
+    @. Δlnℒ[W] += logexpm1(V[W]) - logexpm1(U[W])
+    return sum!(logratio, Δlnℒ, init = false)
 end
 
-function frame_Δlogℒ!(ΔlogL, W, 𝐔, 𝐔ᵖ, ΔU, T = 1)
-    ΔU .= 𝐔 .- 𝐔ᵖ
-    @. ΔU[W] += logexpm1(𝐔ᵖ[W]) - logexpm1(𝐔[W])
+function Δlogℒ!(
+    ΔlogL::AbstractArray{T},
+    W::AbstractArray{<:Integer},
+    U::AbstractArray{T},
+    V::AbstractArray{T},
+    ΔU::AbstractArray{T},
+    𝑇::Union{T,Int} = 1,
+) where {T}
+    ΔU .= U .- V
+    @. ΔU[W] += logexpm1(V[W]) - logexpm1(U[W])
     sum!(ΔlogL, ΔU)
-    return ΔlogL ./= T
+    return ΔlogL ./= 𝑇
 end
 
-function frame_Δlogℒ(frames, 𝐔, 𝐔ᵖ)
-    ln𝓇 = similar(𝐔, 1, 1, size(𝐔, 3))
-    temp = similar(𝐔)
-    return frame_Δlogℒ!(ln𝓇, frames, 𝐔, 𝐔ᵖ, temp)
+function Δlogℒ(
+    W::AbstractArray{<:Integer},
+    U::AbstractArray{T},
+    V::AbstractArray{T},
+) where {T}
+    ln𝓇 = similar(U, 1, 1, size(U, 3))
+    temp = similar(U)
+    return Δlogℒ!(ln𝓇, W, U, V, temp)
 end
