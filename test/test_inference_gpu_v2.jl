@@ -30,12 +30,12 @@ params = ExperimentalParameters(
     FloatType,
     metadata["period"],
     metadata["pixel size"],
-    CuArray(load("./data/beads/beads_darkcounts.jld2", "darkcounts")),
+    CuArray(load("./data/beads/darkcounts1.jld2", "darkcounts")),
     11.14 * 12 / 1000,
     1.2 * 100 / 1000,
 )
 
-frames = CuArray(load("./data/example_frames_v2.jld2", "frames"))
+frames = load("./data/example_frames_v2.jld2", "frames")
 groundtruth = load("./data/example_groundtruth_v2.jld2", "groundtruth")
 
 D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = params.period)
@@ -44,14 +44,6 @@ h = Brightness(value = 2e6, priorparams = (1, 1), proposalparam = 1, scale = par
 
 M = NEmitters(value = 0, maxcount = 10, onprob = oftype(params.period, 0.1))
 
-# CUDA.@allowscalar prior = Normal₃(
-#     CuArray([params.pxboundsx[end] / 2, params.pxboundsy[end] / 2, 0]),
-#     CuArray([
-#         params.pxboundsx[end] / 4,
-#         params.pxboundsy[end] / 4,
-#         convert(FloatType, 0.5),
-#     ]),
-# )
 CUDA.@allowscalar prior = Normal₃(
     CuArray([maximum(params.pxboundsx) / 2, maximum(params.pxboundsy) / 2, 0]),
     CuArray([
@@ -64,19 +56,15 @@ CUDA.@allowscalar prior = Normal₃(
 x = BrownianTracks(
     value = CuArray{FloatType}(undef, 3, maxcount(M), size(frames, 3)),
     prior = prior,
-    perturbsize = CUDA.fill(sqrt(2 * D.value) / 10, 3),
+    perturbsize = CUDA.fill(sqrt(2 * D.value), 3),
 )
-
-# x.value[:, 1:1, :] .= CuArray(groundtruth.tracks)
-
-# chainparams = ChainParameters(x = x.x, frames = frames, sizelimit = 1000)
 
 chain = runMCMC(
     tracks = x,
     nemitters = M,
     diffusivity = D,
     brightness = h,
-    frames = frames,
+    frames = CuArray(frames),
     params = params,
     niters = 1998,
     sizelimit = 2000,

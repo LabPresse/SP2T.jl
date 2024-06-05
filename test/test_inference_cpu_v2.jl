@@ -1,5 +1,8 @@
 using SP2T
 using JLD2
+using Random
+
+Random.seed!(1)
 
 FloatType = Float32
 
@@ -26,7 +29,7 @@ params = ExperimentalParameters(
     FloatType,
     metadata["period"],
     metadata["pixel size"],
-    load("./data/beads/beads_darkcounts.jld2", "darkcounts"),
+    load("./data/beads/darkcounts1.jld2", "darkcounts"),
     11.14 * 12 / 1000,
     1.2 * 100 / 1000,
 )
@@ -48,8 +51,6 @@ x = BrownianTracks(
     ),
     perturbsize = fill(sqrt(2 * D.value), 3),
 )
-
-# chainparams = ChainParameters(x = x.x, frames = frames, sizelimit = 1000)
 
 chain = runMCMC(
     tracks = x,
