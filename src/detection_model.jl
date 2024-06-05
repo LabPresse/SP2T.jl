@@ -169,19 +169,24 @@ get_pxPSF(x, params::ExperimentalParameters) =
 # end
 
 function pxcounts!(
-    U::AbstractArray,
-    x::AbstractArray,
-    h,
-    F::AbstractMatrix,
-    xbnds::AbstractVector,
-    ybnds::AbstractVector,
-    PSF::AbstractPSF,
-)
+    U::AbstractArray{T,3},
+    x::AbstractArray{T,3},
+    h::T,
+    F::AbstractMatrix{T},
+    xbnds::AbstractVector{T},
+    ybnds::AbstractVector{T},
+    PSF::AbstractPSF{T},
+) where {T}
     U .= F
     return add_pxcounts!(U, x, h, xbnds, ybnds, PSF)
 end
 
-pxcounts!(U, x, h, params::ExperimentalParameters) =
+pxcounts!(
+    U::AbstractArray{T,3},
+    x::AbstractArray{T,3},
+    h::T,
+    params::ExperimentalParameters,
+) where {T} =
     pxcounts!(U, x, h, params.darkcounts, params.pxboundsx, params.pxboundsy, params.PSF)
 
 function pxcounts(
@@ -191,12 +196,12 @@ function pxcounts(
     xᵖ::AbstractVector{T},
     yᵖ::AbstractVector{T},
     PSF::AbstractPSF{T},
-) where {T<:AbstractFloat}
+) where {T}
     𝐔 = repeat(𝐅, 1, 1, size(x, 3))
     return add_pxcounts!(𝐔, x, h, xᵖ, yᵖ, PSF)
 end
 
-pxcounts(x, h, params::ExperimentalParameters) =
+pxcounts(x::AbstractArray{T,3}, h::T, params::ExperimentalParameters) where {T} =
     pxcounts(x, h, params.darkcounts, params.pxboundsx, params.pxboundsy, params.PSF)
 
 simframes(𝐔) = rand(eltype(𝐔), size(𝐔)) .< -expm1.(-𝐔)
