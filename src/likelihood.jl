@@ -37,8 +37,9 @@ function Δlogℒ(
     W::AbstractArray{<:Integer},
     U::AbstractArray{T},
     V::AbstractArray{T},
+    𝑇::Union{T,Int} = 1,
 ) where {T}
     ln𝓇 = similar(U, 1, 1, size(U, 3))
-    temp = similar(U)
-    return Δlogℒ!(ln𝓇, W, U, V, temp)
+    ΔU = similar(U)
+    return Δlogℒ!(ln𝓇, W, U, V, ΔU, 𝑇)
 end
