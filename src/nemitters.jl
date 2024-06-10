@@ -29,16 +29,50 @@ function setlog𝒫!(M::NEmitters, T)
     return M
 end
 
-function setlogℒ!(M::NEmitters, Uᵖ, U, 𝐖, x, h, F, xbnds, ybnds, PSF, ΔU)
-    Uᵖ .= F
-    M.logℒ[1] = _logℒ(𝐖, Uᵖ, ΔU)
+function setlogℒ!(
+    M::NEmitters,
+    V::AbstractArray{T,3},
+    U::AbstractArray{T,3},
+    𝐖::AbstractArray{<:Integer,3},
+    x::AbstractArray{T,3},
+    h::T,
+    F::AbstractMatrix{T},
+    xbnds::AbstractVector{T},
+    ybnds::AbstractVector{T},
+    PSF::AbstractPSF{T},
+    ΔU::AbstractArray{T,3},
+) where {T}
+    V .= F
+    M.logℒ[1] = _logℒ(𝐖, V, ΔU)
     @inbounds for m = 1:size(x, 2)
         if m != M.value
-            add_pxcounts!(Uᵖ, view(x, :, m:m, :), h, xbnds, ybnds, PSF)
+            add_pxcounts!(V, view(x, :, m:m, :), h, xbnds, ybnds, PSF)
         else
-            Uᵖ .= U
+            copyto!(V, U)
         end
-        M.logℒ[m+1] = _logℒ(𝐖, Uᵖ, ΔU)
+        M.logℒ[m+1] = _logℒ(𝐖, V, ΔU)
+    end
+    return M
+end
+
+function setlogℒ!(
+    M::NEmitters,
+    V::AbstractArray{T,3},
+    U::AbstractArray{T,3},
+    x::AbstractArray{T,3},
+    h::T,
+    data::Data,
+    ΔU::AbstractArray{T,3},
+) where {T}
+    V .= data.darkcounts
+    M.logℒ[1] = _logℒ(data.frames, V, ΔU)
+    @inbounds for m = 1:size(x, 2)
+        if m != M.value
+            add_pxcounts!(V, view(x, :, m:m, :), h, data)
+        else
+            copyto!(V, U)
+        end
+        M.logℒ[m+1] = _logℒ(data.frames, V, ΔU)
     end
     return M
 end
@@ -107,7 +141,7 @@ end
 #     return x
 # end
 
-function shuffletracks!(x, M::Integer, y)
+function shuffletracks!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, M::Integer) where {T}
     @views begin
         copyto!(y[:, 1:M, :], x[:, randperm(M), :])
         copyto!(x[:, 1:M, :], y[:, 1:M, :])
@@ -118,8 +152,8 @@ end
 # shuffletracks!(x::AbstractArray{T,3}, M::Integer, y::AbstractArray{T,3}) where {T} =
 #     shuffletracks!(view(x, :, 1:M, :), view(y, :, 1:M, :))
 
-shuffletracks!(x::AbstractArray{T,3}, M::NEmitters, y::AbstractArray{T,3}) where {T} =
-    shuffletracks!(x, M.value, y)
+shuffletracks!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, M::NEmitters) where {T} =
+    shuffletracks!(x, y, M.value)
 
 # function update_emittercount!(s::ChainStatus, v::Video)
 #     shuffle_on_x!(s.tracks.value, s.emittercount.value)
