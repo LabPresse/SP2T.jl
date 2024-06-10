@@ -30,7 +30,7 @@ getrect(w_sl, h_sl) = @lift Rect(
 getvertices(rect) = (@lift $(rect).origin), (@lift $(rect).origin .+ $(rect).widths)
 
 function viewframes(
-    frames::AbstractArray{<:Integer};
+    frames::AbstractArray{UInt16};
     batchsize::Integer,
     tracks::Union{Nothing,AbstractArray} = nothing,
     pxsize::Real = 1,

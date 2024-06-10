@@ -22,7 +22,7 @@ function propose!(
     return x
 end
 
-# Δlogℒ!(x::BrownianTracks, W::AbstractArray{<:Integer,3}, 𝑇::Real, aux::AuxiliaryVariables) =
+# Δlogℒ!(x::BrownianTracks, W::AbstractArray{UInt16,3}, 𝑇::Real, aux::AuxiliaryVariables) =
 #     Δlogℒ!(x.logratio, W, aux.U, aux.Uᵖ, aux.ΔU, 𝑇)
 
 # function accept!(x::BrownianTracks, D::Real, M::Integer, aux::AuxiliaryVariables)
@@ -54,7 +54,7 @@ end
 #     M::Integer,
 #     D::T,
 #     h::T,
-#     W::AbstractArray{<:Integer,3},
+#     W::AbstractArray{UInt16,3},
 #     params::ExperimentalParameters,
 #     𝑇::Union{T,Int},
 #     aux::AuxiliaryVariables,
@@ -156,7 +156,7 @@ end
 #     M,
 #     D,
 #     h,
-#     W::AbstractArray{<:Integer,3},
+#     W::AbstractArray{UInt16,3},
 #     params::ExperimentalParameters,
 #     𝑇,
 #     aux::AuxiliaryVariables,
@@ -240,7 +240,7 @@ Sample(x::BrownianTracks, M::NEmitters, D::Diffusivity, h::Brightness) =
 #     M::NEmitters,
 #     D::Diffusivity,
 #     h::Brightness,
-#     W::AbstractArray{<:Integer,3},
+#     W::AbstractArray{UInt16,3},
 #     params::ExperimentalParameters,
 #     𝑇,
 #     aux::AuxiliaryVariables,
@@ -301,7 +301,7 @@ function runMCMC(;
     nemitters::NEmitters,
     diffusivity::Diffusivity,
     brightness::Brightness,
-    # frames::AbstractArray{<:Integer,3},
+    # frames::AbstractArray{UInt16,3},
     data::Data,
     niters::Integer = 1000,
     sizelimit::Integer = 1000,

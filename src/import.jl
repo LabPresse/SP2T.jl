@@ -54,8 +54,8 @@ iscorrupted(sizeinbyte) = sizeinbyte % 4 != 0
 
 function readsignals!(
     files::AbstractVector{String},
-    signals::Vector{<:Integer},
-    nsignals::AbstractVector{<:Integer},
+    signals::Vector{UInt16},
+    nsignals::AbstractVector{UInt16},
 )
     start = 1
     @inbounds for (file, number) in zip(files, nsignals)
@@ -87,7 +87,7 @@ function shiftindices!(indices, delimiters, framesize)
 end
 
 function getframes(
-    indices::AbstractVector{<:Integer};
+    indices::AbstractVector{UInt16};
     width::Integer,
     height::Integer,
     batchsize::Integer,
@@ -106,7 +106,7 @@ function countframes(lastindex, framesize, batchsize)
 end
 
 function _getframes(
-    indices::AbstractVector{<:Integer},
+    indices::AbstractVector{UInt16},
     framesize::Integer,
     batchsize::Integer,
     count::Integer,

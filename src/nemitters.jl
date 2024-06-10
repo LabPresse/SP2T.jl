@@ -33,7 +33,7 @@ function setlogℒ!(
     M::NEmitters,
     V::AbstractArray{T,3},
     U::AbstractArray{T,3},
-    𝐖::AbstractArray{<:Integer,3},
+    𝐖::AbstractArray{UInt16,3},
     x::AbstractArray{T,3},
     h::T,
     F::AbstractMatrix{T},

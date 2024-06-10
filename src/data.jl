@@ -44,7 +44,7 @@ end
 
 function Data(
     T::DataType,
-    frames::Array{<:Integer,3},
+    frames::Array{UInt16,3},
     period::Real,
     pxsize::Real,
     darkcounts::Matrix{<:Real},
@@ -67,7 +67,7 @@ end
 
 function Data(
     T::DataType,
-    frames::Array{<:Integer,3},
+    frames::Array{UInt16,3},
     period::Real,
     pxsize::Real,
     darkcounts::Matrix{<:Real},
@@ -164,7 +164,7 @@ end
 pxcounts(x::AbstractArray{T,3}, h::T, params::Data) where {T} =
     pxcounts(x, h, params.darkcounts, params.pxboundsx, params.pxboundsy, params.PSF)
 
-function simframes!(W::AbstractArray{<:Integer,3}, U::AbstractArray{<:Real,3})
+function simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3})
     rand!(U)
     @. W = U < -expm1(-U)
 end

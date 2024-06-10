@@ -1,4 +1,4 @@
-function SP2T._logℒ(W::CuArray{<:Integer}, U::CuArray{T}, ΔU::CuArray{T}) where {T}
+function SP2T._logℒ(W::CuArray{UInt16}, U::CuArray{T}, ΔU::CuArray{T}) where {T}
     @. ΔU = W * logexpm1(U) - U
     return sum(ΔU)
 end
@@ -7,7 +7,7 @@ end
 
 function SP2T.Δlogℒ!(
     ΔlogL::CuArray{T},
-    W::CuArray{<:Integer},
+    W::CuArray{UInt16},
     U::CuArray{T},
     Uᵖ::CuArray{T},
     ΔU::CuArray{T},

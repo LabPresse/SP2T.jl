@@ -1,6 +1,6 @@
 function SP2T.Data(
     T::DataType,
-    frames::CuArray{<:Integer,3},
+    frames::CuArray{UInt16,3},
     period::Real,
     pxsize::Real,
     darkcounts::CuMatrix{<:Real},
@@ -22,7 +22,7 @@ end
 
 function SP2T.Data(
     T::DataType,
-    frames::CuArray{<:Integer,3},
+    frames::CuArray{UInt16,3},
     period::Real,
     pxsize::Real,
     darkcounts::CuMatrix{<:Real},
