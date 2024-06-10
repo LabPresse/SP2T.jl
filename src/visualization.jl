@@ -47,22 +47,18 @@ function localization_error(S::AbstractVector, gt::Sample)
     return localization_errors, order_errors
 end
 
-function visualize(
-    groundtruth::Sample,
-    frames::AbstractArray{<:Integer},
-    params::ExperimentalParameters,
-)
+function visualize(groundtruth::Sample, data::Data)
     # if isa(frames, CuArray)
     #     to_cpu!(video)
     # end
     # expparams
     x = groundtruth.tracks
     nemitters = size(groundtruth.tracks, 2)
-    pxsizee = pxsize(params)
+    pxsizee = pxsize(data)
 
-    g = get_pxPSF(groundtruth.tracks, params)
+    g = get_pxPSF(groundtruth.tracks, data)
 
-    t = 1:size(frames, 3)
+    t = 1:size(data.frames, 3)
     fig = Figure()
     ax = [
         Axis3(fig[1:3, 1], zlabel = "t"),
@@ -75,29 +71,23 @@ function visualize(
         lines!(ax[2], t, view(x, 3, m, :))
     end
 
-    sl_x = Slider(fig[5, 1], range = 1:size(frames, 3), startvalue = 1)
+    sl_x = Slider(fig[5, 1], range = 1:size(data.frames, 3), startvalue = 1)
 
     frame1 = lift(sl_x.value) do x
         view(g, :, :, x)
     end
 
     frame2 = lift(sl_x.value) do x
-        view(frames, :, :, x)
+        view(data.frames, :, :, x)
     end
 
     # f = lift(sl_x.value) do x
     #     x
     # end
 
-    collected_frame = dropdims(sum(frames, dims = 3), dims = 3)
+    collected_frame = dropdims(sum(data.frames, dims = 3), dims = 3)
 
-    hm = heatmap!(
-        ax[1],
-        params.pxboundsx,
-        params.pxboundsy,
-        frame1,
-        colormap = (:grays, 0.7),
-    )
+    hm = heatmap!(ax[1], data.pxboundsx, data.pxboundsy, frame1, colormap = (:grays, 0.7))
 
     vl = vlines!(ax[2], t[1])
 
@@ -108,16 +98,16 @@ function visualize(
 
     heatmap!(
         ax[3],
-        params.pxboundsx,
-        params.pxboundsy .+ (4 * pxsizee + 2 * params.pxboundsy[end]),
+        data.pxboundsx,
+        data.pxboundsy .+ (4 * pxsizee + 2 * data.pxboundsy[end]),
         frame1,
         colormap = :grays,
     )
     translate!(
         text!(
             ax[3],
-            params.pxboundsx[1],
-            params.pxboundsy[end] + (4 * pxsizee + 1 * params.pxboundsy[end]),
+            data.pxboundsx[1],
+            data.pxboundsy[end] + (4 * pxsizee + 1 * data.pxboundsy[end]),
             text = "asdasd",
             fontsize = 20,
         ),
@@ -128,16 +118,16 @@ function visualize(
 
     heatmap!(
         ax[3],
-        params.pxboundsx,
-        params.pxboundsy .+ (2 * pxsizee + params.pxboundsy[end]),
+        data.pxboundsx,
+        data.pxboundsy .+ (2 * pxsizee + data.pxboundsy[end]),
         frame2,
         colormap = :grays,
         colorrange = (false, true),
     )
     heatmap!(
         ax[3],
-        params.pxboundsx,
-        params.pxboundsy,
+        data.pxboundsx,
+        data.pxboundsy,
         collected_frame,
         colormap = :grays,
         colorrange = (0, maximum(collected_frame)),
@@ -148,8 +138,8 @@ function visualize(
     hidedecorations!(ax[3])
     hidespines!(ax[3])
 
-    (lowerx, upperx) = get_limits(params.pxboundsx, view(x, 1, :, :))
-    (lowery, uppery) = get_limits(params.pxboundsy, view(x, 2, :, :))
+    (lowerx, upperx) = get_limits(data.pxboundsx, view(x, 1, :, :))
+    (lowery, uppery) = get_limits(data.pxboundsy, view(x, 2, :, :))
 
     xlims!(ax[1], lowerx, upperx)
     ylims!(ax[1], lowery, uppery)
@@ -202,8 +192,7 @@ end
 
 function visualize(
     samples::AbstractVector{<:Sample},
-    frames::AbstractArray{<:Integer},
-    params::ExperimentalParameters,
+    data::Data,
     gt::Sample,
     # c::Chain;
     num_grid::Integer = 500,
@@ -228,7 +217,7 @@ function visualize(
     x = view(all_trajectories, :, :, 1)
     y = view(all_trajectories, :, :, 2)
     z = view(all_trajectories, :, :, 3)
-    t = 1:size(frames, 3)
+    t = 1:size(data.frames, 3)
     @show ~, MAP_idx = findmax([i.ln𝒫 for i in s])
 
     B = size(x, 1)
