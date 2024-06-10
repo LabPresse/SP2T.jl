@@ -91,8 +91,6 @@ framecenter(data::Data) = [
     0,
 ]
 
-# _eltype(::ExperimentalParameters{S,T1,T2}) where {S,T1,T2} = S
-
 pxsize(data::Data) = data.pxboundsx[2] - data.pxboundsx[1]
 
 to_cpu(data::Data) = Data(
@@ -103,18 +101,6 @@ to_cpu(data::Data) = Data(
     Array(data.darkcounts),
     data.PSF,
 )
-# function add_px_intensity!(
-#     𝐔::AbstractArray{T,3},
-#     x::AbstractArray{T,3},
-#     h::T,
-#     params::ExperimentalParameter,
-#     β::Integer = 1,
-# ) where {T}
-#     σ = getσ(view(x, 3:3, :, :), params.PSF)
-#     𝐗 = geterf(view(x, 1:1, :, :), params.pxboundsx, σ)
-#     𝐘 = geterf(view(x, 2:2, :, :), params.pxboundsy, σ)
-#     return batched_mul!(𝐔, 𝐗, batched_transpose(𝐘), h, β)
-# end
 
 function add_pxcounts!(
     𝐔::AbstractArray{T,3},
@@ -146,33 +132,6 @@ end
 
 get_pxPSF(x::AbstractArray, data::Data) =
     get_pxPSF(x, data.pxboundsx, data.pxboundsy, data.PSF)
-
-# function get_px_intensity!(
-#     𝐔::AbstractArray{FT,3},
-#     x::AbstractArray{FT,3},
-#     h::FT,
-#     params::ExperimentalParameter{FT},
-# ) where {FT<:AbstractFloat}
-#     𝐔 .= params.darkcounts
-#     return add_px_intensity!(𝐔, x, h, params)
-# end
-
-# function get_px_intensity!(
-#     𝐔::AbstractArray{T,3},
-#     x::AbstractArray{T,3},
-#     expparams::ExperimentalParameter,
-#     brightness::Brightness,
-# ) where {T<:AbstractFloat}
-#     𝐔 .= expparams.darkcounts
-#     return add_px_intensity!(
-#         𝐔,
-#         x,
-#         expparams.pxboundsx,
-#         expparams.pxboundsy,
-#         expparams.PSF,
-#         brightness.h,
-#     )
-# end
 
 function pxcounts!(
     U::AbstractArray{T,3},
