@@ -46,13 +46,12 @@ function log𝒫logℒ(
     M::NEmitters,
     D::Diffusivity,
     h::Brightness,
-    W,
-    params::ExperimentalParameters,
+    data::Data,
     aux::AuxiliaryVariables,
 )
     diff²!(aux, x.value)
-    pxcounts!(aux.U, view(x.value, :, 1:M.value, :), h.value, params)
-    logℒ = _logℒ(W, aux.U, aux.ΔU)
+    pxcounts!(aux.U, view(x.value, :, 1:M.value, :), h.value, data)
+    logℒ = _logℒ(data.frames, aux.U, aux.ΔU)
     log𝒫 = logℒ + _logpdf(x, D.value, aux) + _logpdf(D) + _logpdf(M) + _logpdf(h)
     return log𝒫, logℒ
 end
