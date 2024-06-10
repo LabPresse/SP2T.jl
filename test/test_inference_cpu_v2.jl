@@ -25,8 +25,9 @@ metadata = Dict{String,Any}(
 #     metadata["wavelength"],
 # )
 
-params = ExperimentalParameters(
+data = Data(
     FloatType,
+    load("./data/example_frames_v2.jld2", "frames"),
     metadata["period"],
     metadata["pixel size"],
     load("./data/beads/darkcounts1.jld2", "darkcounts"),
@@ -34,34 +35,38 @@ params = ExperimentalParameters(
     1.2 * 100 / 1000,
 )
 
-frames = load("./data/example_frames_v2.jld2", "frames")
+# frames = load("./data/example_frames_v2.jld2", "frames")
 groundtruth = load("./data/example_groundtruth_v2.jld2", "groundtruth")
 
-D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = params.period)
+D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = data.period)
 
-h = Brightness(value = 2e6, priorparams = (1, 1), proposalparam = 1, scale = params.period)
+h = Brightness(value = 2e6, priorparams = (1, 1), proposalparam = 1, scale = data.period)
 
-M = NEmitters(value = 0, maxcount = 10, onprob = oftype(params.period, 0.1))
+M = NEmitters(value = 1, maxcount = 10, onprob = oftype(data.period, 0.1))
 
 x = BrownianTracks(
     value = Array{FloatType}(undef, 3, maxcount(M), size(frames, 3)),
     prior = Normal₃(
-        [params.pxboundsx[end] / 2, params.pxboundsy[end] / 2, 0],
-        [params.pxboundsx[end] / 4, params.pxboundsy[end] / 4, convert(FloatType, 0.5)],
+        [data.pxboundsx[end] / 2, data.pxboundsy[end] / 2, 0],
+        [data.pxboundsx[end] / 4, data.pxboundsy[end] / 4, convert(FloatType, 0.5)],
     ),
     perturbsize = fill(sqrt(2 * D.value), 3),
 )
+
+x.value[1:2, 1, :] .= 2.5
+x.value[3, 1, :] .= 0
 
 chain = runMCMC(
     tracks = x,
     nemitters = M,
     diffusivity = D,
     brightness = h,
-    frames = frames,
-    params = params,
-    niters = 100,
+    # frames = frames,
+    data = data,
+    niters = 1998,
+    sizelimit = 2000,
 );
 
 # jldsave("example_chain2.jld2"; chain)
 
-visualize(video, groundtruth, chain, burn_in = 200)
+visualize(data, groundtruth, chain, burn_in = 200)

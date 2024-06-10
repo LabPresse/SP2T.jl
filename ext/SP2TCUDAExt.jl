@@ -6,8 +6,8 @@ using SP2T, CUDA, NNlib, LogExpFunctions, SpecialFunctions, Random
 
 # The files in the first "include" block ONLY contains struct definitions, basic constructors, and simple utility functions.
 
-# include("data.jl")
-include("detection_model.jl")
+include("data.jl")
+# include("detection_model.jl")
 # include("sample.jl")
 # include("annealing.jl")
 # include("variable.jl")

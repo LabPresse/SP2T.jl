@@ -1,5 +1,6 @@
-function SP2T.ExperimentalParameters(
+function SP2T.Data(
     T::DataType,
+    frames::CuArray{<:Integer,3},
     period::Real,
     pxsize::Real,
     darkcounts::CuMatrix{<:Real},
@@ -9,7 +10,8 @@ function SP2T.ExperimentalParameters(
 )
     period, pxsize, NA, refractiveindex, wavelength =
         convert.(T, (period, pxsize, NA, refractiveindex, wavelength))
-    return ExperimentalParameters(
+    return Data(
+        frames,
         period,
         CuArray(range(0, step = pxsize, length = size(darkcounts, 1) + 1)),
         CuArray(range(0, step = pxsize, length = size(darkcounts, 2) + 1)),
@@ -18,16 +20,18 @@ function SP2T.ExperimentalParameters(
     )
 end
 
-function SP2T.ExperimentalParameters(
+function SP2T.Data(
     T::DataType,
+    frames::CuArray{<:Integer,3},
     period::Real,
     pxsize::Real,
-    darkcounts::AbstractMatrix{<:Real},
+    darkcounts::CuMatrix{<:Real},
     σ₀::Real,
     z₀::Real,
 )
     period, pxsize, σ₀, z₀ = convert.(T, (period, pxsize, σ₀, z₀))
-    return ExperimentalParameters(
+    return Data(
+        frames,
         period,
         CuArray(range(0, step = pxsize, length = size(darkcounts, 1) + 1)),
         CuArray(range(0, step = pxsize, length = size(darkcounts, 2) + 1)),

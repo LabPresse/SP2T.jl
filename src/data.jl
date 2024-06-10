@@ -33,16 +33,18 @@ function _erf(x, bnds, σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end
 
-struct ExperimentalParameters{Ts,Tv,Tm,Tp}
-    period::Ts
+struct Data{Ta,Tm,Tv,Tp}
+    frames::Ta
+    period::Real
     pxboundsx::Tv
     pxboundsy::Tv
     darkcounts::Tm
     PSF::Tp
 end
 
-function ExperimentalParameters(
+function Data(
     T::DataType,
+    frames::Array{<:Integer,3},
     period::Real,
     pxsize::Real,
     darkcounts::Matrix{<:Real},
@@ -53,7 +55,8 @@ function ExperimentalParameters(
     period, pxsize, NA, refractiveindex, wavelength =
         convert.(T, (period, pxsize, NA, refractiveindex, wavelength))
     @show typeof(darkcounts)
-    return ExperimentalParameters(
+    return Data(
+        frames,
         period,
         range(0, step = pxsize, length = size(darkcounts, 1) + 1),
         range(0, step = pxsize, length = size(darkcounts, 2) + 1),
@@ -62,8 +65,9 @@ function ExperimentalParameters(
     )
 end
 
-function ExperimentalParameters(
+function Data(
     T::DataType,
+    frames::Array{<:Integer,3},
     period::Real,
     pxsize::Real,
     darkcounts::Matrix{<:Real},
@@ -71,8 +75,9 @@ function ExperimentalParameters(
     z₀::Real,
 )
     period, pxsize, σ₀, z₀ = convert.(T, (period, pxsize, σ₀, z₀))
-    return ExperimentalParameters(
+    return Data(
         period,
+        frames,
         range(0, step = pxsize, length = size(darkcounts, 1) + 1),
         range(0, step = pxsize, length = size(darkcounts, 2) + 1),
         convert(Matrix{T}, darkcounts),
@@ -80,22 +85,23 @@ function ExperimentalParameters(
     )
 end
 
-framecenter(params::ExperimentalParameters) = [
-    (params.pxboundsx[1] + params.pxboundsx[end]) / 2,
-    (params.pxboundsy[1] + params.pxboundsy[end]) / 2,
+framecenter(data::Data) = [
+    (data.pxboundsx[1] + data.pxboundsx[end]) / 2,
+    (data.pxboundsy[1] + data.pxboundsy[end]) / 2,
     0,
 ]
 
 # _eltype(::ExperimentalParameters{S,T1,T2}) where {S,T1,T2} = S
 
-pxsize(params::ExperimentalParameters) = params.pxboundsx[2] - params.pxboundsx[1]
+pxsize(data::Data) = data.pxboundsx[2] - data.pxboundsx[1]
 
-to_cpu(params::ExperimentalParameters) = ExperimentalParameters(
-    params.period,
-    Array(params.pxboundsx),
-    Array(params.pxboundsy),
-    Array(params.darkcounts),
-    params.PSF,
+to_cpu(data::Data) = Data(
+    data.period,
+    Array(data.frames),
+    Array(data.pxboundsx),
+    Array(data.pxboundsy),
+    Array(data.darkcounts),
+    data.PSF,
 )
 # function add_px_intensity!(
 #     𝐔::AbstractArray{T,3},
@@ -125,8 +131,8 @@ function add_pxcounts!(
     return batched_mul!(𝐔, 𝐗, batched_transpose(𝐘), h, β)
 end
 
-add_pxcounts!(𝐔, x, h, params::ExperimentalParameters) =
-    add_pxcounts!(𝐔, x, h, params.pxboundsx, params.pxboundsy, params.PSF)
+add_pxcounts!(U::AbstractArray{T,3}, x::AbstractArray{T,3}, h::T, data::Data) where {T} =
+    add_pxcounts!(U, x, h, data.pxboundsx, data.pxboundsy, data.PSF)
 
 function get_pxPSF(
     x::AbstractArray{T,3},
@@ -138,8 +144,8 @@ function get_pxPSF(
     return add_pxcounts!(𝐔, x, oneunit(T), xᵖ, yᵖ, PSF, 0)
 end
 
-get_pxPSF(x, params::ExperimentalParameters) =
-    get_pxPSF(x, params.pxboundsx, params.pxboundsy, params.PSF)
+get_pxPSF(x::AbstractArray, data::Data) =
+    get_pxPSF(x, data.pxboundsx, data.pxboundsy, data.PSF)
 
 # function get_px_intensity!(
 #     𝐔::AbstractArray{FT,3},
@@ -181,12 +187,7 @@ function pxcounts!(
     return add_pxcounts!(U, x, h, xbnds, ybnds, PSF)
 end
 
-pxcounts!(
-    U::AbstractArray{T,3},
-    x::AbstractArray{T,3},
-    h::T,
-    params::ExperimentalParameters,
-) where {T} =
+pxcounts!(U::AbstractArray{T,3}, x::AbstractArray{T,3}, h::T, params::Data) where {T} =
     pxcounts!(U, x, h, params.darkcounts, params.pxboundsx, params.pxboundsy, params.PSF)
 
 function pxcounts(
@@ -201,7 +202,10 @@ function pxcounts(
     return add_pxcounts!(𝐔, x, h, xᵖ, yᵖ, PSF)
 end
 
-pxcounts(x::AbstractArray{T,3}, h::T, params::ExperimentalParameters) where {T} =
+pxcounts(x::AbstractArray{T,3}, h::T, params::Data) where {T} =
     pxcounts(x, h, params.darkcounts, params.pxboundsx, params.pxboundsy, params.PSF)
 
-simframes(𝐔) = rand(eltype(𝐔), size(𝐔)) .< -expm1.(-𝐔)
+function simframes!(W::AbstractArray{<:Integer,3}, U::AbstractArray{<:Real,3})
+    rand!(U)
+    @. W = U < -expm1(-U)
+end

@@ -40,7 +40,7 @@ export BrownianTracks,
     Brightness,
     Chain,
     Sample,
-    ExperimentalParameters,
+    Data,
     Normal₃,
     CircularGaussianLorentzian
 
@@ -53,8 +53,8 @@ export readbin, getframes, getROIindices, viewframes, pxsize
 
 # The files in the first "include" block ONLY contains struct definitions, basic constructors, and simple utility functions.
 
-# include("data.jl")
-include("detection_model.jl")
+include("data.jl")
+# include("detection_model.jl")
 # include("sample.jl")
 include("annealing.jl")
 # include("variable.jl")

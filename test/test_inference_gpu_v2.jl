@@ -26,8 +26,9 @@ metadata = Dict{String,Any}(
 #     metadata["wavelength"],
 # )
 
-params = ExperimentalParameters(
+data = Data(
     FloatType,
+    CuArray(load("./data/example_frames_v2.jld2", "frames")),
     metadata["period"],
     metadata["pixel size"],
     CuArray(load("./data/beads/darkcounts1.jld2", "darkcounts")),
@@ -35,20 +36,20 @@ params = ExperimentalParameters(
     1.2 * 100 / 1000,
 )
 
-frames = load("./data/example_frames_v2.jld2", "frames")
+# frames = load("./data/example_frames_v2.jld2", "frames")
 groundtruth = load("./data/example_groundtruth_v2.jld2", "groundtruth")
 
-D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = params.period)
+D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = data.period)
 
-h = Brightness(value = 2e6, priorparams = (1, 1), proposalparam = 1, scale = params.period)
+h = Brightness(value = 2e6, priorparams = (1, 1), proposalparam = 1, scale = data.period)
 
-M = NEmitters(value = 0, maxcount = 10, onprob = oftype(params.period, 0.1))
+M = NEmitters(value = 1, maxcount = 10, onprob = oftype(data.period, 0.1))
 
 CUDA.@allowscalar prior = Normal₃(
-    CuArray([maximum(params.pxboundsx) / 2, maximum(params.pxboundsy) / 2, 0]),
+    CuArray([maximum(data.pxboundsx) / 2, maximum(data.pxboundsy) / 2, 0]),
     CuArray([
-        maximum(params.pxboundsx) / 4,
-        maximum(params.pxboundsy) / 4,
+        maximum(data.pxboundsx) / 4,
+        maximum(data.pxboundsy) / 4,
         convert(FloatType, 0.5),
     ]),
 )
@@ -59,17 +60,19 @@ x = BrownianTracks(
     perturbsize = CUDA.fill(sqrt(2 * D.value), 3),
 )
 
+x.value[:, 1:1, :] .= CuArray(groundtruth.tracks)
+
 chain = runMCMC(
     tracks = x,
     nemitters = M,
     diffusivity = D,
     brightness = h,
-    frames = CuArray(frames),
-    params = params,
-    niters = 1998,
-    sizelimit = 2000,
+    # frames = CuArray(frames),
+    data = data,
+    niters = 10_000,
+    sizelimit = 1000,
 );
 
 jldsave("example_samples_v2.jld2"; chain)
 
-visualize(video, groundtruth, chain, burn_in = 200)
+visualize(data, groundtruth, chain, burn_in = 200)
