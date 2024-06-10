@@ -4,7 +4,7 @@ function SP2T.addΔlogπ₁!(
     y::AbstractArray{T,3},
     prior::Normal₃,
 ) where {T}
-    CUDA.@allowscalar ln𝓇[1] += SP2T.Δlog𝒫(x, y, prior)
+    CUDA.@allowscalar ln𝓇[1] += SP2T.Δlogπ₁(x, y, prior)
     return ln𝓇
 end
 
