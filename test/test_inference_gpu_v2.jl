@@ -36,14 +36,13 @@ data = Data(
     1.2 * 100 / 1000,
 )
 
-# frames = load("./data/example_frames_v2.jld2", "frames")
 groundtruth = load("./data/example_groundtruth_v2.jld2", "groundtruth")
 
 D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = data.period)
 
 h = Brightness(value = 2e6, priorparams = (1, 1), proposalparam = 1, scale = data.period)
 
-M = NEmitters(value = 1, maxcount = 10, onprob = oftype(data.period, 0.1))
+M = NEmitters(value = 0, maxcount = 10, onprob = oftype(data.period, 0.1))
 
 CUDA.@allowscalar prior = Normal₃(
     CuArray([maximum(data.pxboundsx) / 2, maximum(data.pxboundsy) / 2, 0]),
@@ -55,21 +54,20 @@ CUDA.@allowscalar prior = Normal₃(
 )
 
 x = BrownianTracks(
-    value = CuArray{FloatType}(undef, 3, maxcount(M), size(frames, 3)),
+    value = CuArray{FloatType}(undef, 3, maxcount(M), size(data.frames, 3)),
     prior = prior,
     perturbsize = CUDA.fill(sqrt(2 * D.value), 3),
 )
 
-x.value[:, 1:1, :] .= CuArray(groundtruth.tracks)
+# x.value[:, 1:1, :] .= CuArray(groundtruth.tracks)
 
 chain = runMCMC(
     tracks = x,
     nemitters = M,
     diffusivity = D,
     brightness = h,
-    # frames = CuArray(frames),
     data = data,
-    niters = 10_000,
+    niters = 5,
     sizelimit = 1000,
 );
 
