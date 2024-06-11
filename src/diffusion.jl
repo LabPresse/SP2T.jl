@@ -1,7 +1,7 @@
 mutable struct Diffusivity{T}
     value::T
     params::NTuple{2,T}
-    priorparams::NTuple{2,T}
+    πparams::NTuple{2,T}
 end
 
 Diffusivity(D, priorparams) = Diffusivity(D, priorparams, priorparams)
@@ -12,7 +12,7 @@ Diffusivity(; value, priorparams, scale::T) where {T} = Diffusivity(
 )
 
 function setparams!(D::Diffusivity{T}, Δx², 𝑇) where {T}
-    D.params = D.priorparams .+ (length(Δx²), sum(Δx²) / 2) ./ (2 * 𝑇)
+    D.params = D.πparams .+ (length(Δx²), sum(Δx²) / 2) ./ (2 * 𝑇)
     return D
 end
 

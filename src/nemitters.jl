@@ -1,6 +1,6 @@
 mutable struct NEmitters{Tv}
     value::Int
-    logprior::Tv
+    logπ::Tv
     logℒ::Tv
     log𝒫::Tv
 end
@@ -15,7 +15,7 @@ maxcount(M::NEmitters) = length(M.log𝒫)
 anyactive(M::NEmitters) = M.value > 0
 
 function setlog𝒫!(M::NEmitters, 𝑇::Real)
-    @. M.log𝒫 = M.logprior + M.logℒ / 𝑇
+    @. M.log𝒫 = M.logπ + M.logℒ / 𝑇
     return M
 end
 
@@ -56,6 +56,7 @@ function setlogℒ!(
 ) where {T}
     V .= data.darkcounts
     M.logℒ[1] = _logℒ(data.frames, V, ΔU)
+    @show M.logℒ[1]
     @inbounds for m = 1:size(x, 2)
         if m != M.value
             add_pxcounts!(V, view(x, :, m:m, :), h, data)

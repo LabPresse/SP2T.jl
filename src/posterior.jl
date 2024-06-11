@@ -4,10 +4,9 @@ _logpdf(x::BrownianTracks, D, aux::AuxiliaryVariables) =
     -log(D) * length(aux.Δx²) / 2 - sum(aux.Δx²) / (4 * D) -
     _logpdf(x.prior, view(x.value, :, :, 1))
 
-_logpdf(D::Diffusivity) =
-    -(D.priorparams[1] + 1) * log(D.value) - D.priorparams[2] / D.value
+_logpdf(D::Diffusivity) = -(D.πparams[1] + 1) * log(D.value) - D.πparams[2] / D.value
 
-_logpdf(M::NEmitters) = M.logprior[M.value+1]
+_logpdf(M::NEmitters) = M.logπ[M.value+1]
 
 _logpdf(h::Brightness) = (h.priorparams[1] - 1) * log(h.value) - h.value / h.priorparams[2]
 
