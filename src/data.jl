@@ -76,8 +76,8 @@ function Data(
 )
     period, pxsize, σ₀, z₀ = convert.(T, (period, pxsize, σ₀, z₀))
     return Data(
-        period,
         frames,
+        period,
         range(0, step = pxsize, length = size(darkcounts, 1) + 1),
         range(0, step = pxsize, length = size(darkcounts, 2) + 1),
         convert(Matrix{T}, darkcounts),
