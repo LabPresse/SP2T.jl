@@ -1,4 +1,5 @@
 using SP2T
+using JLD2
 
 function get_darkcounts(frames)
     darkcounts = Array{Float64}(undef, size(frames, 1), size(frames, 2))
@@ -6,12 +7,6 @@ function get_darkcounts(frames)
     N = size(frames, 3)
     @. darkcounts .= -log1p(-darkcounts / N)
     return darkcounts
-end
-
-function get_darkcounts2(frames)
-    darkcounts = Array{Float64}(undef, size(frames, 1), size(frames, 2))
-    sum!(darkcounts, frames)
-    return darkcounts ./= size(frames, 3)
 end
 
 indices = readbin(
@@ -24,4 +19,7 @@ frames = getframes(ROIindices, width = 50, height = 50, batchsize = 1);
 
 darkcounts = get_darkcounts(frames)
 
-darkcounts2 = get_darkcounts2(frames)
+idx = darkcounts .== 0
+@views darkcounts[idx] .+= eps()
+
+jldsave("./data/beads/darkcounts1.jld2"; darkcounts)
