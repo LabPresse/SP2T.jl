@@ -269,7 +269,7 @@ function runMCMC!(
         update_offtracks!(x, M.value, D.value)
         anyactive(M) && update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, aux)
         update!(D, x.value, 𝑇, aux.Δx²)
-        # update!(M, x.value, x.valueᵖ, h.value, W, params, 𝑇, aux)
+        update!(M, x.value, x.valueᵖ, h.value, data, 𝑇, aux)
         if iter % saveperiod(chain) == 0
             log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, aux)
             push!(chain.samples, Sample(x, M, D, h, iter + prev_niters, 𝑇, log𝒫, logℒ))
@@ -279,8 +279,8 @@ function runMCMC!(
     return chain
 end
 
-AuxiliaryVariables(tracks::BrownianTracks, data::Data) =
-    AuxiliaryVariables(tracks.value, data.pxboundsx, data.pxboundsy)
+AuxiliaryVariables(x::BrownianTracks, data::Data) =
+    AuxiliaryVariables(x.value, data.pxboundsx, data.pxboundsy, data.darkcounts)
 
 function runMCMC!(
     chain::Chain,
@@ -292,7 +292,8 @@ function runMCMC!(
     niters,
 )
     prev_niters = chain.samples[end].iteration
-    aux = AuxiliaryVariables(x.value, data.pxboundsx, data.pxboundsy)
+    aux = AuxiliaryVariables(x, data)
+    M.logℒ[1] = _logℒ(data.frames, aux.V, aux.ΔU)
     runMCMC!(chain, x, M, D, h, data, niters, prev_niters, aux)
 end
 
@@ -301,7 +302,6 @@ function runMCMC(;
     nemitters::NEmitters,
     diffusivity::Diffusivity,
     brightness::Brightness,
-    # frames::AbstractArray{UInt16,3},
     data::Data,
     niters::Integer = 1000,
     sizelimit::Integer = 1000,

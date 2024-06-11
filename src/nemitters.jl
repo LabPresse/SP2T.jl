@@ -55,8 +55,6 @@ function setlogℒ!(
     ΔU::AbstractArray{T,3},
 ) where {T}
     V .= data.darkcounts
-    M.logℒ[1] = _logℒ(data.frames, V, ΔU)
-    @show M.logℒ[1]
     @inbounds for m = 1:size(x, 2)
         if m != M.value
             add_pxcounts!(V, view(x, :, m:m, :), h, data)

@@ -48,9 +48,16 @@ struct AuxiliaryVariables{T}
     ΔU::T
 end
 
-function AuxiliaryVariables(x, xbnds, ybnds)
+function AuxiliaryVariables(
+    x::AbstractArray{T,3},
+    xbnds::AbstractVector,
+    ybnds::AbstractVector,
+    F::AbstractMatrix{T},
+) where {T}
     Δx² = similar(x, size(x, 1), size(x, 2), size(x, 3) - 1)
     U = similar(x, length(xbnds) - 1, length(ybnds) - 1, size(x, 3))
+    V = similar(U)
+    V .= F
     ΣΔΔx² = similar(x, 1, 1, size(x, 3) - 1)
     ΔlogP = similar(x, 1, 1, size(x, 3))
     return AuxiliaryVariables(
@@ -60,7 +67,7 @@ function AuxiliaryVariables(x, xbnds, ybnds)
         ΣΔΔx²,
         ΔlogP,
         U,
-        similar(U),
+        V,
         similar(U),
     )
 end
