@@ -4,9 +4,18 @@
 # end
 
 # logℒ(𝐖, 𝐔) = sum(logexpm1.(𝐔[𝐖])) - sum(𝐔)
+#! must be changed
+# _logℒ(W::AbstractArray{UInt16}, U::AbstractArray{T}, temp::AbstractArray{T}) where {T} =
+#     sum(logexpm1.(U[W])) - sum(U)
 
-_logℒ(W::AbstractArray{UInt16}, U::AbstractArray{T}, temp::AbstractArray{T}) where {T} =
-    sum(logexpm1.(U[W])) - sum(U)
+function _logℒ(
+    W::AbstractArray{UInt16},
+    U::AbstractArray{T},
+    ΔU::AbstractArray{T},
+) where {T}
+    @. ΔU = W * logexpm1(U) - U
+    return sum(ΔU)
+end
 
 function unsafe_Δlogℒ!(
     logratio::AbstractArray{T},
@@ -19,6 +28,20 @@ function unsafe_Δlogℒ!(
     return sum!(logratio, Δlnℒ, init = false)
 end
 
+# function Δlogℒ!(
+#     ΔlogL::AbstractArray{T},
+#     W::AbstractArray{UInt16},
+#     U::AbstractArray{T},
+#     V::AbstractArray{T},
+#     ΔU::AbstractArray{T},
+#     𝑇::Union{T,Int} = 1,
+# ) where {T}
+#     ΔU .= U .- V
+#     @. ΔU[W] += logexpm1(V[W]) - logexpm1(U[W])
+#     sum!(ΔlogL, ΔU)
+#     return ΔlogL ./= 𝑇
+# end
+
 function Δlogℒ!(
     ΔlogL::AbstractArray{T},
     W::AbstractArray{UInt16},
@@ -27,8 +50,7 @@ function Δlogℒ!(
     ΔU::AbstractArray{T},
     𝑇::Union{T,Int} = 1,
 ) where {T}
-    ΔU .= U .- V
-    @. ΔU[W] += logexpm1(V[W]) - logexpm1(U[W])
+    @. ΔU = W * (logexpm1(V) - logexpm1(U)) - (V - U)
     sum!(ΔlogL, ΔU)
     return ΔlogL ./= 𝑇
 end

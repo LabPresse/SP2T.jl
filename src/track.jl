@@ -131,7 +131,7 @@ function counter!(x::BrownianTracks)
     return x
 end
 
-function copyidxto!(x::AbstractArray{T}, y::AbstractArray{T}, i::Array{UInt16}) where {T}
+function copyidxto!(x::AbstractArray{T}, y::AbstractArray{T}, i::Array{Bool}) where {T}
     j = vec(i)
     @views x[:, :, j] .= y[:, :, j]
     return x
