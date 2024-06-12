@@ -38,7 +38,7 @@ data = Data(
 
 data, groundtruth = simulate!(data; diffusivity = 2, brightness = 5e5, nemitters = 1)
 
-visualize(groundtruth, data)
+# visualize(groundtruth, data)
 
 jldsave("./example/data.jld2"; data)
 jldsave("./example/groundtruth.jld2"; groundtruth)
