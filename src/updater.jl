@@ -1,12 +1,21 @@
-# function update!(
-#     diffusivity::Diffusivity,
-#     tracks::BrownianTracks,
-#     chainparams::ChainParameters,
-# )
-#     setΔx²!(tracks)
-#     setparams!(diffusivity, tracks.Δx², chainparams.temperature)
-#     return sample!(diffusivity)
-# end
+function simulate!(
+    data::Data;
+    diffusivity::Real,
+    brightness::Real,
+    nemitters::Integer,
+    μ = nothing,
+    σ = [0, 0, 0],
+)
+    T = typeof(data.period)
+    x = Array{T}(undef, 3, nemitters, size(data.frames, 3))
+    D = convert(T, diffusivity) * data.period
+    h = convert(T, brightness) * data.period
+    isnothing(μ) && (μ = framecenter(data))
+    simulate!(x, μ, σ, D)
+    groundtruth = Sample(x, D, h, 0, one(T), zero(T), zero(T))
+    simframes!(data.frames, pxcounts(groundtruth.tracks, groundtruth.brightness, data))
+    return data, groundtruth
+end
 
 function propose!(
     x::BrownianTracks,
