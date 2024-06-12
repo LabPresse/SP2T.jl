@@ -165,6 +165,6 @@ pxcounts(x::AbstractArray{T,3}, h::T, params::Data) where {T} =
     pxcounts(x, h, params.darkcounts, params.pxboundsx, params.pxboundsy, params.PSF)
 
 function simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3})
-    rand!(U)
-    @. W = U < -expm1(-U)
+    V = rand!(similar(U))
+    @. W = V < -expm1(-U)
 end
