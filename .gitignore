@@ -1,7 +1,7 @@
 .vscode
 .JuliaFormatter.toml
 .VSCodeCounter
-example
+example/*.jld2
 Manifest.toml
 test/scrach*
 test/benchmark*
@@ -11,5 +11,5 @@ extra
 *.mp4
 *.png
 .DS_Store
-data/beads
+data
 *.jld2
