@@ -11,15 +11,16 @@ metadata = Dict{String,Any}(
     "numerical aperture" => 1.45,
     "refractive index" => 1.515,
     "wavelength" => 0.665,
-    "period" => 3e-6,
+    "period" => 1e-5,
     "pixel size" => 0.1,
 )
 
-# expparams = ExperimentalParameters(
+# data = Data(
 #     FloatType,
+#     Array{UInt16}(undef, 50, 50, 2550),
 #     metadata["period"],
 #     metadata["pixel size"],
-#     load("./data/beads/beads_darkcounts.jld2", "darkcounts"),
+#     load("./data/beads/darkcounts1.jld2", "darkcounts"),
 #     metadata["numerical aperture"],
 #     metadata["refractive index"],
 #     metadata["wavelength"],
@@ -35,9 +36,9 @@ data = Data(
     1.2 * 100 / 1000,
 )
 
-data, groundtruth = simulate!(data; diffusivity = 2, brightness = 2e6, nemitters = 1)
+data, groundtruth = simulate!(data; diffusivity = 2, brightness = 5e5, nemitters = 1)
 
 visualize(groundtruth, data)
 
-jldsave("./data/example_data.jld2"; data)
-jldsave("./data/example_groundtruth.jld2"; groundtruth)
+jldsave("./example/data.jld2"; data)
+jldsave("./example/groundtruth.jld2"; groundtruth)
