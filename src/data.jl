@@ -33,9 +33,16 @@ function _erf(x, bnds, σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end
 
-struct Data{Ta,Tm,Tv,Tp}
+struct Data{
+    Ta<:AbstractArray,
+    Ts<:Real,
+    Tm<:AbstractMatrix,
+    Tv<:AbstractVector,
+    Tp<:AbstractPSF,
+}
     frames::Ta
-    period::Real
+    batchsize::Int
+    period::Ts
     pxboundsx::Tv
     pxboundsy::Tv
     darkcounts::Tm
@@ -57,6 +64,7 @@ function Data(
     @show typeof(darkcounts)
     return Data(
         frames,
+        1,
         period,
         range(0, step = pxsize, length = size(darkcounts, 1) + 1),
         range(0, step = pxsize, length = size(darkcounts, 2) + 1),
@@ -77,6 +85,7 @@ function Data(
     period, pxsize, σ₀, z₀ = convert.(T, (period, pxsize, σ₀, z₀))
     return Data(
         frames,
+        1,
         period,
         range(0, step = pxsize, length = size(darkcounts, 1) + 1),
         range(0, step = pxsize, length = size(darkcounts, 2) + 1),
@@ -94,8 +103,9 @@ framecenter(data::Data) = [
 pxsize(data::Data) = data.pxboundsx[2] - data.pxboundsx[1]
 
 to_cpu(data::Data) = Data(
-    data.period,
     Array(data.frames),
+    data.batchsize,
+    data.period,
     Array(data.pxboundsx),
     Array(data.pxboundsy),
     Array(data.darkcounts),
@@ -167,4 +177,9 @@ pxcounts(x::AbstractArray{T,3}, h::T, params::Data) where {T} =
 function simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3})
     V = rand!(similar(U))
     @. W = V < -expm1(-U)
+end
+
+function simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}, B::Integer)
+    P = -expm1.(-U)
+    W .= rand.(Binomial.(B, P))
 end
