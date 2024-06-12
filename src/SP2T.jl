@@ -38,9 +38,9 @@ export BrownianTracks,
     CircularGaussianLorentzian
 
 export simulate!, runMCMC!, maxcount, runMCMC
-export visualize
+# export visualize, viewframes
 
-export readbin, getframes, getROIindices, viewframes, pxsize
+export readbin, getframes, getROIindices, pxsize
 
 include("data.jl")
 include("annealing.jl")
@@ -57,7 +57,7 @@ include("updater.jl")
 include("posterior.jl")
 
 include("import.jl")
-include("data_viewer.jl")
-include("visualization.jl")
+# include("data_viewer.jl")
+# include("visualization.jl")
 
 end
