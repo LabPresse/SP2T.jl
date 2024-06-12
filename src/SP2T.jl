@@ -17,15 +17,11 @@ using NNlib: batched_mul, batched_mul!, batched_transpose
 #
 using StatsBase: counts
 
-# For visualization
-using GLMakie
-using ColorSchemes
-
 # Progress Meter
 using ProgressMeter
 
 # For postprocessing
-using Combinatorics: permutations
+# using Combinatorics: permutations
 
 export BrownianTracks,
     NEmitters,
