@@ -11,29 +11,33 @@ metadata = Dict{String,Any}(
     "numerical aperture" => 1.45,
     "refractive index" => 1.515,
     "wavelength" => 0.665,
+    "period" => 3e-6,
+    "pixel size" => 0.1,
 )
 
-param = ExperimentalParameter(
+# expparams = ExperimentalParameters(
+#     FloatType,
+#     metadata["period"],
+#     metadata["pixel size"],
+#     load("./data/beads/beads_darkcounts.jld2", "darkcounts"),
+#     metadata["numerical aperture"],
+#     metadata["refractive index"],
+#     metadata["wavelength"],
+# )
+
+data = Data(
     FloatType,
-    units = ("μm", "s"),
-    length = 255 * 3,
-    period = 0.0033,
-    pxsize = 0.133,
-    darkcounts = fill(1e-3, (50, 50)),
-    NA = metadata["numerical aperture"],
-    nᵣ = metadata["refractive index"],
-    λ = metadata["wavelength"],
+    Array{UInt16}(undef, 50, 50, 2550),
+    metadata["period"],
+    metadata["pixel size"],
+    load("./data/beads/darkcounts1.jld2", "darkcounts"),
+    11.14 * 12 / 1000,
+    1.2 * 100 / 1000,
 )
 
-groundtruth = simulate_sample(
-    param = param,
-    emitter_number = 2,
-    diffusion_coefficient = 0.5,
-    emission_rate = 200,
-)
+data, groundtruth = simulate!(data; diffusivity = 2, brightness = 2e6, nemitters = 1)
 
-video = Video(param, groundtruth)
-visualize(video, groundtruth)
+visualize(groundtruth, data)
 
-jldsave("example_video_fast.jld2"; video)
-jldsave("example_groundtruth_fast.jld2"; groundtruth)
+jldsave("./data/example_data.jld2"; data)
+jldsave("./data/example_groundtruth.jld2"; groundtruth)
