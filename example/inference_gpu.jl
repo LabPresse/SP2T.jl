@@ -5,42 +5,23 @@ using Random
 
 Random.seed!(1)
 
-FloatType = Float32
-
-metadata = Dict{String,Any}(
-    "units" => ("μm", "s"),
-    "numerical aperture" => 1.45,
-    "refractive index" => 1.515,
-    "wavelength" => 0.665,
-    "period" => 3e-6,
-    "pixel size" => 0.1,
-)
-
-# expparams = ExperimentalParameters(
-#     FloatType,
-#     metadata["period"],
-#     metadata["pixel size"],
-#     load("./data/beads/beads_darkcounts.jld2", "darkcounts"),
-#     metadata["numerical aperture"],
-#     metadata["refractive index"],
-#     metadata["wavelength"],
-# )
+data = load("./example/data.jld2", "data")
+groundtruth = load("./example/groundtruth.jld2", "groundtruth")
 
 data = Data(
-    FloatType,
-    CuArray(load("./data/example_frames_v2.jld2", "frames")),
-    metadata["period"],
-    metadata["pixel size"],
-    CuArray(load("./data/beads/darkcounts1.jld2", "darkcounts")),
-    11.14 * 12 / 1000,
-    1.2 * 100 / 1000,
+    CuArray(data.frames),
+    data.batchsize,
+    data.period,
+    CuArray(data.pxboundsx),
+    CuArray(data.pxboundsy),
+    CuArray(data.darkcounts),
+    data.PSF,
 )
-
-groundtruth = load("./data/example_groundtruth_v2.jld2", "groundtruth")
+FloatType = typeof(data.period)
 
 D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = data.period)
 
-h = Brightness(value = 2e6, priorparams = (1, 1), proposalparam = 1, scale = data.period)
+h = Brightness(value = 5e5, priorparams = (1, 1), proposalparam = 1, scale = data.period)
 
 M = NEmitters(value = 0, maxcount = 10, onprob = oftype(data.period, 0.1))
 
@@ -67,10 +48,10 @@ chain = runMCMC(
     diffusivity = D,
     brightness = h,
     data = data,
-    niters = 5,
+    niters = 998,
     sizelimit = 1000,
 );
 
-jldsave("example_samples_v2.jld2"; chain)
+jldsave("./example/chain_gpu.jld2"; chain)
 
-visualize(data, groundtruth, chain, burn_in = 200)
+# visualize(data, groundtruth, chain, burn_in = 200)
