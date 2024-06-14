@@ -11,7 +11,7 @@ Diffusivity(; value, priorparams, scale::T) where {T} = Diffusivity(
     convert.(T, (priorparams[1], priorparams[2] * scale)),
 )
 
-function setparams!(D::Diffusivity{T}, Δx², 𝑇) where {T}
+function setparams!(D::Diffusivity{T}, Δx²::AbstractArray{T}, 𝑇::Union{T,Int}) where {T}
     D.params = D.πparams .+ (length(Δx²), sum(Δx²) / 2) ./ (2 * 𝑇)
     return D
 end
