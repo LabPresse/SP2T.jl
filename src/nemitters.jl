@@ -10,7 +10,7 @@ function NEmitters(; value, maxcount, onprob)
     return NEmitters(value, logprior, similar(logprior), similar(logprior))
 end
 
-maxcount(M::NEmitters) = length(M.log𝒫)
+maxcount(M::NEmitters) = length(M.log𝒫) - 1
 
 anyactive(M::NEmitters) = M.value > 0
 
@@ -62,6 +62,28 @@ function setlogℒ!(
             copyto!(V, U)
         end
         M.logℒ[m+1] = _logℒ(data.frames, V, ΔU)
+    end
+    return M
+end
+
+function setlogℒ!(
+    M::NEmitters,
+    V::AbstractArray{T,3},
+    U::AbstractArray{T,3},
+    x::AbstractArray{T,3},
+    h::T,
+    data::Data,
+    ΔU::AbstractArray{T,3},
+    𝟙::AbstractArray{T,3},
+) where {T}
+    V .= data.darkcounts
+    @inbounds for m = 1:size(x, 2)
+        if m != M.value
+            add_pxcounts!(V, view(x, :, m:m, :), h, data)
+        else
+            copyto!(V, U)
+        end
+        M.logℒ[m+1] = _logℒ(data.frames, V, ΔU, 𝟙)
     end
     return M
 end
