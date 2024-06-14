@@ -10,6 +10,7 @@ function simulate!(
     x = Array{T}(undef, 3, nemitters, size(data.frames, 3))
     D = convert(T, diffusivity) * data.period
     h = convert(T, brightness) * data.period
+    σ = convert(Vector{T}, σ)
     isnothing(μ) && (μ = framecenter(data))
     simulate!(x, μ, σ, D)
     groundtruth = Sample(x, D, h, 0, one(T), zero(T), zero(T))

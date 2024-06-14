@@ -5,31 +5,32 @@ struct CircularGaussianLorentzian{T} <: AbstractPSF{T}
     z₀::T # [length] std of PSF along z (optical axis)
 end
 
-function CircularGaussianLorentzian{FT}(;
+function CircularGaussianLorentzian{T}(;
     NA::Real,
     nᵣ::Real,
     λ::Real,
-) where {FT<:AbstractFloat}
+) where {T<:AbstractFloat}
     a = λ / pi / nᵣ
     b = _b(NA, nᵣ)
     z₀ = a * b
     σ₀ = sqrt(a * z₀) / 2
-    return CircularGaussianLorentzian{FT}(σ₀, z₀)
+    return CircularGaussianLorentzian{T}(σ₀, z₀)
 end
 
-function _b(NA, nᵣ)
+function _b(NA::T, nᵣ::T) where {T<:AbstractFloat}
     α = semiangle(NA, nᵣ)
     cos12α = sqrt(cos(α))
     cos32α, cos72α = cos12α^3, cos12α^7
     return ((7 * (1 - cos32α)) / (4 - 7 * cos32α + 3 * cos72α))
 end
 
-semiangle(NA, nᵣ) = asin(NA / nᵣ)
+semiangle(NA::T, nᵣ::T) where {T<:AbstractFloat} = asin(NA / nᵣ)
 
-_σ(z, PSF::CircularGaussianLorentzian) = @. √2 * PSF.σ₀ * √(1 + (z / PSF.z₀)^2)
+_σ(z::AbstractArray{T}, PSF::CircularGaussianLorentzian{T}) where {T<:AbstractFloat} =
+    @. √convert(T, 2) * PSF.σ₀ * √(oneunit(T) + (z / PSF.z₀)^2)
 
-function _erf(x, bnds, σ)
-    𝐗 = @. (bnds - x) / (√2 * σ)
+function _erf(x::AbstractArray{T}, bnds::AbstractVector{T}, σ::AbstractArray{T}) where {T}
+    𝐗 = @. (bnds - x) / (√convert(T, 2) * σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end
 

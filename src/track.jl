@@ -59,7 +59,12 @@ logrand!(x::AbstractArray) = x .= log.(rand!(x))
 
 neglogrand!(x::AbstractArray) = x .= .-log.(rand!(x))
 
-function simulate!(x, μ, σ, D)
+function simulate!(
+    x::AbstractArray{T},
+    μ::AbstractVector{T},
+    σ::AbstractVector{T},
+    D::T,
+) where {T<:AbstractFloat}
     randn!(x)
     @views begin
         x[:, :, 1] .= x[:, :, 1] .* σ .+ μ
