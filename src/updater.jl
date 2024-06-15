@@ -92,7 +92,7 @@ function update_ontracks!(
     update_odd!(xᵒⁿ, yᵒⁿ, Δxᵒⁿ², Δyᵒⁿ², D, x.logratio, x.accepted, ΔΔxᵒⁿ², aux)
     update_even!(xᵒⁿ, yᵒⁿ, Δxᵒⁿ², Δyᵒⁿ², D, x.logratio, x.accepted, ΔΔxᵒⁿ², aux)
     counter!(x)
-    copyidxto!(aux.U, aux.V, x.accepted)
+    # copyidxto!(aux.U, aux.V, x.accepted)
     return x
 end
 
@@ -107,10 +107,10 @@ function update!(
     D::Diffusivity,
     x::AbstractArray{T,3},
     𝑇::Union{T,Int},
-    Δx²::AbstractArray{T,3},
+    aux::AuxiliaryVariables,
 ) where {T}
-    diff²!(Δx², x)
-    setparams!(D, Δx², 𝑇)
+    diff²!(aux.Δx², x)
+    setparams!(D, aux.Δx², 𝑇, aux.𝟙Δx)
     return sample!(D)
 end
 
@@ -124,7 +124,7 @@ function update!(
     aux::AuxiliaryVariables,
 ) where {T}
     shuffletracks!(x, y, M)
-    setlogℒ!(M, aux.V, aux.U, x, h, data, aux.ΔU)
+    setlogℒ!(M, aux.V, aux.U, x, h, data, aux.ΔU, aux.𝟙U)
     setlog𝒫!(M, 𝑇)
     sample!(M)
     return M
@@ -151,7 +151,7 @@ function runMCMC!(
         𝑇 = temperature(chain, iter)
         update_offtracks!(x, M.value, D.value)
         anyactive(M) && update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, aux)
-        update!(D, x.value, 𝑇, aux.Δx²)
+        update!(D, x.value, 𝑇, aux)
         update!(M, x.value, x.valueᵖ, h.value, data, 𝑇, aux)
         if iter % saveperiod(chain) == 0
             log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, aux)
@@ -176,7 +176,7 @@ function runMCMC!(
 )
     prev_niters = chain.samples[end].iteration
     aux = AuxiliaryVariables(x, data)
-    M.logℒ[1] = _logℒ(data.frames, aux.V, aux.ΔU)
+    M.logℒ[1] = _logℒ(data.frames, aux.V, aux.ΔU, aux.𝟙U)
     runMCMC!(chain, x, M, D, h, data, niters, prev_niters, aux)
 end
 

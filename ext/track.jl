@@ -8,5 +8,8 @@ function SP2T.addΔlogπ₁!(
     return ln𝓇
 end
 
-SP2T.copyidxto!(x::AbstractArray{T}, y::AbstractArray{T}, idx::CuArray{Bool}) where {T} =
-    @. x = (idx * y) + (~idx * x)
+SP2T.copyidxto!(
+    x::AbstractArray{T,N},
+    y::AbstractArray{T,N},
+    i::CuArray{Bool,N},
+) where {T,N} = @. x = (i * y) + (~i * x)

@@ -40,12 +40,14 @@ saveperiod(chain::Chain) =
 struct AuxiliaryVariables{T}
     Δx²::T
     Δy²::T
+    𝟙Δx::T
     ΔΔx²::T
     ΣΔΔx²::T
     ΔlogP::T
     U::T
     V::T
     ΔU::T
+    𝟙U::T
 end
 
 function AuxiliaryVariables(
@@ -55,20 +57,24 @@ function AuxiliaryVariables(
     F::AbstractMatrix{T},
 ) where {T}
     Δx² = similar(x, size(x, 1), size(x, 2), size(x, 3) - 1)
+    𝟙Δx = fill!(similar(Δx²), 1)
     U = similar(x, length(xbnds) - 1, length(ybnds) - 1, size(x, 3))
     V = similar(U)
     V .= F
     ΣΔΔx² = similar(x, 1, 1, size(x, 3) - 1)
     ΔlogP = similar(x, 1, 1, size(x, 3))
+    𝟙U = fill!(similar(U), 1)
     return AuxiliaryVariables(
         Δx²,
         similar(Δx²),
+        𝟙Δx,
         similar(Δx²),
         ΣΔΔx²,
         ΔlogP,
         U,
         V,
         similar(U),
+        𝟙U,
     )
 end
 

@@ -1,9 +1,21 @@
-function SP2T._logℒ(W::CuArray{UInt16}, U::CuArray{T}, ΔU::CuArray{T}) where {T}
+# function SP2T._logℒ(W::CuArray{UInt16,N}, U::CuArray{T,N}, ΔU::CuArray{T,N}) where {T,N}
+#     @. ΔU = W * logexpm1(U) - U
+#     sum(ΔU)
+# end
+
+function SP2T._logℒ(
+    W::CuArray{<:Integer,N},
+    U::CuArray{T,N},
+    ΔU::CuArray{T,N},
+    𝟙::CuArray{T,N},
+) where {T,N}
     @. ΔU = W * logexpm1(U) - U
-    return sum(ΔU)
+    SP2T._sum(ΔU, 𝟙)
 end
 
 # SP2T.logℒ(W::CuArray, 𝐔::CuArray) = SP2T.logℒ!(similar(𝐔), W, 𝐔)
+
+SP2T._sum(x::CuArray{T,N}, 𝟙::CuArray{T,N}) where {T,N} = x ⋅ 𝟙
 
 function SP2T.Δlogℒ!(
     ΔlogL::CuArray{T},
@@ -15,5 +27,25 @@ function SP2T.Δlogℒ!(
 ) where {T}
     @. ΔU = W * (logexpm1(V) - logexpm1(U)) - (V - U)
     sum!(ΔlogL, ΔU)
-    return ΔlogL ./= 𝑇
+    ΔlogL ./= 𝑇
+end
+
+function SP2T.Δlogℒ!(
+    ΔlogL::CuArray{T,3},
+    W::CuArray{UInt16,3},
+    U::CuArray{T,3},
+    V::CuArray{T,3},
+    ΔU::CuArray{T,3},
+    𝟙::CuArray{T,3},
+    𝑇::Union{T,Int} = 1,
+) where {T}
+    @. ΔU = W * (logexpm1(V) - logexpm1(U)) - (V - U)
+    SP2T._sum!(ΔlogL, ΔU, 𝟙)
+    ΔlogL ./= 𝑇
+end
+
+function SP2T._sum!(o::CuArray{T,3}, x::CuArray{T,3}, 𝟙::CuArray{T,3}) where {T}
+    x′ = reshape(x, 1, :, size(x, 3))
+    𝟙′ = reshape(𝟙, :, 1, size(𝟙, 3))
+    batched_mul!(o, x′, 𝟙′)
 end

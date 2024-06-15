@@ -26,8 +26,14 @@ end
 
 semiangle(NA::T, nᵣ::T) where {T<:AbstractFloat} = asin(NA / nᵣ)
 
+_σ!(
+    σ::AbstractArray{T,N},
+    z::AbstractArray{T,N},
+    PSF::CircularGaussianLorentzian{T},
+) where {T,N} = @. σ = √convert(T, 2) * PSF.σ₀ * √(oneunit(T) + (z / PSF.z₀)^2)
+
 _σ(z::AbstractArray{T}, PSF::CircularGaussianLorentzian{T}) where {T<:AbstractFloat} =
-    @. √convert(T, 2) * PSF.σ₀ * √(oneunit(T) + (z / PSF.z₀)^2)
+    _σ!(similar(z), z, PSF)
 
 function _erf(x::AbstractArray{T}, bnds::AbstractVector{T}, σ::AbstractArray{T}) where {T}
     𝐗 = @. (bnds - x) / (√convert(T, 2) * σ)
@@ -125,6 +131,7 @@ function add_pxcounts!(
     σ = _σ(view(x, 3:3, :, :), PSF)
     𝐗 = _erf(view(x, 1:1, :, :), xᵖ, σ)
     𝐘 = _erf(view(x, 2:2, :, :), yᵖ, σ)
+    # @show size(σ), size(𝐗)
     return batched_mul!(𝐔, 𝐗, batched_transpose(𝐘), h, β)
 end
 

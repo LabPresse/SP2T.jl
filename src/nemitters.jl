@@ -19,53 +19,6 @@ function setlog𝒫!(M::NEmitters, 𝑇::Real)
     return M
 end
 
-# function setlogℒ!(
-#     M::NEmitters,
-#     V::AbstractArray{T,3},
-#     U::AbstractArray{T,3},
-#     𝐖::AbstractArray{UInt16,3},
-#     x::AbstractArray{T,3},
-#     h::T,
-#     F::AbstractMatrix{T},
-#     xbnds::AbstractVector{T},
-#     ybnds::AbstractVector{T},
-#     PSF::AbstractPSF{T},
-#     ΔU::AbstractArray{T,3},
-# ) where {T}
-#     V .= F
-#     M.logℒ[1] = _logℒ(𝐖, V, ΔU)
-#     @inbounds for m = 1:size(x, 2)
-#         if m != M.value
-#             add_pxcounts!(V, view(x, :, m:m, :), h, xbnds, ybnds, PSF)
-#         else
-#             copyto!(V, U)
-#         end
-#         M.logℒ[m+1] = _logℒ(𝐖, V, ΔU)
-#     end
-#     return M
-# end
-
-function setlogℒ!(
-    M::NEmitters,
-    V::AbstractArray{T,3},
-    U::AbstractArray{T,3},
-    x::AbstractArray{T,3},
-    h::T,
-    data::Data,
-    ΔU::AbstractArray{T,3},
-) where {T}
-    V .= data.darkcounts
-    @inbounds for m = 1:size(x, 2)
-        if m != M.value
-            add_pxcounts!(V, view(x, :, m:m, :), h, data)
-        else
-            copyto!(V, U)
-        end
-        M.logℒ[m+1] = _logℒ(data.frames, V, ΔU)
-    end
-    return M
-end
-
 function setlogℒ!(
     M::NEmitters,
     V::AbstractArray{T,3},
@@ -78,11 +31,7 @@ function setlogℒ!(
 ) where {T}
     V .= data.darkcounts
     @inbounds for m = 1:size(x, 2)
-        if m != M.value
-            add_pxcounts!(V, view(x, :, m:m, :), h, data)
-        else
-            copyto!(V, U)
-        end
+        add_pxcounts!(V, view(x, :, m:m, :), h, data)
         M.logℒ[m+1] = _logℒ(data.frames, V, ΔU, 𝟙)
     end
     return M

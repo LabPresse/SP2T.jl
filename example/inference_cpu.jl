@@ -30,7 +30,7 @@ chain = runMCMC(
     diffusivity = D,
     brightness = h,
     data = data,
-    niters = 998,
+    niters = 999,
     sizelimit = 1000,
 );
 
