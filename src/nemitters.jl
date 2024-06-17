@@ -21,7 +21,6 @@ end
 
 function setlogℒ!(
     M::NEmitters,
-    V::AbstractArray{T,3},
     U::AbstractArray{T,3},
     x::AbstractArray{T,3},
     h::T,
@@ -29,10 +28,10 @@ function setlogℒ!(
     ΔU::AbstractArray{T,3},
     𝟙::AbstractArray{T,3},
 ) where {T}
-    V .= data.darkcounts
+    U .= data.darkcounts
     @inbounds for m = 1:size(x, 2)
-        add_pxcounts!(V, view(x, :, m:m, :), h, data)
-        M.logℒ[m+1] = _logℒ(data.frames, V, ΔU, 𝟙)
+        add_pxcounts!(U, view(x, :, m:m, :), h, data)
+        M.logℒ[m+1] = _logℒ(data.frames, U, ΔU, 𝟙)
     end
     return M
 end

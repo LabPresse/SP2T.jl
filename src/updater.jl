@@ -124,7 +124,7 @@ function update!(
     aux::AuxiliaryVariables,
 ) where {T}
     shuffletracks!(x, y, M)
-    setlogℒ!(M, aux.V, aux.U, x, h, data, aux.ΔU, aux.𝟙U)
+    setlogℒ!(M, aux.U, x, h, data, aux.ΔU, aux.𝟙U)
     setlog𝒫!(M, 𝑇)
     sample!(M)
     return M
