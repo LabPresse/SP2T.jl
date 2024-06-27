@@ -18,7 +18,7 @@ using NNlib: batched_mul, batched_mul!, batched_transpose
 using StatsBase: counts
 
 # Progress Meter
-using ProgressMeter
+using ProgressMeter: @showprogress
 
 # For postprocessing
 # using Combinatorics: permutations

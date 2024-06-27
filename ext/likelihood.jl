@@ -18,27 +18,27 @@ end
 SP2T._sum(x::CuArray{T,N}, 𝟙::CuArray{T,N}) where {T,N} = x ⋅ 𝟙
 
 function SP2T.Δlogℒ!(
-    ΔlogL::CuArray{T},
-    W::CuArray{UInt16},
-    U::CuArray{T},
-    V::CuArray{T},
-    ΔU::CuArray{T},
+    ΔlogL::CuArray{T,N},
+    W::CuArray{UInt16,N},
+    U::CuArray{T,N},
+    V::CuArray{T,N},
+    ΔU::CuArray{T,N},
     𝑇::Union{T,Int} = 1,
-) where {T}
+) where {T,N}
     @. ΔU = W * (logexpm1(V) - logexpm1(U)) - (V - U)
     sum!(ΔlogL, ΔU)
     ΔlogL ./= 𝑇
 end
 
 function SP2T.Δlogℒ!(
-    ΔlogL::CuArray{T,3},
-    W::CuArray{UInt16,3},
-    U::CuArray{T,3},
-    V::CuArray{T,3},
-    ΔU::CuArray{T,3},
-    𝟙::CuArray{T,3},
+    ΔlogL::CuArray{T,N},
+    W::CuArray{UInt16,N},
+    U::CuArray{T,N},
+    V::CuArray{T,N},
+    ΔU::CuArray{T,N},
+    𝟙::CuArray{T,N},
     𝑇::Union{T,Int} = 1,
-) where {T}
+) where {T,N}
     @. ΔU = W * (logexpm1(V) - logexpm1(U)) - (V - U)
     SP2T._sum!(ΔlogL, ΔU, 𝟙)
     ΔlogL ./= 𝑇
