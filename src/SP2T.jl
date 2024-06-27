@@ -53,7 +53,5 @@ include("updater.jl")
 include("posterior.jl")
 
 include("import.jl")
-# include("data_viewer.jl")
-# include("visualization.jl")
 
 end
