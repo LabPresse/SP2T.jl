@@ -93,17 +93,15 @@ function getframes(
     batchsize::Integer,
 )
     framesize = width * height
-    count, framesleft = countframes(indices[end], framesize, batchsize)
+    nframes, framesleft = countframes(indices[end], framesize, batchsize)
     framesleft != 0 &&
         @warn "The last batch contains $framesleft frames, fewer than the batchsize provided."
-    frames = _getframes(indices, framesize, batchsize, count)
-    return reshape(frames, width, height, count)
+    frames = _getframes(indices, framesize, batchsize, nframes)
+    return reshape(frames, width, height, nframes)
 end
 
-function countframes(lastindex, framesize, batchsize)
-    nbinframes = fld1(lastindex, framesize)
-    return batchsize == 1 ? (nbinframes, 0) : divrem(nbinframes, batchsize)
-end
+countframes(lastindex::Integer, framesize::Integer, batchsize::Integer) =
+    divrem(fld1(lastindex, framesize), batchsize)
 
 function _getframes(
     indices::AbstractVector{<:Integer},
@@ -112,36 +110,58 @@ function _getframes(
     count::Integer,
 )
     npixels = framesize * count
-    if batchsize == 1
-        frames = falses(npixels)
-        frames[indices] .= true
-    else
-        frames = counts(batchindices(indices, framesize, batchsize), 1:npixels) # See StatsBase.counts
-    end
+    frames = zeros(UInt16, npixels)
+    addcounts!(frames, batchindices(indices, framesize, batchsize), 1:npixels) # See StatsBase.counts/addcounts!
     return frames
 end
 
 batchindices(indices, framesize, batchsize) =
     @. (indices - 1) ÷ (framesize * batchsize) * framesize + mod1(indices, framesize)
 
-function getROIindices(indices, ROIbounds, width, height)
-    newwidth, newheight =
-        ROIbounds[2, 1] - ROIbounds[1, 1] + 1, ROIbounds[2, 2] - ROIbounds[1, 2] + 1
-    cartesianindices = cartesianize(indices, width, width * height)
-    ROIcartesianindices = extractROI!(cartesianindices, ROIbounds)
-    return linearize(ROIcartesianindices, newwidth, newheight)
-end
+# function getROIindices(
+#     indices::AbstractVector{<:Integer},
+#     ROIbounds::AbstractMatrix{<:Integer},
+#     width::Integer,
+#     height::Integer,
+# )
+#     newwidth, newheight =
+#         ROIbounds[2, 1] - ROIbounds[1, 1] + 1, ROIbounds[2, 2] - ROIbounds[1, 2] + 1
+#     cartesianindices = cartesianize(indices, width, width * height)
+#     ROIcartesianindices = extractROI!(cartesianindices, ROIbounds)
+#     return linearize(ROIcartesianindices, newwidth, newheight)
+# end
 
-function cartesianize(indices, width, framesize)
-    cartesianindices = Matrix{eltype(indices)}(undef, length(indices), 3)
+function cartesianize(
+    indices::AbstractVector{T},
+    width::Integer,
+    framesize::Integer,
+) where {T<:Integer}
+    cartesianindices = Matrix{T}(undef, length(indices), 3)
     return cartesianize!(cartesianindices, indices, width, framesize)
 end
 
-function cartesianize!(cartesianindices, indices, width, framesize)
+function cartesianize!(
+    cartesianindices::AbstractMatrix{<:Integer},
+    indices::AbstractVector{<:Integer},
+    width::Integer,
+    framesize::Integer,
+)
     cartesianindices[:, 1] .= mod1.(indices, width)
     cartesianindices[:, 2] .= fld1.(mod1.(indices, framesize), width)
     cartesianindices[:, 3] .= fld1.(indices, framesize)
     return cartesianindices
+end
+
+function cartesianize!(
+    cartesianindex::AbstractVector{<:Integer},
+    index::Integer,
+    width::Integer,
+    framesize::Integer,
+)
+    cartesianindex[1] = mod1(index, width)
+    cartesianindex[2] = fld1(mod1(index, framesize), width)
+    cartesianindex[3] = fld1(index, framesize)
+    return cartesianindex
 end
 
 function extractROI!(cartesianindices, ROIbounds)
@@ -152,12 +172,48 @@ function extractROI!(cartesianindices, ROIbounds)
     return cartesianindices[inROI, :]
 end
 
-function linearize(cartesianindices, width, height)
+function extractROI(
+    indices::AbstractVector{<:Integer},
+    framesize::NTuple{2,<:Integer},
+    ROIorigin::NTuple{3,<:Integer},
+    ROIrange::NTuple{3,<:Integer},
+)
+    cartesianindex = similar(indices, 3)
+    newindices = similar(indices, 0)
+    for index in indices
+        cartesianize!(cartesianindex, index, framesize[1], framesize[1] * framesize[2])
+        cartesianindex .-= ROIorigin .- 1
+        if cartesianindex[3] > ROIrange[3]
+            break
+        elseif 0 < cartesianindex[1] <= ROIrange[1] &&
+               0 < cartesianindex[2] <= ROIrange[2] &&
+               0 < cartesianindex[3]
+            push!(newindices, linearize(cartesianindex, ROIrange[1], ROIrange[2]))
+        end
+    end
+    return newindices
+end
+
+linearize(cartesianindices::AbstractVector{<:Integer}, width::Integer, height::Integer) =
+    (cartesianindices[3] - 1) * height * width +
+    (cartesianindices[2] - 1) * height +
+    cartesianindices[1]
+
+function linearize(
+    cartesianindices::AbstractMatrix{<:Integer},
+    width::Integer,
+    height::Integer,
+)
     indices = similar(cartesianindices, axes(cartesianindices, 1))
     return linearize!(indices, cartesianindices, height, width)
 end
 
-function linearize!(indices, cartesianindices, width, height)
+function linearize!(
+    indices::AbstractVector{<:Integer},
+    cartesianindices::AbstractMatrix{<:Integer},
+    width::Integer,
+    height::Integer,
+)
     @views @. indices =
         (cartesianindices[:, 3] - 1) * height * width +
         (cartesianindices[:, 2] - 1) * height +

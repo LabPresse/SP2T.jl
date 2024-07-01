@@ -15,7 +15,7 @@ using NNlib: batched_mul, batched_mul!, batched_transpose
 # using JLD2
 
 #
-using StatsBase: counts
+using StatsBase: counts, addcounts!
 
 # Progress Meter
 using ProgressMeter: @showprogress
@@ -36,7 +36,7 @@ export BrownianTracks,
 export simulate!, runMCMC!, maxcount, runMCMC
 # export visualize, viewframes
 
-export readbin, getframes, getROIindices, pxsize
+export readbin, getframes, pxsize, extractROI
 
 include("data.jl")
 include("annealing.jl")

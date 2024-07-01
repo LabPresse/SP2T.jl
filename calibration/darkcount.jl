@@ -1,5 +1,7 @@
 using SP2T
 using JLD2
+using GLMakie
+using ColorSchemes
 
 function get_darkcounts(frames)
     darkcounts = Array{Float64}(undef, size(frames, 1), size(frames, 2))
@@ -13,13 +15,17 @@ indices = readbin(
     "/home/lancexwq/Dropbox (ASU)/SinglePhotonTracking/Data/Weiqing-Nathan/Diffusing Beads/GYbeads_SPADdirect_b2_10p3us/",
 );
 
-ROIindices = getROIindices(indices, [291 191 270*255+1; 340 240 300*255], 512, 512);
+DCindices = extractROI(indices, (512, 512), (291, 131, 1), (340, 180, 30 * 255));
 
-frames = getframes(ROIindices, width = 50, height = 50, batchsize = 1);
+DCframes = getframes(DCindices, width = 50, height = 50, batchsize = 1);
 
-darkcounts = get_darkcounts(frames)
+darkcounts = get_darkcounts(DCframes)
 
 idx = darkcounts .== 0
 @views darkcounts[idx] .+= eps()
 
-jldsave("./data/beads/darkcounts1.jld2"; darkcounts)
+fig = Figure()
+ax = Axis(fig[1, 1], aspect = DataAspect())
+heatmap!(ax, darkcounts, colormap = :bone)
+
+jldsave("./data/beads/darkcounts2.jld2"; darkcounts)
