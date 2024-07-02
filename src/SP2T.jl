@@ -34,7 +34,6 @@ export BrownianTracks,
     CircularGaussianLorentzian
 
 export simulate!, runMCMC!, maxcount, runMCMC
-# export visualize, viewframes
 
 export readbin, getframes, pxsize, extractROI
 
