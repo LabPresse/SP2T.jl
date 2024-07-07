@@ -13,3 +13,4 @@ extra
 .DS_Store
 data
 *.jld2
+benchmarks
