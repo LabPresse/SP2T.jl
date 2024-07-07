@@ -26,12 +26,11 @@ function setlogℒ!(
     h::T,
     data::Data,
     ΔU::AbstractArray{T,3},
-    𝟙::AbstractArray{T,3},
 ) where {T}
     U .= data.darkcounts
     @inbounds for m = 1:size(x, 2)
         add_pxcounts!(U, view(x, :, m:m, :), h, data)
-        M.logℒ[m+1] = _logℒ(data.frames, U, ΔU, 𝟙)
+        M.logℒ[m+1] = _logℒ(data.frames, U, ΔU)
     end
     return M
 end
@@ -44,8 +43,10 @@ function sample!(M::NEmitters)
 end
 
 function shuffletracks!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, M::Integer) where {T}
+    i = randperm(M)
+    isequal(i, 1:M) && return x
     @views begin
-        copyto!(y[:, 1:M, :], x[:, randperm(M), :])
+        copyto!(y[:, 1:M, :], x[:, i, :])
         copyto!(x[:, 1:M, :], y[:, 1:M, :])
     end
     return x

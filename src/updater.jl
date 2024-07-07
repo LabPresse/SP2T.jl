@@ -110,7 +110,7 @@ function update!(
     aux::AuxiliaryVariables,
 ) where {T}
     diff²!(aux.Δx², x)
-    setparams!(D, aux.Δx², 𝑇, aux.𝟙Δx)
+    setparams!(D, aux.Δx², 𝑇)
     return sample!(D)
 end
 
@@ -124,7 +124,7 @@ function update!(
     aux::AuxiliaryVariables,
 ) where {T}
     shuffletracks!(x, y, M)
-    setlogℒ!(M, aux.U, x, h, data, aux.ΔU, aux.𝟙U)
+    setlogℒ!(M, aux.U, x, h, data, aux.ΔU)
     setlog𝒫!(M, 𝑇)
     sample!(M)
     return M
@@ -176,7 +176,7 @@ function runMCMC!(
 )
     prev_niters = chain.samples[end].iteration
     aux = AuxiliaryVariables(x, data)
-    M.logℒ[1] = _logℒ(data.frames, aux.V, aux.ΔU, aux.𝟙U)
+    M.logℒ[1] = _logℒ(data.frames, aux.V, aux.ΔU)
     runMCMC!(chain, x, M, D, h, data, niters, prev_niters, aux)
 end
 

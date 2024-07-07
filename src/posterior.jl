@@ -1,7 +1,7 @@
 _logpdf(n::Normal₃, x) = sum(@. -(x - n.μ) / (2 * n.σ^2))
 
 _logpdf(x::BrownianTracks, D, aux::AuxiliaryVariables) =
-    -log(D) * length(aux.Δx²) / 2 - _sum(aux.Δx², aux.𝟙Δx) / (4 * D) -
+    -log(D) * length(aux.Δx²) / 2 - sum(vec(aux.Δx²)) / (4 * D) -
     _logpdf(x.prior, view(x.value, :, :, 1))
 
 _logpdf(D::Diffusivity) = -(D.πparams[1] + 1) * log(D.value) - D.πparams[2] / D.value
@@ -20,7 +20,7 @@ function log𝒫logℒ(
 )
     diff²!(aux, x.value)
     pxcounts!(aux.U, view(x.value, :, 1:M.value, :), h.value, data)
-    logℒ = _logℒ(data.frames, aux.U, aux.ΔU, aux.𝟙U)
+    logℒ = _logℒ(data.frames, aux.U, aux.ΔU)
     log𝒫 = logℒ + _logpdf(x, D.value, aux) + _logpdf(D) + _logpdf(M) + _logpdf(h)
     return log𝒫, logℒ
 end
