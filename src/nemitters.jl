@@ -25,32 +25,42 @@ function setlogℒ!(
     x::AbstractArray{T,3},
     h::T,
     data::Data,
-    ΔU::AbstractArray{T,3},
+    Sᵤ::AbstractArray{T,3},
 ) where {T}
     U .= data.darkcounts
-    @inbounds for m = 1:size(x, 2)
-        add_pxcounts!(U, view(x, :, m:m, :), h, data)
-        M.logℒ[m+1] = _logℒ(data.frames, U, ΔU)
+    @inbounds for m = 1:size(x, 3)
+        add_pxcounts!(U, view(x, :, :, m:m), h, data)
+        M.logℒ[m+1] = _logℒ(data.frames, U, data.mask, Sᵤ)
     end
     return M
 end
 
-randc(logp) = argmax(logp .- log.(randexp!(similar(logp))))
+randc(logp::AbstractArray) = argmax(logp .- log.(randexp!(similar(logp))))
 
 function sample!(M::NEmitters)
     M.value = randc(M.log𝒫) - 1
     return M
 end
 
-function shuffletracks!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, M::Integer) where {T}
-    i = randperm(M)
-    isequal(i, 1:M) && return x
-    @views begin
-        copyto!(y[:, 1:M, :], x[:, i, :])
-        copyto!(x[:, 1:M, :], y[:, 1:M, :])
-    end
+function _permute!(
+    x::AbstractArray{T,3},
+    p::AbstractVector{<:Integer},
+    y::AbstractArray{T,3},
+) where {T}
+    @views copyto!(y, x[:, :, p])
+    copyto!(x, y)
+end
+
+function permuteemitters!(
+    x::AbstractArray{T,3},
+    y::AbstractArray{T,3},
+    M::Integer,
+) where {T}
+    p = randperm(M)
+    isequal(p, 1:M) && return x
+    @views _permute!(x[:, :, 1:M], p, y[:, :, 1:M])
     return x
 end
 
-shuffletracks!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, M::NEmitters) where {T} =
-    shuffletracks!(x, y, M.value)
+permuteemitters!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, M::NEmitters) where {T} =
+    permuteemitters!(x, y, M.value)

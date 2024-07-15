@@ -7,7 +7,7 @@ function simulate!(
     σ = [0, 0, 0],
 )
     T = typeof(data.period)
-    x = Array{T}(undef, 3, nemitters, size(data.frames, 3))
+    x = Array{T}(undef, size(data.frames, 3), 3, nemitters)
     D = convert(T, diffusivity) * data.period
     h = convert(T, brightness) * data.period
     σ = convert(Vector{T}, σ)
@@ -33,43 +33,43 @@ function propose!(
 end
 
 function update_odd!(
-    x::AbstractArray{T,3},
-    y::AbstractArray{T,3},
+    𝐱::AbstractArray{T,3},
+    𝐲::AbstractArray{T,3},
     Δx²::AbstractArray{T,3},
     Δy²::AbstractArray{T,3},
     D::T,
-    logr::AbstractArray{T,3},
-    accept::AbstractArray{Bool,3},
+    logr::AbstractVector{T},
+    accept::AbstractVector{Bool},
     ΔΔx²::AbstractArray{T,3},
     aux::AuxiliaryVariables,
 ) where {T}
-    oddΔlogπ!(aux.ΔlogP, x, y, Δx², Δy², D, ΔΔx², aux.ΣΔΔx²)
+    oddΔlogπ!(aux.ΔlogP, 𝐱, 𝐲, Δx², Δy², D, ΔΔx², aux.ΣΔΔx²)
     @views begin
         logr[1:2:end] .+= aux.ΔlogP[1:2:end]
         # accept_odd!(x, y, accept, logr)
         accept[1:2:end] .= logr[1:2:end] .> 0
     end
-    copyidxto!(x, y, accept)
+    copyidxto!(𝐱, 𝐲, accept)
 end
 
 function update_even!(
-    x::AbstractArray{T,3},
-    y::AbstractArray{T,3},
+    𝐱::AbstractArray{T,3},
+    𝐲::AbstractArray{T,3},
     Δx²::AbstractArray{T,3},
     Δy²::AbstractArray{T,3},
     D::T,
-    logr::AbstractArray{T,3},
-    accept::AbstractArray{Bool,3},
+    logr::AbstractVector{T},
+    accept::AbstractVector{Bool},
     ΔΔx²::AbstractArray{T,3},
     aux::AuxiliaryVariables,
 ) where {T}
-    evenΔlogπ!(aux.ΔlogP, x, y, Δx², Δy², D, ΔΔx², aux.ΣΔΔx²)
+    evenΔlogπ!(aux.ΔlogP, 𝐱, 𝐲, Δx², Δy², D, ΔΔx², aux.ΣΔΔx²)
     @views begin
         logr[2:2:end] .+= aux.ΔlogP[2:2:end]
         # accept_even!(x, y, accept, logr)
         accept[2:2:end] .= logr[2:2:end] .> 0
     end
-    copyidxto!(x, y, accept)
+    copyidxto!(𝐱, 𝐲, accept)
 end
 
 function update_ontracks!(
@@ -77,8 +77,8 @@ function update_ontracks!(
     M::Integer,
     D::T,
     h::T,
-    data::Data,
-    𝑇::Union{T,Int},
+    data::Data{T},
+    𝑇::T,
     aux::AuxiliaryVariables,
 ) where {T}
     MHinit!(x)
@@ -87,7 +87,8 @@ function update_ontracks!(
     propose!(yᵒⁿ, xᵒⁿ, x)
     pxcounts!(aux.U, xᵒⁿ, h, data)
     pxcounts!(aux.V, yᵒⁿ, h, data)
-    x.logratio .+= Δlogℒ!(aux.ΔlogP, data.frames, aux.U, aux.V, aux.ΔU, 𝑇)
+    Δlogℒ!(aux.ΔlogP, data.frames, aux.U, aux.V, data.mask, aux.Sᵤ)
+    x.logratio .+= anneal!(aux.ΔlogP, 𝑇)
     addΔlogπ₁!(x.logratio, xᵒⁿ, yᵒⁿ, x.prior)
     update_odd!(xᵒⁿ, yᵒⁿ, Δxᵒⁿ², Δyᵒⁿ², D, x.logratio, x.accepted, ΔΔxᵒⁿ², aux)
     update_even!(xᵒⁿ, yᵒⁿ, Δxᵒⁿ², Δyᵒⁿ², D, x.logratio, x.accepted, ΔΔxᵒⁿ², aux)
@@ -97,7 +98,7 @@ function update_ontracks!(
 end
 
 function update_offtracks!(x::BrownianTracks, M::Integer, D::Real)
-    @views xᵒᶠᶠ = x.value[:, M+1:end, :]
+    @views xᵒᶠᶠ = x.value[:, :, M+1:end]
     μ, σ = _params(x.prior)
     simulate!(xᵒᶠᶠ, μ, σ, D)
     return x
@@ -106,11 +107,11 @@ end
 function update!(
     D::Diffusivity,
     x::AbstractArray{T,3},
-    𝑇::Union{T,Int},
-    aux::AuxiliaryVariables,
+    𝑇::T,
+    Δx²::AbstractArray{T,3},
 ) where {T}
-    diff²!(aux.Δx², x)
-    setparams!(D, aux.Δx², 𝑇)
+    diff²!(Δx², x)
+    setparams!(D, Δx², 𝑇)
     return sample!(D)
 end
 
@@ -120,11 +121,12 @@ function update!(
     y::AbstractArray{T,3},
     h::T,
     data::Data,
-    𝑇::Union{T,Int},
-    aux::AuxiliaryVariables,
+    𝑇::T,
+    U::AbstractArray{T,3},
+    Sᵤ::AbstractArray{T,3},
 ) where {T}
-    shuffletracks!(x, y, M)
-    setlogℒ!(M, aux.U, x, h, data, aux.ΔU)
+    permuteemitters!(x, y, M)
+    setlogℒ!(M, U, x, h, data, Sᵤ)
     setlog𝒫!(M, 𝑇)
     sample!(M)
     return M
@@ -151,8 +153,8 @@ function runMCMC!(
         𝑇 = temperature(chain, iter)
         update_offtracks!(x, M.value, D.value)
         anyactive(M) && update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, aux)
-        update!(D, x.value, 𝑇, aux)
-        update!(M, x.value, x.valueᵖ, h.value, data, 𝑇, aux)
+        update!(D, x.value, 𝑇, aux.Δx²)
+        update!(M, x.value, x.valueᵖ, h.value, data, 𝑇, aux.U, aux.Sᵤ)
         if iter % saveperiod(chain) == 0
             log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, aux)
             push!(chain.samples, Sample(x, M, D, h, iter + prev_niters, 𝑇, log𝒫, logℒ))
@@ -172,11 +174,11 @@ function runMCMC!(
     D::Diffusivity,
     h::Brightness,
     data::Data,
-    niters,
+    niters::Integer,
 )
     prev_niters = chain.samples[end].iteration
     aux = AuxiliaryVariables(x, data)
-    M.logℒ[1] = _logℒ(data.frames, aux.V, aux.ΔU)
+    M.logℒ[1] = _logℒ(data.frames, aux.V, data.mask, aux.Sᵤ)
     runMCMC!(chain, x, M, D, h, data, niters, prev_niters, aux)
 end
 
@@ -188,8 +190,9 @@ function runMCMC(;
     data::Data,
     niters::Integer = 1000,
     sizelimit::Integer = 1000,
-    annealing::AbstractAnnealing = NoAnnealing(),
+    annealing::Union{AbstractAnnealing,Nothing} = nothing,
 )
+    isnothing(annealing) && (annealing = NoAnnealing{typeof(data.period)}())
     chain =
         Chain([Sample(tracks, nemitters, diffusivity, brightness)], sizelimit, annealing)
     runMCMC!(chain, tracks, nemitters, diffusivity, brightness, data, niters)

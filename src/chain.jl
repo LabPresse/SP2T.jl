@@ -3,12 +3,21 @@ struct Sample{Ts,Ta}
     diffusivity::Ts
     brightness::Ts
     iteration::Int # iteration
-    temperature::Union{Ts,Int} # temperature
+    𝑇::Ts # temperature
     log𝒫::Ts # log posterior
     logℒ::Ts # log likelihood
 end
 
-Sample(x::Array, M, D, h, i, T, log𝒫, logℒ) = Sample(x[:, 1:M, :], D, h, i, T, log𝒫, logℒ)
+Sample(
+    x::Array{T,3},
+    M::Integer,
+    D::T,
+    h::T,
+    i::Integer,
+    𝑇::T,
+    log𝒫::T,
+    logℒ::T,
+) where {T} = Sample(x[:, :, 1:M], D, h, i, 𝑇, log𝒫, logℒ)
 
 Sample(x::AbstractArray{T,3}, M::Integer, D::T, h::T) where {T<:AbstractFloat} =
     Sample(x, M, D, h, 0, oneunit(T), convert(T, NaN), convert(T, NaN))
@@ -32,34 +41,35 @@ function shrink!(chain::Chain)
     return chain
 end
 
-temperature(chain::Chain, i) = temperature(chain.annealing, i)
+temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 
 saveperiod(chain::Chain) =
     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
 
-struct AuxiliaryVariables{T}
-    Δx²::T
-    Δy²::T
-    ΔΔx²::T
-    ΣΔΔx²::T
-    ΔlogP::T
-    U::T
-    V::T
-    ΔU::T
+struct AuxiliaryVariables{Ta,Tv}
+    Δx²::Ta
+    Δy²::Ta
+    ΔΔx²::Ta
+    ΣΔΔx²::Tv
+    ΔlogP::Tv
+    U::Ta
+    V::Ta
+    Sᵤ::Ta
 end
 
 function AuxiliaryVariables(
     x::AbstractArray{T,3},
-    xbnds::AbstractVector,
-    ybnds::AbstractVector,
+    xbnds::AbstractVector{T},
+    ybnds::AbstractVector{T},
     F::AbstractMatrix{T},
 ) where {T}
-    Δx² = similar(x, size(x, 1), size(x, 2), size(x, 3) - 1)
-    U = similar(x, length(xbnds) - 1, length(ybnds) - 1, size(x, 3))
+    N = size(x, 1)
+    Δx² = similar(x, N - 1, size(x, 2), size(x, 3))
+    U = similar(x, length(xbnds) - 1, length(ybnds) - 1, N)
     V = similar(U)
     V .= F
-    ΣΔΔx² = similar(x, 1, 1, size(x, 3) - 1)
-    ΔlogP = similar(x, 1, 1, size(x, 3))
+    ΣΔΔx² = similar(x, N - 1)
+    ΔlogP = similar(x, N)
     return AuxiliaryVariables(
         Δx²,
         similar(Δx²),
@@ -73,9 +83,4 @@ function AuxiliaryVariables(
 end
 
 displacements(aux::AuxiliaryVariables, M::Integer) =
-    @views aux.Δx²[:, 1:M, :], aux.Δy²[:, 1:M, :], aux.ΔΔx²[:, 1:M, :]
-
-function diff²!(aux::AuxiliaryVariables, x)
-    diff²!(aux.Δx², x)
-    return aux
-end
+    @views aux.Δx²[:, :, 1:M], aux.Δy²[:, :, 1:M], aux.ΔΔx²[:, :, 1:M]

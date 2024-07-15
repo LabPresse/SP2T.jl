@@ -5,7 +5,7 @@ using SP2T, CUDA, NNlib, LogExpFunctions, SpecialFunctions, Random, LinearAlgebr
 include("data.jl")
 include("chain.jl")
 
-include("likelihood.jl")
+include("nemitters.jl")
 include("track.jl")
 
 end
