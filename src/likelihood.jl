@@ -1,5 +1,4 @@
 # using vec makes GPU sum much faster
-# S stands for scratch within this file 
 
 _logℒ(
     W::AbstractArray{Bool,N},

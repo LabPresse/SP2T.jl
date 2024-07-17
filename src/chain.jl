@@ -54,7 +54,7 @@ struct AuxiliaryVariables{Ta,Tv}
     ΔlogP::Tv
     U::Ta
     V::Ta
-    Sᵤ::Ta
+    Sᵤ::Ta # S for scratch
 end
 
 function AuxiliaryVariables(

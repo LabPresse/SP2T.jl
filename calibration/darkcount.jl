@@ -27,5 +27,6 @@ idx = darkcounts .== 0
 fig = Figure()
 ax = Axis(fig[1, 1], aspect = DataAspect())
 heatmap!(ax, darkcounts, colormap = :bone)
+fig
 
 jldsave("./data/beads/darkcounts2.jld2"; darkcounts)
