@@ -33,9 +33,7 @@ export BrownianTracks,
     Normal₃,
     CircularGaussianLorentzian
 
-export simulate!, runMCMC!, maxcount, runMCMC
-
-export readbin, getframes, pxsize, extractROI
+export simulate!, runMCMC!, maxcount, runMCMC, pxsize
 
 include("data.jl")
 include("annealing.jl")
@@ -51,6 +49,6 @@ include("brightness.jl")
 include("updater.jl")
 include("posterior.jl")
 
-include("import.jl")
+# include("import.jl")
 
 end
