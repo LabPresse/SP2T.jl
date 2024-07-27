@@ -8,20 +8,9 @@ using LogExpFunctions
 using LinearAlgebra
 using Random
 
-# GPU 
 using NNlib: batched_mul, batched_mul!, batched_transpose
 
-# # IO
-# using JLD2
-
-#
-using StatsBase: counts, addcounts!
-
-# Progress Meter
 using ProgressMeter: @showprogress
-
-# For postprocessing
-# using Combinatorics: permutations
 
 export BrownianTracks,
     NEmitters,
