@@ -48,11 +48,11 @@ chain = runMCMC(
     diffusivity = D,
     brightness = h,
     data = data,
-    niters = 999,
+    niters = 1,
     sizelimit = 1000,
 );
 
-# @profview runMCMC!(chain, x, M, D, h, data, 10);
+@profview runMCMC!(chain, x, M, D, h, data, 10);
 
 jldsave("./example/chain_gpu.jld2"; chain)
 

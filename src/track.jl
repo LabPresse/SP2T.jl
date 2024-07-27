@@ -100,10 +100,12 @@ function addΔlogπ₁!(
     return ln𝓇
 end
 
-diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}) where {T} =
-    @views Δx² .= (x[2:end, :, :] .- x[1:end-1, :, :]) .^ 2
+diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}, y::AbstractArray{T,3}) where {T} =
+    @views Δx² .= (y[2:end, :, :] .- x[1:end-1, :, :]) .^ 2
 
-function diff²!(
+diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}) where {T} = diff²!(Δx², x, x)
+
+function staggered_diff²!(
     Δx²::AbstractArray{T,3},
     x1::AbstractArray{T,3},
     x2::AbstractArray{T,3},
@@ -165,7 +167,7 @@ function oddΔlogπ!(
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
     diff²!(Δx², x)
-    diff²!(Δy², x, y)
+    staggered_diff²!(Δy², x, y)
     ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², D)
     oddΔlogπ!(Δlogπ, ΣΔΔx²)
 end
@@ -181,7 +183,7 @@ function evenΔlogπ!(
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
     diff²!(Δx², x)
-    diff²!(Δy², y, x)
+    staggered_diff²!(Δy², y, x)
     ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², D)
     evenΔlogπ!(Δlogπ, ΣΔΔx²)
 end
