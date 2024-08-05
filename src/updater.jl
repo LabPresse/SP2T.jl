@@ -118,14 +118,12 @@ end
 function update!(
     M::NEmitters,
     x::AbstractArray{T,3},
-    y::AbstractArray{T,3},
     h::T,
     data::Data,
     𝑇::T,
     U::AbstractArray{T,3},
     Sᵤ::AbstractArray{T,3},
 ) where {T}
-    permuteemitters!(x, y, M)
     setlogℒ!(M, U, x, h, data, Sᵤ)
     setlog𝒫!(M, 𝑇)
     sample!(M)
@@ -152,9 +150,12 @@ function runMCMC!(
     @showprogress 1 "Computing..." for iter = 1:niters
         𝑇 = temperature(chain, iter)
         update_offtracks!(x, M.value, D.value)
-        anyactive(M) && update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, aux)
+        if anyactive(M)
+            update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, aux)
+            permuteemitters!(x.value, x.valueᵖ, M.value)
+        end
         update!(D, x.value, 𝑇, aux.Δx²)
-        update!(M, x.value, x.valueᵖ, h.value, data, 𝑇, aux.U, aux.Sᵤ)
+        # update!(M, x.value, h.value, data, 𝑇, aux.U, aux.Sᵤ)
         if iter % saveperiod(chain) == 0
             log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, aux)
             push!(chain.samples, Sample(x, M, D, h, iter + prev_niters, 𝑇, log𝒫, logℒ))
@@ -178,7 +179,7 @@ function runMCMC!(
 )
     prev_niters = chain.samples[end].iteration
     aux = AuxiliaryVariables(x, data)
-    M.logℒ[1] = _logℒ(data.frames, aux.V, data.mask, aux.Sᵤ)
+    M.logℒ[1] = logℒ(data, aux.V, aux.Sᵤ)
     runMCMC!(chain, x, M, D, h, data, niters, prev_niters, aux)
 end
 
