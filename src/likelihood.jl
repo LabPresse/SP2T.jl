@@ -1,10 +1,16 @@
 # using vec makes GPU sum much faster
 
+logℒ(data::Data, U::AbstractArray{T,N}, S::AbstractArray{T,N}) where {T,N} =
+    if data.frames isa Union{BitArray,Array{Bool}}
+        _logℒ(data.frames, U, data.mask)
+    else
+        _logℒ(data.frames, U, data.mask, S)
+    end
+
 _logℒ(
     W::AbstractArray{Bool,N},
     U::AbstractArray{T,N},
     M::AbstractMatrix{Bool},
-    S::AbstractArray{T,N},
 ) where {T,N} = sum(logexpm1.(U[W.&M])) - sum(U .* M)
 
 function _logℒ(
