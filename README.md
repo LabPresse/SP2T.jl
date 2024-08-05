@@ -22,7 +22,7 @@ SP²T is written in [Julia](https://julialang.org/), so please install it follow
 
 We write SP²T so that it can run on CPU or GPU. However, running on GPU is much (>10x) faster. For this reason, you are highly encouraged to try it out.
 
-Although tested mostly on Nvidia GPUs, SP²T itself is not limited to any GPU company as long as the packages it relies on (e.g., NNlib.jl) support the GPU you have.
+Although tested mostly on Nvidia GPUs, SP²T itself is not limited to any GPU company as long as the packages it relies on (e.g., [NNlib.jl](https://github.com/FluxML/NNlib.jl)) support the GPU you have.
 
 ## Installation
 
@@ -38,7 +38,7 @@ in the Julia REPL.
 
 ### CUDA.jl
 
-As mentioned in [Prerequisites](#prerequisites), using GPU is highly recommended. Please refer to the [JuliaGPU website](https://juliagpu.org/) for what and how to install based on your hardware.
+As mentioned in the [Prerequisites](#prerequisites), using GPU is highly recommended. Please refer to the [JuliaGPU website](https://juliagpu.org/) for what and how to install based on your hardware.
 
 ## BNP-Track Framework
 
