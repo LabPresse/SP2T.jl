@@ -5,8 +5,8 @@ mutable struct NEmitters{Tv}
     log𝒫::Tv
 end
 
-function NEmitters(; value, maxcount, onprob)
-    logprior = collect((0:maxcount) .* log1p(-onprob))
+function NEmitters(; value::Integer, maxcount::Integer, logonprob::Real)
+    logprior = collect((0:maxcount) .* logonprob)
     return NEmitters(value, logprior, similar(logprior), similar(logprior))
 end
 
@@ -30,7 +30,7 @@ function setlogℒ!(
     U .= data.darkcounts
     @inbounds for m = 1:size(x, 3)
         add_pxcounts!(U, view(x, :, :, m:m), h, data)
-        M.logℒ[m+1] = _logℒ(data.frames, U, data.mask, Sᵤ)
+        M.logℒ[m+1] = logℒ(data, U, Sᵤ)
     end
     return M
 end
