@@ -30,7 +30,7 @@ _σ!(
     σ::AbstractArray{T,N},
     z::AbstractArray{T,N},
     PSF::CircularGaussianLorentzian{T},
-) where {T,N} = @. σ = √convert(T, 2) * PSF.σ₀ * √(oneunit(T) + (z / PSF.z₀)^2)
+) where {T,N} = @. σ = PSF.σ₀ * √(oneunit(T) + (z / PSF.z₀)^2)
 
 function _σ(
     z::AbstractArray{T},
@@ -43,6 +43,11 @@ end
 function _erf(x::AbstractArray{T}, bnds::AbstractVector{T}, σ::AbstractArray{T}) where {T}
     𝐗 = @. (bnds - $PermutedDimsArray(x, (2, 3, 1))) / (√convert(T, 2) * σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+end
+
+function maxPSF(PSF::CircularGaussianLorentzian, pxsize::Real)
+    x = pxsize / 2 / (√2 * PSF.σ₀)
+    erf(-x, x)^2 / 4
 end
 
 struct Data{T}
@@ -116,6 +121,8 @@ framecenter(data::Data) = [
 
 pxsize(data::Data) = data.pxboundsx[2] - data.pxboundsx[1]
 
+maxPSF(data::Data) = maxPSF(data.PSF, pxsize(data))
+
 to_cpu(data::Data) = Data(
     Array(data.frames),
     data.batchsize,
@@ -144,7 +151,7 @@ function add_pxcounts!(
     return batched_mul!(𝐔, 𝐗, batched_transpose(𝐘), h, β)
 end
 
-add_pxcounts!(U::AbstractArray{T,3}, x::AbstractArray{T,3}, h::T, data::Data) where {T} =
+add_pxcounts!(U::AbstractArray{T,3}, x::AbstractArray{T,3}, h::T, data::Data{T}) where {T} =
     add_pxcounts!(U, x, h, data.pxboundsx, data.pxboundsy, data.PSF)
 
 function get_pxPSF(
