@@ -9,7 +9,7 @@ struct Sample{Ts,Ta}
 end
 
 Sample(
-    x::Array{T,3},
+    x::AbstractArray{T,3},
     M::Integer,
     D::T,
     h::T,
@@ -17,7 +17,7 @@ Sample(
     𝑇::T,
     log𝒫::T,
     logℒ::T,
-) where {T} = Sample(x[:, :, 1:M], D, h, i, 𝑇, log𝒫, logℒ)
+) where {T} = Sample(collect(view(x, :, :, 1:M)), D, h, i, 𝑇, log𝒫, logℒ)
 
 Sample(x::AbstractArray{T,3}, M::Integer, D::T, h::T) where {T<:AbstractFloat} =
     Sample(x, M, D, h, 0, oneunit(T), convert(T, NaN), convert(T, NaN))
