@@ -22,7 +22,7 @@ export BrownianTracks,
     Normal₃,
     CircularGaussianLorentzian
 
-export simulate!, runMCMC!, maxcount, runMCMC, pxsize
+export simulate!, runMCMC!, maxcount, runMCMC
 
 include("data.jl")
 include("annealing.jl")

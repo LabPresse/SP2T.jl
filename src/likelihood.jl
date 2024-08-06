@@ -1,7 +1,7 @@
 # using vec makes GPU sum much faster
 
-logℒ(data::Data, U::AbstractArray{T,N}, S::AbstractArray{T,N}) where {T,N} =
-    _logℒ(data.frames, U, data.mask, S, data.batchsize)
+# logℒ(data::Data, U::AbstractArray{T,N}, S::AbstractArray{T,N}) where {T,N} =
+#     _logℒ(data.frames, U, data.filter, data.batchsize, S)
 
 # _logℒ(
 #     W::AbstractArray{Bool,N},
@@ -9,15 +9,17 @@ logℒ(data::Data, U::AbstractArray{T,N}, S::AbstractArray{T,N}) where {T,N} =
 #     F::AbstractMatrix{Bool},
 # ) where {T,N} = sum(logexpm1.(U[W.&F])) - sum(U .* F)
 
-function _logℒ(
+function logℒ(
     W::AbstractArray{UInt16,3},
     U::AbstractArray{T,3},
     F::AbstractMatrix{Bool},
-    𝐴::AbstractArray{T,3},
-    B::Integer=1,
+    B::Integer,
+    Sₐ::AbstractArray{T,3},
+    Sᵥ::AbstractVector{T},
 ) where {T}
-    @. 𝐴 = W * logexpm1(U) - B * U
-    sum(transpose(reshape(𝐴, length(F), :)) * vec(F))
+    @. Sₐ = W * logexpm1(U) - B * U
+    mul!(Sᵥ, transpose(reshape(Sₐ, length(F), :)), vec(F))
+    sum(Sᵥ)
 end
 
 # dangerous hack
@@ -52,11 +54,11 @@ function Δlogℒ!(
     U::AbstractArray{T,3},
     V::AbstractArray{T,3},
     F::AbstractMatrix{Bool},
-    𝐴::AbstractArray{T,3},
-    B::Integer=1,
+    B::Integer,
+    S::AbstractArray{T,3},
 ) where {T}
-    @. 𝐴 = W * (logexpm1(V) - logexpm1(U)) - B * (V - U)
-    mul!(Δlogℒ, transpose(reshape(𝐴, length(F), :)), vec(F))
+    @. S = W * (logexpm1(V) - logexpm1(U)) - B * (V - U)
+    mul!(Δlogℒ, transpose(reshape(S, length(F), :)), vec(F))
 end
 
 anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇

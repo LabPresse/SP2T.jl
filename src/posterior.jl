@@ -15,13 +15,13 @@ _logpdf(h::Brightness) = (h.priorparams[1] - 1) * log(h.value) - h.value / h.pri
 function log𝒫logℒ(
     x::BrownianTracks,
     M::NEmitters,
-    D::Diffusivity,
-    h::Brightness,
-    data::Data,
-    aux::AuxiliaryVariables,
-)
-    pxcounts!(aux.U, view(x.value, :, :, 1:M.value), h.value, data)
-    logℒ1 = logℒ(data, aux.U, aux.Sᵤ)
-    log𝒫1 = logℒ1 + _logpdf(x, D.value, aux.Δx²) + _logpdf(D) + _logpdf(M) + _logpdf(h)
+    D::Diffusivity{T},
+    h::Brightness{T},
+    data::Data{T},
+    A::AuxiliaryVariables{T},
+) where {T}
+    pxcounts!(A.U, view(x.value, :, :, 1:M.value), h.value, data)
+    logℒ1 = logℒ(data.frames, A.U, data.filter, data.batchsize, A.Sₐ, A.Sᵥ)
+    log𝒫1 = logℒ1 + _logpdf(x, D.value, A.Δ𝐱²) + _logpdf(D) + _logpdf(M) + _logpdf(h)
     return log𝒫1, logℒ1
 end

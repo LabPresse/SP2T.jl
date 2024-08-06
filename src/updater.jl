@@ -1,12 +1,11 @@
 function simulate!(
-    data::Data;
+    data::Data{T};
     diffusivity::Real,
     brightness::Real,
     nemitters::Integer,
     μ = nothing,
     σ = [0, 0, 0],
-)
-    T = typeof(data.period)
+) where {T}
     x = Array{T}(undef, size(data.frames, 3), 3, nemitters)
     D = convert(T, diffusivity) * data.period
     h = convert(T, brightness) * data.period
@@ -21,10 +20,10 @@ end
 function propose!(
     x::BrownianTracks,
     M::Integer,
-    h::Real,
-    data::Data,
-    aux::AuxiliaryVariables,
-)
+    h::T,
+    data::Data{T},
+    aux::AuxiliaryVariables{T},
+) where {T}
     xᵒⁿ, yᵒⁿ = ontracks(x, M)
     propose!(yᵒⁿ, xᵒⁿ, x.perturbsize)
     pxcounts!(aux.U, xᵒⁿ, h, data)
@@ -35,18 +34,18 @@ end
 function update_odd!(
     𝐱::AbstractArray{T,3},
     𝐲::AbstractArray{T,3},
-    Δx²::AbstractArray{T,3},
-    Δy²::AbstractArray{T,3},
+    Δ𝐱²::AbstractArray{T,3},
+    Δ𝐲²::AbstractArray{T,3},
     D::T,
     logr::AbstractVector{T},
     accept::AbstractVector{Bool},
     ΔΔx²::AbstractArray{T,3},
-    aux::AuxiliaryVariables,
+    aux::AuxiliaryVariables{T},
 ) where {T}
-    oddΔlogπ!(aux.ΔlogP, 𝐱, 𝐲, Δx², Δy², D, ΔΔx², aux.ΣΔΔx²)
+    Δlogℒ = aux.Sᵥ
+    oddΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², D, ΔΔx², aux.ΣΔΔ𝐱²)
     @views begin
-        logr[1:2:end] .+= aux.ΔlogP[1:2:end]
-        # accept_odd!(x, y, accept, logr)
+        logr[1:2:end] .+= Δlogℒ[1:2:end]
         accept[1:2:end] .= logr[1:2:end] .> 0
     end
     copyidxto!(𝐱, 𝐲, accept)
@@ -55,18 +54,18 @@ end
 function update_even!(
     𝐱::AbstractArray{T,3},
     𝐲::AbstractArray{T,3},
-    Δx²::AbstractArray{T,3},
-    Δy²::AbstractArray{T,3},
+    Δ𝐱²::AbstractArray{T,3},
+    Δ𝐲²::AbstractArray{T,3},
     D::T,
     logr::AbstractVector{T},
     accept::AbstractVector{Bool},
     ΔΔx²::AbstractArray{T,3},
-    aux::AuxiliaryVariables,
+    aux::AuxiliaryVariables{T},
 ) where {T}
-    evenΔlogπ!(aux.ΔlogP, 𝐱, 𝐲, Δx², Δy², D, ΔΔx², aux.ΣΔΔx²)
+    Δlogℒ = aux.Sᵥ
+    evenΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², D, ΔΔx², aux.ΣΔΔ𝐱²)
     @views begin
-        logr[2:2:end] .+= aux.ΔlogP[2:2:end]
-        # accept_even!(x, y, accept, logr)
+        logr[2:2:end] .+= Δlogℒ[2:2:end]
         accept[2:2:end] .= logr[2:2:end] .> 0
     end
     copyidxto!(𝐱, 𝐲, accept)
@@ -79,7 +78,7 @@ function update_ontracks!(
     h::T,
     data::Data{T},
     𝑇::T,
-    aux::AuxiliaryVariables,
+    aux::AuxiliaryVariables{T},
 ) where {T}
     MHinit!(x)
     xᵒⁿ, yᵒⁿ = ontracks(x, M)
@@ -87,13 +86,12 @@ function update_ontracks!(
     propose!(yᵒⁿ, xᵒⁿ, x)
     pxcounts!(aux.U, xᵒⁿ, h, data)
     pxcounts!(aux.V, yᵒⁿ, h, data)
-    Δlogℒ!(aux.ΔlogP, data.frames, aux.U, aux.V, data.mask, aux.Sᵤ)
-    x.logratio .+= anneal!(aux.ΔlogP, 𝑇)
+    Δlogℒ!(aux.Sᵥ, data.frames, aux.U, aux.V, data.filter, data.batchsize, aux.Sₐ)
+    x.logratio .+= anneal!(aux.Sᵥ, 𝑇)
     addΔlogπ₁!(x.logratio, xᵒⁿ, yᵒⁿ, x.prior)
     update_odd!(xᵒⁿ, yᵒⁿ, Δxᵒⁿ², Δyᵒⁿ², D, x.logratio, x.accepted, ΔΔxᵒⁿ², aux)
     update_even!(xᵒⁿ, yᵒⁿ, Δxᵒⁿ², Δyᵒⁿ², D, x.logratio, x.accepted, ΔΔxᵒⁿ², aux)
     counter!(x)
-    # copyidxto!(aux.U, aux.V, x.accepted)
     return x
 end
 
@@ -119,12 +117,11 @@ function update!(
     M::NEmitters,
     x::AbstractArray{T,3},
     h::T,
-    data::Data,
+    data::Data{T},
     𝑇::T,
-    U::AbstractArray{T,3},
-    Sᵤ::AbstractArray{T,3},
+    A::AuxiliaryVariables{T},
 ) where {T}
-    setlogℒ!(M, U, x, h, data, Sᵤ)
+    setlogℒ!(M, x, h, data, A)
     setlog𝒫!(M, 𝑇)
     sample!(M)
     return M
@@ -142,31 +139,28 @@ function runMCMC!(
     M::NEmitters,
     D::Diffusivity,
     h::Brightness,
-    data::Data,
+    data::Data{T},
     niters::Integer,
     prev_niters::Integer,
-    aux::AuxiliaryVariables,
-)
+    A::AuxiliaryVariables{T},
+) where {T}
     @showprogress 1 "Computing..." for iter = 1:niters
         𝑇 = temperature(chain, iter)
         update_offtracks!(x, M.value, D.value)
         if anyactive(M)
-            update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, aux)
+            update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, A)
             permuteemitters!(x.value, x.valueᵖ, M.value)
         end
-        update!(D, x.value, 𝑇, aux.Δx²)
-        update!(M, x.value, h.value, data, 𝑇, aux.U, aux.Sᵤ)
+        update!(D, x.value, 𝑇, A.Δ𝐱²)
+        update!(M, x.value, h.value, data, 𝑇, A)
         if iter % saveperiod(chain) == 0
-            log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, aux)
+            log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, A)
             push!(chain.samples, Sample(x, M, D, h, iter + prev_niters, 𝑇, log𝒫, logℒ))
             isfull(chain) && shrink!(chain)
         end
     end
     return chain
 end
-
-AuxiliaryVariables(x::BrownianTracks, data::Data) =
-    AuxiliaryVariables(x.value, data.pxboundsx, data.pxboundsy, data.darkcounts)
 
 function runMCMC!(
     chain::Chain,
@@ -178,9 +172,10 @@ function runMCMC!(
     niters::Integer,
 )
     prev_niters = chain.samples[end].iteration
-    aux = AuxiliaryVariables(x, data)
-    M.logℒ[1] = logℒ(data, aux.V, aux.Sᵤ)
-    runMCMC!(chain, x, M, D, h, data, niters, prev_niters, aux)
+    A = AuxiliaryVariables(x.value, size(data.frames))
+    A.U .= data.darkcounts
+    M.logℒ[1] = logℒ(data.frames, A.U, data.filter, data.batchsize, A.Sₐ, A.Sᵥ)
+    runMCMC!(chain, x, M, D, h, data, niters, prev_niters, A)
 end
 
 function runMCMC(;

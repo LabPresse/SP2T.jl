@@ -21,16 +21,15 @@ end
 
 function setlogℒ!(
     M::NEmitters,
-    U::AbstractArray{T,3},
     x::AbstractArray{T,3},
     h::T,
-    data::Data,
-    Sᵤ::AbstractArray{T,3},
+    data::Data{T},
+    A::AuxiliaryVariables{T},
 ) where {T}
-    U .= data.darkcounts
+    A.U .= data.darkcounts
     @inbounds for m = 1:size(x, 3)
-        add_pxcounts!(U, view(x, :, :, m:m), h, data)
-        M.logℒ[m+1] = logℒ(data, U, Sᵤ)
+        add_pxcounts!(A.U, view(x, :, :, m:m), h, data)
+        M.logℒ[m+1] = logℒ(data.frames, A.U, data.filter, data.batchsize, A.Sₐ, A.Sᵥ)
     end
     return M
 end
