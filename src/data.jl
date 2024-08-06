@@ -57,7 +57,7 @@ struct Data{T}
     pxboundsx::AbstractVector{T}
     pxboundsy::AbstractVector{T}
     darkcounts::AbstractMatrix{T}
-    mask::AbstractMatrix{Bool}
+    filter::AbstractMatrix{Bool}
     PSF::AbstractPSF{T}
 end
 
@@ -67,7 +67,7 @@ function Data(
     period::Real,
     pxsize::Real,
     darkcounts::AbstractMatrix{<:Real},
-    maskthresholds::Tuple{<:Real,<:Real},
+    cutoffs::Tuple{<:Real,<:Real},
     NA::Real,
     refractiveindex::Real,
     wavelength::Real,
@@ -80,7 +80,7 @@ function Data(
     )
     darkcounts = T.(darkcounts)
     mask = similar(darkcounts, Bool)
-    mask .= maskthresholds[1] .< darkcounts .< maskthresholds[2]
+    mask .= cutoffs[1] .< darkcounts .< cutoffs[2]
 
     pxboundsx = similar(darkcounts, size(darkcounts, 1) + 1)
     pxboundsx .= 0:pxsize:size(darkcounts, 1)*pxsize
@@ -96,7 +96,7 @@ function Data(
     period::Real,
     pxsize::Real,
     darkcounts::AbstractMatrix{<:Real},
-    maskthresholds::Tuple{<:Real,<:Real},
+    cutoffs::Tuple{<:Real,<:Real},
     σ₀::Real,
     z₀::Real,
 )
@@ -104,7 +104,7 @@ function Data(
     PSF = CircularGaussianLorentzian{T}(σ₀, z₀)
     darkcounts = T.(darkcounts)
     mask = similar(darkcounts, Bool)
-    mask .= maskthresholds[1] .< darkcounts .< maskthresholds[2]
+    mask .= cutoffs[1] .< darkcounts .< cutoffs[2]
 
     pxboundsx = similar(darkcounts, size(darkcounts, 1) + 1)
     pxboundsx .= 0:pxsize:size(darkcounts, 1)*pxsize
@@ -119,21 +119,6 @@ framecenter(data::Data) = [
     (data.pxboundsy[1] + data.pxboundsy[end]) / 2,
     0,
 ]
-
-# pxsize(data::Data) = data.pxboundsx[2] - data.pxboundsx[1]
-
-# maxPSF(data::Data) = maxPSF(data.PSF, pxsize(data))
-
-# to_cpu(data::Data) = Data(
-#     Array(data.frames),
-#     data.batchsize,
-#     data.period,
-#     Array(data.pxboundsx),
-#     Array(data.pxboundsy),
-#     Array(data.darkcounts),
-#     Array(data.mask),
-#     data.PSF,
-# )
 
 function add_pxcounts!(
     𝐔::AbstractArray{T,3},
