@@ -46,41 +46,30 @@ temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 saveperiod(chain::Chain) =
     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
 
-struct AuxiliaryVariables{Ta,Tv}
-    Δx²::Ta
-    Δy²::Ta
-    ΔΔx²::Ta
-    ΣΔΔx²::Tv
-    ΔlogP::Tv
-    U::Ta
-    V::Ta
-    Sᵤ::Ta # S for scratch
+struct AuxiliaryVariables{T}
+    Δ𝐱²::AbstractArray{T,3}
+    Δ𝐲²::AbstractArray{T,3}
+    ΔΔ𝐱²::AbstractArray{T,3}
+    ΣΔΔ𝐱²::AbstractVector{T}
+    Sᵥ::AbstractVector{T} # scratch vector
+    U::AbstractArray{T,3}
+    V::AbstractArray{T,3}
+    Sₐ::AbstractArray{T,3} # scratch array
 end
 
-function AuxiliaryVariables(
+AuxiliaryVariables(
     x::AbstractArray{T,3},
-    xbnds::AbstractVector{T},
-    ybnds::AbstractVector{T},
-    F::AbstractMatrix{T},
-) where {T}
-    N = size(x, 1)
-    Δx² = similar(x, N - 1, size(x, 2), size(x, 3))
-    U = similar(x, length(xbnds) - 1, length(ybnds) - 1, N)
-    V = similar(U)
-    V .= F
-    ΣΔΔx² = similar(x, N - 1)
-    ΔlogP = similar(x, N)
-    return AuxiliaryVariables(
-        Δx²,
-        similar(Δx²),
-        similar(Δx²),
-        ΣΔΔx²,
-        ΔlogP,
-        U,
-        V,
-        similar(U),
-    )
-end
+    dims::Tuple{<:Integer,<:Integer,<:Integer},
+) where {T} = AuxiliaryVariables(
+    similar(x, dims[3] - 1, size(x, 2), size(x, 3)),
+    similar(x, dims[3] - 1, size(x, 2), size(x, 3)),
+    similar(x, dims[3] - 1, size(x, 2), size(x, 3)),
+    similar(x, dims[3] - 1),
+    similar(x, dims[3]),
+    similar(x, dims[1], dims[2], dims[3]),
+    similar(x, dims[1], dims[2], dims[3]),
+    similar(x, dims[1], dims[2], dims[3]),
+)
 
 displacements(aux::AuxiliaryVariables, M::Integer) =
-    @views aux.Δx²[:, :, 1:M], aux.Δy²[:, :, 1:M], aux.ΔΔx²[:, :, 1:M]
+    @views aux.Δ𝐱²[:, :, 1:M], aux.Δ𝐲²[:, :, 1:M], aux.ΔΔ𝐱²[:, :, 1:M]
