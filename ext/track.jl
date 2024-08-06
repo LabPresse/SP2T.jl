@@ -8,5 +8,5 @@ function SP2T.addΔlogπ₁!(
     return ln𝓇
 end
 
-SP2T.copyidxto!(x::CuArray{T,N}, y::CuArray{T,N}, i::CuVector{Bool}) where {T,N} =
-    @. x = (i * y) + (~i * x)
+SP2T.copyidxto!(dest::CuArray{T,N}, src::CuArray{T,N}, i::CuVector{Bool}) where {T,N} =
+    @. dest = (i * src) + (~i * dest)

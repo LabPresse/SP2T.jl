@@ -134,9 +134,13 @@ function counter!(x::BrownianTracks)
     return x
 end
 
-function copyidxto!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, i::Vector{Bool}) where {T}
-    @views x[i, :, :] .= y[i, :, :]
-    return x
+function copyidxto!(
+    dest::AbstractArray{T,3},
+    src::AbstractArray{T,3},
+    i::Vector{Bool},
+) where {T}
+    @views dest[i, :, :] .= src[i, :, :]
+    return dest
 end
 
 function Δlogπ!(
