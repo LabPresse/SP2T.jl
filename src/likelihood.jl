@@ -1,26 +1,23 @@
 # using vec makes GPU sum much faster
 
 logℒ(data::Data, U::AbstractArray{T,N}, S::AbstractArray{T,N}) where {T,N} =
-    if data.frames isa Union{BitArray,Array{Bool}}
-        _logℒ(data.frames, U, data.mask)
-    else
-        _logℒ(data.frames, U, data.mask, S)
-    end
+    _logℒ(data.frames, U, data.mask, S, data.batchsize)
 
-_logℒ(
-    W::AbstractArray{Bool,N},
-    U::AbstractArray{T,N},
-    M::AbstractMatrix{Bool},
-) where {T,N} = sum(logexpm1.(U[W.&M])) - sum(U .* M)
+# _logℒ(
+#     W::AbstractArray{Bool,N},
+#     U::AbstractArray{T,N},
+#     F::AbstractMatrix{Bool},
+# ) where {T,N} = sum(logexpm1.(U[W.&F])) - sum(U .* F)
 
 function _logℒ(
     W::AbstractArray{UInt16,3},
     U::AbstractArray{T,3},
-    M::AbstractMatrix{Bool},
-    S::AbstractArray{T,3},
+    F::AbstractMatrix{Bool},
+    𝐴::AbstractArray{T,3},
+    B::Integer=1,
 ) where {T}
-    @. S = W * logexpm1(U) - U
-    sum(transpose(reshape(S, length(M), :)) * vec(M))
+    @. 𝐴 = W * logexpm1(U) - B * U
+    sum(transpose(reshape(𝐴, length(F), :)) * vec(F))
 end
 
 # dangerous hack
@@ -36,29 +33,30 @@ end
 #     sum!(logratio, Δlnℒ, init = false)
 # end
 
-function Δlogℒ!(
-    Δlogℒ::AbstractArray{T,N},
-    W::AbstractArray{Bool,N},
-    U::AbstractArray{T,N},
-    V::AbstractArray{T,N},
-    M::AbstractMatrix{Bool},
-    S::AbstractArray{T,N},
-) where {T,N}
-    @. S = (U - V) * M
-    @. S[W&M] += logexpm1(V[W&M]) - logexpm1(U[W&M])
-    sum!(Δlogℒ, S)
-end
+# function Δlogℒ!(
+#     Δlogℒ::AbstractArray{T,N},
+#     W::AbstractArray{Bool,N},
+#     U::AbstractArray{T,N},
+#     V::AbstractArray{T,N},
+#     F::AbstractMatrix{Bool},
+#     S::AbstractArray{T,N},
+# ) where {T,N}
+#     @. S = (U - V) * F
+#     @. S[W&F] += logexpm1(V[W&F]) - logexpm1(U[W&F])
+#     sum!(Δlogℒ, S)
+# end
 
 function Δlogℒ!(
     Δlogℒ::AbstractVector{T},
     W::AbstractArray{UInt16,3},
     U::AbstractArray{T,3},
     V::AbstractArray{T,3},
-    M::AbstractMatrix{Bool},
-    S::AbstractArray{T,3},
+    F::AbstractMatrix{Bool},
+    𝐴::AbstractArray{T,3},
+    B::Integer=1,
 ) where {T}
-    @. S = W * (logexpm1(V) - logexpm1(U)) - (V - U)
-    Δlogℒ .= transpose(reshape(S, length(M), :)) * vec(M)
+    @. 𝐴 = W * (logexpm1(V) - logexpm1(U)) - B * (V - U)
+    mul!(Δlogℒ, transpose(reshape(𝐴, length(F), :)), vec(F))
 end
 
 anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇
