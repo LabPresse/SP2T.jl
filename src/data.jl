@@ -7,11 +7,11 @@ end
 
 function CircularGaussianLorentzian{T}(;
     NA::Real,
-    nᵣ::Real,
-    λ::Real,
+    refractiveindex::Real,
+    wavelength::Real,
 ) where {T<:AbstractFloat}
-    a = λ / pi / nᵣ
-    b = _b(NA, nᵣ)
+    a = wavelength / pi / refractiveindex
+    b = _b(NA, refractiveindex)
     z₀ = a * b
     σ₀ = sqrt(a * z₀) / 2
     return CircularGaussianLorentzian{T}(σ₀, z₀)
@@ -63,54 +63,55 @@ end
 
 function Data(
     T::DataType,
-    frames::Array{UInt16,3},
+    frames::AbstractArray{UInt16,3},
     period::Real,
     pxsize::Real,
-    darkcounts::Matrix{<:Real},
-    maskthreshold::Real,
+    darkcounts::AbstractMatrix{<:Real},
+    maskthresholds::Tuple{<:Real,<:Real},
     NA::Real,
     refractiveindex::Real,
     wavelength::Real,
 )
-    period, pxsize, NA, refractiveindex, wavelength =
-        convert.(T, (period, pxsize, NA, refractiveindex, wavelength))
-    mask = Matrix{Bool}(undef, size(darkcounts))
-    mask .= darkcounts .< maskthreshold
-    return Data(
-        frames,
-        1,
-        period,
-        range(0, step = pxsize, length = size(darkcounts, 1) + 1),
-        range(0, step = pxsize, length = size(darkcounts, 2) + 1),
-        convert(Matrix{T}, darkcounts),
-        mask,
-        CircularGaussianLorentzian{T}(NA = NA, nᵣ = refractiveindex, λ = wavelength),
+    period, pxsize = convert.(T, (period, pxsize))
+    PSF = CircularGaussianLorentzian{T}(
+        NA = NA,
+        refractiveindex = refractiveindex,
+        wavelength = wavelength,
     )
+    darkcounts = T.(darkcounts)
+    mask = similar(darkcounts, Bool)
+    mask .= maskthresholds[1] .< darkcounts .< maskthresholds[2]
+
+    pxboundsx = similar(darkcounts, size(darkcounts, 1) + 1)
+    pxboundsx .= 0:pxsize:size(darkcounts, 1)*pxsize
+    pxboundsy = similar(darkcounts, size(darkcounts, 2) + 1)
+    pxboundsy .= 0:pxsize:size(darkcounts, 2)*pxsize
+
+    return Data(frames, 1, period, pxboundsy, pxboundsy, darkcounts, mask, PSF)
 end
 
 function Data(
     T::DataType,
-    frames::Array{UInt16,3},
+    frames::AbstractArray{UInt16,3},
     period::Real,
     pxsize::Real,
-    darkcounts::Matrix{<:Real},
-    maskthreshold::Real,
+    darkcounts::AbstractMatrix{<:Real},
+    maskthresholds::Tuple{<:Real,<:Real},
     σ₀::Real,
     z₀::Real,
 )
-    period, pxsize, σ₀, z₀ = convert.(T, (period, pxsize, σ₀, z₀))
-    mask = Matrix{Bool}(undef, size(darkcounts))
-    mask .= darkcounts .< maskthreshold
-    return Data(
-        frames,
-        1,
-        period,
-        range(0, step = pxsize, length = size(darkcounts, 1) + 1),
-        range(0, step = pxsize, length = size(darkcounts, 2) + 1),
-        convert(Matrix{T}, darkcounts),
-        mask,
-        CircularGaussianLorentzian(σ₀, z₀),
-    )
+    period, pxsize = convert.(T, (period, pxsize))
+    PSF = CircularGaussianLorentzian{T}(σ₀, z₀)
+    darkcounts = T.(darkcounts)
+    mask = similar(darkcounts, Bool)
+    mask .= maskthresholds[1] .< darkcounts .< maskthresholds[2]
+
+    pxboundsx = similar(darkcounts, size(darkcounts, 1) + 1)
+    pxboundsx .= 0:pxsize:size(darkcounts, 1)*pxsize
+    pxboundsy = similar(darkcounts, size(darkcounts, 2) + 1)
+    pxboundsy .= 0:pxsize:size(darkcounts, 2)*pxsize
+
+    return Data(frames, 1, period, pxboundsx, pxboundsy, darkcounts, mask, PSF)
 end
 
 framecenter(data::Data) = [
@@ -119,20 +120,20 @@ framecenter(data::Data) = [
     0,
 ]
 
-pxsize(data::Data) = data.pxboundsx[2] - data.pxboundsx[1]
+# pxsize(data::Data) = data.pxboundsx[2] - data.pxboundsx[1]
 
-maxPSF(data::Data) = maxPSF(data.PSF, pxsize(data))
+# maxPSF(data::Data) = maxPSF(data.PSF, pxsize(data))
 
-to_cpu(data::Data) = Data(
-    Array(data.frames),
-    data.batchsize,
-    data.period,
-    Array(data.pxboundsx),
-    Array(data.pxboundsy),
-    Array(data.darkcounts),
-    Array(data.mask),
-    data.PSF,
-)
+# to_cpu(data::Data) = Data(
+#     Array(data.frames),
+#     data.batchsize,
+#     data.period,
+#     Array(data.pxboundsx),
+#     Array(data.pxboundsy),
+#     Array(data.darkcounts),
+#     Array(data.mask),
+#     data.PSF,
+# )
 
 function add_pxcounts!(
     𝐔::AbstractArray{T,3},

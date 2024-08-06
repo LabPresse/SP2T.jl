@@ -155,7 +155,7 @@ function runMCMC!(
             permuteemitters!(x.value, x.valueᵖ, M.value)
         end
         update!(D, x.value, 𝑇, aux.Δx²)
-        # update!(M, x.value, h.value, data, 𝑇, aux.U, aux.Sᵤ)
+        update!(M, x.value, h.value, data, 𝑇, aux.U, aux.Sᵤ)
         if iter % saveperiod(chain) == 0
             log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, aux)
             push!(chain.samples, Sample(x, M, D, h, iter + prev_niters, 𝑇, log𝒫, logℒ))
