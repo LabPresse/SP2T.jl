@@ -11,9 +11,9 @@
 
 function logℒ(
     W::AbstractArray{UInt16,3},
-    U::AbstractArray{T,3},
     F::AbstractMatrix{Bool},
     B::Integer,
+    U::AbstractArray{T,3},
     Sₐ::AbstractArray{T,3},
     Sᵥ::AbstractVector{T},
 ) where {T}
@@ -21,6 +21,9 @@ function logℒ(
     mul!(Sᵥ, transpose(reshape(Sₐ, length(F), :)), vec(F))
     sum(Sᵥ)
 end
+
+logℒ(D::Data{T}, A::AuxiliaryVariables{T}) where {T} =
+    logℒ(D.frames, D.filter, D.batchsize, A.U, A.Sₐ, A.Sᵥ)
 
 # dangerous hack
 # function unsafe_Δlogℒ!(
@@ -51,15 +54,18 @@ end
 function Δlogℒ!(
     Δlogℒ::AbstractVector{T},
     W::AbstractArray{UInt16,3},
-    U::AbstractArray{T,3},
-    V::AbstractArray{T,3},
     F::AbstractMatrix{Bool},
     B::Integer,
+    U::AbstractArray{T,3},
+    V::AbstractArray{T,3},
     S::AbstractArray{T,3},
 ) where {T}
     @. S = W * (logexpm1(V) - logexpm1(U)) - B * (V - U)
     mul!(Δlogℒ, transpose(reshape(S, length(F), :)), vec(F))
 end
+
+Δlogℒ!(D::Data{T}, A::AuxiliaryVariables{T}) where {T} =
+    Δlogℒ!(A.Sᵥ, D.frames, D.filter, D.batchsize, A.U, A.V, A.Sₐ)
 
 anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇
 

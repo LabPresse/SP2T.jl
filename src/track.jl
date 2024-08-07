@@ -77,8 +77,8 @@ function propose!(
     y .= y .* transpose(σ) .+ x
 end
 
-propose!(y::AbstractArray{T}, x::AbstractArray{T}, t::BrownianTracks) where {T} =
-    propose!(y, x, t.perturbsize)
+# propose!(y::AbstractArray{T}, x::AbstractArray{T}, t::BrownianTracks) where {T} =
+#     propose!(y, x, t.perturbsize)
 
 Δlogπ₁(
     x₁::AbstractMatrix{T},

@@ -21,7 +21,7 @@ function log𝒫logℒ(
     A::AuxiliaryVariables{T},
 ) where {T}
     pxcounts!(A.U, view(x.value, :, :, 1:M.value), h.value, data)
-    logℒ1 = logℒ(data.frames, A.U, data.filter, data.batchsize, A.Sₐ, A.Sᵥ)
+    logℒ1 = logℒ(data, A)
     log𝒫1 = logℒ1 + _logpdf(x, D.value, A.Δ𝐱²) + _logpdf(D) + _logpdf(M) + _logpdf(h)
     return log𝒫1, logℒ1
 end

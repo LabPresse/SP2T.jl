@@ -28,16 +28,14 @@ include("data.jl")
 include("annealing.jl")
 include("chain.jl")
 
-include("likelihood.jl")
 include("diffusion.jl")
 include("track.jl")
 include("nemitters.jl")
 include("brightness.jl")
 # include("permutation.jl")
 
-include("updater.jl")
+include("likelihood.jl")
 include("posterior.jl")
-
-# include("import.jl")
+include("updater.jl")
 
 end

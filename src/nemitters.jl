@@ -29,7 +29,7 @@ function setlogℒ!(
     A.U .= data.darkcounts
     @inbounds for m = 1:size(x, 3)
         add_pxcounts!(A.U, view(x, :, :, m:m), h, data)
-        M.logℒ[m+1] = logℒ(data.frames, A.U, data.filter, data.batchsize, A.Sₐ, A.Sᵥ)
+        M.logℒ[m+1] = logℒ(data, A)
     end
     return M
 end
