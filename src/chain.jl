@@ -1,11 +1,11 @@
-struct Sample{Ts,Ta}
-    tracks::Ta
-    diffusivity::Ts
-    brightness::Ts
+struct Sample{T<:AbstractFloat,AofT<:AbstractArray{T,3}}
+    tracks::AofT
+    diffusivity::T
+    brightness::T
     iteration::Int # iteration
-    𝑇::Ts # temperature
-    log𝒫::Ts # log posterior
-    logℒ::Ts # log likelihood
+    𝑇::T # temperature
+    log𝒫::T # log posterior
+    logℒ::T # log likelihood
 end
 
 Sample(
@@ -28,10 +28,18 @@ get_D(v::AbstractVector{Sample}) = [s.D for s in v]
 
 get_h(v::AbstractVector{Sample}) = [s.h for s in v]
 
-struct Chain{Ts,Ta}
-    samples::Vector{Ts}
+struct Chain{VofS<:AbstractVector{<:Sample},A<:AbstractAnnealing}
+    samples::VofS
     sizelimit::Int
-    annealing::Ta # annealing
+    annealing::A
+end
+
+function ntracks(chain::Chain; burn_in::Real = 0)
+    n = 0
+    for i = burn_in+1:length(chain.samples)
+        n += size(chain.samples[i].tracks, 3)
+    end
+    n
 end
 
 isfull(chain::Chain) = length(chain.samples) == chain.sizelimit
@@ -46,15 +54,18 @@ temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 saveperiod(chain::Chain) =
     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
 
-struct AuxiliaryVariables{T}
-    Δ𝐱²::AbstractArray{T,3}
-    Δ𝐲²::AbstractArray{T,3}
-    ΔΔ𝐱²::AbstractArray{T,3}
-    ΣΔΔ𝐱²::AbstractVector{T}
-    Sᵥ::AbstractVector{T} # scratch vector
-    U::AbstractArray{T,3}
-    V::AbstractArray{T,3}
-    Sₐ::AbstractArray{T,3} # scratch array
+struct AuxiliaryVariables{
+    A<:AbstractArray{<:AbstractFloat,3},
+    V<:AbstractVector{<:AbstractFloat},
+}
+    Δ𝐱²::A
+    Δ𝐲²::A
+    ΔΔ𝐱²::A
+    ΣΔΔ𝐱²::V
+    Sᵥ::V # scratch vector
+    U::A
+    V::A
+    Sₐ::A # scratch array
 end
 
 AuxiliaryVariables(

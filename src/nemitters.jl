@@ -23,8 +23,8 @@ function setlogℒ!(
     M::NEmitters,
     x::AbstractArray{T,3},
     h::T,
-    data::Data{T},
-    A::AuxiliaryVariables{T},
+    data::Data,
+    A::AuxiliaryVariables,
 ) where {T}
     A.U .= data.darkcounts
     @inbounds for m = 1:size(x, 3)

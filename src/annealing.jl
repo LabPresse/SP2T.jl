@@ -1,10 +1,10 @@
 abstract type AbstractAnnealing{T} end
 
-struct NoAnnealing{T} <: AbstractAnnealing{T} end
+ftypof(::AbstractAnnealing{T}) where {T} = T
 
-NoAnnealing() = NoAnnealing{Float32}()
-
-temperature(::NoAnnealing{T}, i) where {T} = one(T)
+struct ConstantAnnealing{T} <: AbstractAnnealing{T}
+    temperature::T
+end
 
 struct PolynomialAnnealing{T} <: AbstractAnnealing{T}
     init_temperature::T
@@ -14,9 +14,7 @@ end
 
 PolynomialAnnealing{T}() where {T} = PolynomialAnnealing{T}(1, 1, 0)
 
+temperature(a::ConstantAnnealing, i::Real) = a.temperature
+
 temperature(a::PolynomialAnnealing{T}, i::Real) where {T} =
     i >= a.last_iter ? one(T) : a.init_temperature * (i / a.last_iter - oneunit(T))^a.order
-
-ftypof(::PolynomialAnnealing{T}) where {T} = T
-
-# ftypof(::Nothing) = Nothing

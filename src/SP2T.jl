@@ -3,8 +3,8 @@ module SP2T
 #* This code is optizmized for GPU.
 
 using Distributions
-using SpecialFunctions
-using LogExpFunctions
+using SpecialFunctions: erf
+using LogExpFunctions: logexpm1
 using LinearAlgebra
 using Random
 
@@ -20,9 +20,11 @@ export BrownianTracks,
     Sample,
     Data,
     Normal₃,
-    CircularGaussianLorentzian
+    CircularGaussianLorentzian,
+    ConstantAnnealing,
+    PolynomialAnnealing
 
-export simulate!, runMCMC!, maxcount, runMCMC
+export simulate!, runMCMC!, maxcount, runMCMC, ntracks
 
 include("data.jl")
 include("annealing.jl")

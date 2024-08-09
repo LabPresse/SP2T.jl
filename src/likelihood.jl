@@ -22,7 +22,7 @@ function logℒ(
     sum(Sᵥ)
 end
 
-logℒ(D::Data{T}, A::AuxiliaryVariables{T}) where {T} =
+logℒ(D::Data, A::AuxiliaryVariables) =
     logℒ(D.frames, D.filter, D.batchsize, A.U, A.Sₐ, A.Sᵥ)
 
 # dangerous hack
@@ -64,7 +64,7 @@ function Δlogℒ!(
     mul!(Δlogℒ, transpose(reshape(S, length(F), :)), vec(F))
 end
 
-Δlogℒ!(D::Data{T}, A::AuxiliaryVariables{T}) where {T} =
+Δlogℒ!(D::Data, A::AuxiliaryVariables) =
     Δlogℒ!(A.Sᵥ, D.frames, D.filter, D.batchsize, A.U, A.V, A.Sₐ)
 
 anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇

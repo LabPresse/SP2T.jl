@@ -50,15 +50,22 @@ function maxPSF(PSF::CircularGaussianLorentzian, pxsize::Real)
     erf(-x, x)^2 / 4
 end
 
-struct Data{T}
-    frames::AbstractArray{UInt16,3}
+struct Data{
+    F<:AbstractArray{UInt16,3},
+    T<:AbstractFloat,
+    VofT<:AbstractVector{T},
+    MofT<:AbstractMatrix{T},
+    MofB<:AbstractMatrix{Bool},
+    PSFofT<:AbstractPSF{T},
+}
+    frames::F
     batchsize::Int
     period::T
-    pxboundsx::AbstractVector{T}
-    pxboundsy::AbstractVector{T}
-    darkcounts::AbstractMatrix{T}
-    filter::AbstractMatrix{Bool}
-    PSF::AbstractPSF{T}
+    pxboundsx::VofT
+    pxboundsy::VofT
+    darkcounts::MofT
+    filter::MofB
+    PSF::PSFofT
 end
 
 function Data(
@@ -137,7 +144,7 @@ function add_pxcounts!(
     return batched_mul!(𝐔, 𝐗, batched_transpose(𝐘), h, β)
 end
 
-add_pxcounts!(U::AbstractArray{T,3}, x::AbstractArray{T,3}, h::T, data::Data{T}) where {T} =
+add_pxcounts!(U::AbstractArray{T,3}, x::AbstractArray{T,3}, h::T, data::Data) where {T} =
     add_pxcounts!(U, x, h, data.pxboundsx, data.pxboundsy, data.PSF)
 
 function get_pxPSF(

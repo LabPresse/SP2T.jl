@@ -1,11 +1,12 @@
 function simulate!(
-    data::Data{T};
+    data::Data;
     diffusivity::Real,
     brightness::Real,
     nemitters::Integer,
     μ = nothing,
     σ = [0, 0, 0],
-) where {T}
+)
+    T = typeof(data.period)
     x = Array{T}(undef, size(data.frames, 3), 3, nemitters)
     D = convert(T, diffusivity) * data.period
     h = convert(T, brightness) * data.period
@@ -21,8 +22,8 @@ end
 #     x::BrownianTracks,
 #     M::Integer,
 #     h::T,
-#     data::Data{T},
-#     aux::AuxiliaryVariables{T},
+#     data::Data,
+#     aux::AuxiliaryVariables,
 # ) where {T}
 #     xᵒⁿ, yᵒⁿ = ontracks(x, M)
 #     propose!(yᵒⁿ, xᵒⁿ, x.perturbsize)
@@ -40,7 +41,7 @@ function update_odd!(
     logr::AbstractVector{T},
     accept::AbstractVector{Bool},
     ΔΔx²::AbstractArray{T,3},
-    A::AuxiliaryVariables{T},
+    A::AuxiliaryVariables,
 ) where {T}
     Δlogℒ = A.Sᵥ
     oddΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², D, ΔΔx², A.ΣΔΔ𝐱²)
@@ -60,7 +61,7 @@ function update_even!(
     logr::AbstractVector{T},
     accept::AbstractVector{Bool},
     ΔΔx²::AbstractArray{T,3},
-    A::AuxiliaryVariables{T},
+    A::AuxiliaryVariables,
 ) where {T}
     Δlogℒ = A.Sᵥ
     evenΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², D, ΔΔx², A.ΣΔΔ𝐱²)
@@ -76,9 +77,9 @@ function update_ontracks!(
     M::Integer,
     D::T,
     h::T,
-    data::Data{T},
+    data::Data,
     𝑇::T,
-    A::AuxiliaryVariables{T},
+    A::AuxiliaryVariables,
 ) where {T}
     MHinit!(x)
     xᵒⁿ, yᵒⁿ = ontracks(x, M)
@@ -107,7 +108,7 @@ function update!(
     D::Diffusivity{T},
     x::AbstractArray{T,3},
     𝑇::T,
-    A::AuxiliaryVariables{T},
+    A::AuxiliaryVariables,
 ) where {T}
     diff²!(A.Δ𝐱², x)
     setparams!(D, A.Δ𝐱², 𝑇)
@@ -118,9 +119,9 @@ function update!(
     M::NEmitters,
     x::AbstractArray{T,3},
     h::T,
-    data::Data{T},
+    data::Data,
     𝑇::T,
-    A::AuxiliaryVariables{T},
+    A::AuxiliaryVariables,
 ) where {T}
     setlogℒ!(M, x, h, data, A)
     setlog𝒫!(M, 𝑇)
@@ -134,10 +135,10 @@ function runMCMC!(
     M::NEmitters,
     D::Diffusivity{T},
     h::Brightness{T},
-    data::Data{T},
+    data::Data,
     niters::Integer,
     prev_niters::Integer,
-    A::AuxiliaryVariables{T},
+    A::AuxiliaryVariables,
 ) where {T}
     @showprogress 1 "Computing..." for iter = 1:niters
         𝑇 = temperature(chain, iter)
@@ -175,7 +176,7 @@ function runMCMC!(
     M::NEmitters,
     D::Diffusivity{T},
     h::Brightness{T},
-    data::Data{T},
+    data::Data,
     niters::Integer,
 ) where {T}
     prev_niters = chain.samples[end].iteration
@@ -190,12 +191,12 @@ function runMCMC(;
     nemitters::NEmitters,
     diffusivity::Diffusivity{T},
     brightness::Brightness{T},
-    data::Data{T},
+    data::Data,
     niters::Integer = 1000,
     sizelimit::Integer = 1000,
-    annealing::Union{AbstractAnnealing,Nothing} = nothing,
+    annealing::Union{AbstractAnnealing{T},Nothing} = nothing,
 ) where {T}
-    isnothing(annealing) && (annealing = NoAnnealing{T}())
+    isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
     chain = Chain(
         [Sample(tracks.value, nemitters.value, diffusivity.value, brightness.value)],
         sizelimit,
