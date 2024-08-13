@@ -129,7 +129,43 @@ function update!(
     return M
 end
 
-function runMCMC!(
+function parametricMCMC!(
+    chain::Chain,
+    x::BrownianTracks,
+    M::NEmitters,
+    D::Diffusivity{T},
+    h::Brightness{T},
+    data::Data,
+    niters::Integer,
+    prev_niters::Integer,
+    A::AuxiliaryVariables,
+) where {T}
+    @showprogress 1 "Computing..." for iter = 1:niters
+        𝑇 = temperature(chain, iter)
+        update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, A)
+        update!(D, x.value, 𝑇, A)
+        if iter % saveperiod(chain) == 0
+            log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, A)
+            push!(
+                chain.samples,
+                Sample(
+                    x.value,
+                    M.value,
+                    D.value,
+                    h.value,
+                    iter + prev_niters,
+                    𝑇,
+                    log𝒫,
+                    logℒ,
+                ),
+            )
+            isfull(chain) && shrink!(chain)
+        end
+    end
+    return chain
+end
+
+function nonparametricMCMC!(
     chain::Chain,
     x::BrownianTracks,
     M::NEmitters,
@@ -178,12 +214,17 @@ function runMCMC!(
     h::Brightness{T},
     data::Data,
     niters::Integer,
+    parametric::Bool,
 ) where {T}
     prev_niters = chain.samples[end].iteration
     A = AuxiliaryVariables(x.value, size(data.frames))
     A.U .= data.darkcounts
     M.logℒ[1] = logℒ(data, A)
-    runMCMC!(chain, x, M, D, h, data, niters, prev_niters, A)
+    if parametric
+        parametricMCMC!(chain, x, M, D, h, data, niters, prev_niters, A)
+    else
+        nonparametricMCMC!(chain, x, M, D, h, data, niters, prev_niters, A)
+    end
 end
 
 function runMCMC(;
@@ -195,6 +236,7 @@ function runMCMC(;
     niters::Integer = 1000,
     sizelimit::Integer = 1000,
     annealing::Union{AbstractAnnealing{T},Nothing} = nothing,
+    parametric::Bool = false,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
     chain = Chain(
@@ -202,6 +244,6 @@ function runMCMC(;
         sizelimit,
         annealing,
     )
-    runMCMC!(chain, tracks, nemitters, diffusivity, brightness, data, niters)
+    runMCMC!(chain, tracks, nemitters, diffusivity, brightness, data, niters, parametric)
     return chain
 end
