@@ -54,6 +54,12 @@ temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 saveperiod(chain::Chain) =
     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
 
+findMAP(chain::Chain; burn_in::Real = 0) =
+    @views findmax([s.log𝒫 for s in chain.samples[burn_in+1:end]])
+
+findML(chain::Chain; burn_in::Real = 0) =
+    @views findmax([s.logℒ for s in chain.samples[burn_in+1:end]])
+
 struct AuxiliaryVariables{
     A<:AbstractArray{<:AbstractFloat,3},
     V<:AbstractVector{<:AbstractFloat},

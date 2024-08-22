@@ -24,7 +24,7 @@ export BrownianTracks,
     ConstantAnnealing,
     PolynomialAnnealing
 
-export simulate!, runMCMC!, maxcount, runMCMC, ntracks
+export simulate!, runMCMC!, maxcount, runMCMC, ntracks, findMAP, findML
 
 include("data.jl")
 include("annealing.jl")
