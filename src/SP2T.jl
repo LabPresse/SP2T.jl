@@ -12,7 +12,7 @@ using NNlib: batched_mul, batched_mul!, batched_transpose
 
 using ProgressMeter: @showprogress
 
-export BrownianTracks,
+export Tracks,
     NEmitters,
     Diffusivity,
     Brightness,

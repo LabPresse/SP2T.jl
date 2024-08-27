@@ -6,7 +6,7 @@ struct Normal₃{T} <: SimplifiedDistribution{T}
 end
 
 _params(n::Normal₃) = n.μ, n.σ
-struct BrownianTracks{Ta,Tv,B}
+struct Tracks{Ta,Tv,B}
     value::Ta
     valueᵖ::Ta
     prior::Normal₃{Tv}
@@ -16,7 +16,7 @@ struct BrownianTracks{Ta,Tv,B}
     counter::Matrix{Int}
 end
 
-function BrownianTracks(
+function Tracks(
     x::AbstractArray{T,3},
     xᵖ::AbstractArray{T,3},
     prior::Normal₃{<:AbstractVector{T}},
@@ -24,25 +24,17 @@ function BrownianTracks(
 ) where {T}
     logratio = similar(x, axes(x, 1))
     accepted = fill!(similar(logratio, Bool), false)
-    return BrownianTracks(x, xᵖ, prior, perturbsize, logratio, accepted, zeros(Int, 2, 2))
+    return Tracks(x, xᵖ, prior, perturbsize, logratio, accepted, zeros(Int, 2, 2))
 end
 
-function BrownianTracks(; value, prior, perturbsize)
+function Tracks(; value, prior, perturbsize)
     valueᵖ = similar(value)
     logratio = similar(value, axes(value, 1))
     accepted = similar(logratio, Bool)
-    return BrownianTracks(
-        value,
-        valueᵖ,
-        prior,
-        perturbsize,
-        logratio,
-        accepted,
-        zeros(Int, 2, 2),
-    )
+    return Tracks(value, valueᵖ, prior, perturbsize, logratio, accepted, zeros(Int, 2, 2))
 end
 
-ontracks(x::BrownianTracks, M::Integer) = @views x.value[:, :, 1:M], x.valueᵖ[:, :, 1:M]
+ontracks(x::Tracks, M::Integer) = @views x.value[:, :, 1:M], x.valueᵖ[:, :, 1:M]
 
 logrand!(x::AbstractArray) = x .= log.(rand!(x))
 
@@ -62,7 +54,7 @@ function simulate!(
     return cumsum!(x, x, dims = 1)
 end
 
-function MHinit!(x::BrownianTracks)
+function MHinit!(x::Tracks)
     neglogrand!(x.logratio)
     fill!(x.accepted, false)
     return x
@@ -129,7 +121,7 @@ function ΣΔΔx²!(
     ΣΔΔx² ./= 4 * D
 end
 
-function counter!(x::BrownianTracks)
+function counter!(x::Tracks)
     @views x.counter[:, 2] .+= count(x.accepted), length(x.accepted)
     return x
 end

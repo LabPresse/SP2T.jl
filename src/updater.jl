@@ -73,7 +73,7 @@ function update_even!(
 end
 
 function update_ontracks!(
-    x::BrownianTracks,
+    x::Tracks,
     M::Integer,
     D::T,
     h::T,
@@ -97,7 +97,7 @@ function update_ontracks!(
     return x
 end
 
-function update_offtracks!(x::BrownianTracks, M::Integer, D::Real)
+function update_offtracks!(x::Tracks, M::Integer, D::Real)
     @views xᵒᶠᶠ = x.value[:, :, M+1:end]
     μ, σ = _params(x.prior)
     simulate!(xᵒᶠᶠ, μ, σ, D)
@@ -131,7 +131,7 @@ end
 
 function parametricMCMC!(
     chain::Chain,
-    x::BrownianTracks,
+    x::Tracks,
     M::NEmitters,
     D::Diffusivity{T},
     h::Brightness{T},
@@ -167,7 +167,7 @@ end
 
 function nonparametricMCMC!(
     chain::Chain,
-    x::BrownianTracks,
+    x::Tracks,
     M::NEmitters,
     D::Diffusivity{T},
     h::Brightness{T},
@@ -208,7 +208,7 @@ end
 
 function runMCMC!(
     chain::Chain,
-    x::BrownianTracks,
+    x::Tracks,
     M::NEmitters,
     D::Diffusivity{T},
     h::Brightness{T},
@@ -228,7 +228,7 @@ function runMCMC!(
 end
 
 function runMCMC(;
-    tracks::BrownianTracks,
+    tracks::Tracks,
     nemitters::NEmitters,
     diffusivity::Diffusivity{T},
     brightness::Brightness{T},
