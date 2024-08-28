@@ -1,6 +1,6 @@
-_logπ(n::Normal₃, x::AbstractArray) = sum(vec(@. -(x - n.μ) / (2 * n.σ^2)))
+_logπ(ℕ::Normal₃, x::AbstractArray) = sum(vec(@. -(x - ℕ.μ) / (2 * ℕ.σ^2)))
 
-function _logπ(x::BrownianTracks, M::Integer, D::T, Δx²::AbstractArray{T,3}) where {T}
+function _logπ(x::Tracks, M::Integer, D::T, Δx²::AbstractArray{T,3}) where {T}
     xᵒⁿ = view(x.value, :, :, 1:M)
     Δxᵒⁿ² = view(Δx², :, :, 1:M)
     diff²!(Δxᵒⁿ², xᵒⁿ)
@@ -15,7 +15,7 @@ _logπ(M::NEmitters) = M.logπ[M.value+1]
 _logπ(h::Brightness) = (h.priorparams[1] - 1) * log(h.value) - h.value / h.priorparams[2]
 
 function log𝒫logℒ(
-    x::BrownianTracks,
+    x::Tracks,
     M::NEmitters,
     D::Diffusivity,
     h::Brightness,
