@@ -24,7 +24,7 @@ export Tracks,
     ConstantAnnealing,
     PolynomialAnnealing
 
-export simulate!, runMCMC!, maxcount, runMCMC
+export simulate!, bridge!, runMCMC!, maxcount, runMCMC
 
 include("data.jl")
 include("annealing.jl")

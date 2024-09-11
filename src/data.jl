@@ -179,24 +179,29 @@ pxcounts!(U::AbstractArray{T,3}, x::AbstractArray{T,3}, h::T, data::Data) where 
 function pxcounts(
     x::AbstractArray{T,3},
     h::T,
-    𝐅::AbstractMatrix{T},
+    DC::AbstractMatrix{T},
     xᵖ::AbstractVector{T},
     yᵖ::AbstractVector{T},
     PSF::AbstractPSF{T},
 ) where {T}
-    𝐔 = repeat(𝐅, 1, 1, size(x, 1))
+    𝐔 = repeat(DC, 1, 1, size(x, 1))
     return add_pxcounts!(𝐔, x, h, xᵖ, yᵖ, PSF)
 end
 
 pxcounts(x::AbstractArray{T,3}, h::T, data::Data) where {T} =
     pxcounts(x, h, data.darkcounts, data.pxboundsx, data.pxboundsy, data.PSF)
 
-function simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3})
-    V = rand!(similar(U))
-    @. W = V < -expm1(-U)
-end
+simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}) =
+    @. W = $rand!($similar(U)) < -expm1(-U)
 
-function simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}, B::Integer)
-    P = -expm1.(-U)
-    W .= rand.(Binomial.(B, P))
+simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}, B::Integer) =
+    @. W = rand(Binomial(B, -expm1(-U)))
+
+function simframes(U::AbstractArray{<:Real,3}, B::Integer = 1)
+    W = similar(U, UInt16)
+    if B == 1
+        simframes!(W, U)
+    else
+        simframes!(W, U, B)
+    end
 end

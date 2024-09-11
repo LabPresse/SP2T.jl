@@ -40,18 +40,55 @@ logrand!(x::AbstractArray) = x .= log.(rand!(x))
 
 neglogrand!(x::AbstractArray) = x .= .-log.(rand!(x))
 
+function _randn!(x::AbstractArray{T}, σ::Union{T,AbstractMatrix{T}}) where {T}
+    randn!(x)
+    x .*= σ
+end
+
+function _randn!(x::AbstractArray{T,3}, σ::T, σ₀::AbstractVecOrMat{T}) where {T}
+    _randn!(x, σ)
+    @views @. x[1, :, :] *= σ₀ / σ
+end
+
+function simulate!(
+    x::AbstractArray{T,3},
+    μ::AbstractVector{T},
+    σ::AbstractVector{T},
+    D::T,
+    y::AbstractArray{T,3},
+) where {T}
+    _randn!(y, √(2 * D), σ)
+    cumsum!(x, y, dims = 1)
+    x .+= reshape(μ, 1, :)
+end
+
 function simulate!(
     x::AbstractArray{T,3},
     μ::AbstractVector{T},
     σ::AbstractVector{T},
     D::T,
 ) where {T}
-    randn!(x)
-    @views begin
-        x[1, :, :] .= x[1, :, :] .* σ .+ μ
-        x[2:end, :, :] .*= √(2 * D)
-    end
-    return cumsum!(x, x, dims = 1)
+    _randn!(x, √(2 * D), σ)
+    cumsum!(x, x, dims = 1)
+    x .+= reshape(μ, 1, :)
+end
+
+function simulate!(
+    x::AbstractArray{T,3},
+    μ::AbstractArray{T,3},
+    σ::AbstractVector{T},
+    D::T,
+) where {T}
+    _randn!(x, √(2 * D), σ)
+    cumsum!(x, x, dims = 1)
+    x .+= μ
+end
+
+function bridge!(x::AbstractArray{T,3}, D::T, xend::AbstractArray{T,3}) where {T}
+    σ = fill!(similar(x, size(x, 2)), 0)
+    simulate!(x, -diff(xend, dims = 1), σ, D)
+    N = size(x, 1) - 1
+    @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
 
 function MHinit!(x::Tracks)
