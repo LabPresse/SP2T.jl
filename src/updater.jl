@@ -143,7 +143,7 @@ function parametricMCMC!(
     @showprogress 1 "Computing..." for iter = 1:niters
         𝑇 = temperature(chain, iter)
         update_ontracks!(x, M.value, D.value, h.value, data, 𝑇, A)
-        update!(D, x.value, 𝑇, A)
+        update!(D, view(x.value, :, :, 1:M.value), 𝑇, A)
         if iter % saveperiod(chain) == 0
             log𝒫, logℒ = log𝒫logℒ(x, M, D, h, data, A)
             push!(
