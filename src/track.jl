@@ -1,17 +1,32 @@
 abstract type SimplifiedDistribution{T} end
 
-struct Normal₃{T} <: SimplifiedDistribution{T}
-    μ::T
-    σ::T
+struct DNormal{T<:AbstractFloat,V<:AbstractVector{T}} <: SimplifiedDistribution{T}
+    μ::V
+    σ::V
 end
 
-Distributions.params(n::Normal₃) = n.μ, n.σ
-struct Tracks{T,Ta,Tv,B}
-    value::Ta
-    valueᵖ::Ta
-    prior::Normal₃{Tv}
-    perturbsize::Tv
-    logratio::Tv
+function DNormal{T}(μ::V, σ::V) where {T<:AbstractFloat,V<:AbstractVector{<:Real}}
+    eltype(μ) === T || (μ = convert.(T, μ))
+    eltype(σ) === T || (σ = convert.(T, σ))
+    return DNormal(μ, σ)
+end
+
+function Base.getproperty(d::DNormal, s::Symbol)
+    if s === :dims
+        return length(getfield(d, s))
+    else
+        return getfield(d, s)
+    end
+end
+
+Distributions.params(n::DNormal) = n.μ, n.σ
+
+struct Tracks{T,A,V,B}
+    value::A
+    valueᵖ::A
+    prior::DNormal{T,V}
+    perturbsize::V
+    logratio::V
     accepted::B
     counter::Matrix{Int}
 end
@@ -37,7 +52,7 @@ end
 
 function Tracks{T}(;
     value::AbstractArray{<:Real,3},
-    prior::Normal₃{<:AbstractVector{<:Real}},
+    prior::DNormal{<:Real,<:AbstractVector{<:Real}},
     perturbsize::AbstractVector{<:Real},
 ) where {T<:AbstractFloat}
     value = convert.(T, value)
@@ -57,7 +72,7 @@ end
 
 function Tracks(;
     value::AbstractArray{<:Real,3},
-    prior::Normal₃{<:AbstractVector{<:Real}},
+    prior::DNormal{<:Real,<:AbstractVector{<:Real}},
     perturbsize::AbstractVector{<:Real},
 )
     valueᵖ = similar(value)
@@ -104,7 +119,7 @@ end
 
 function simulate!(
     x::AbstractArray{T,3},
-    μ::AbstractArray{T},
+    μ::AbstractVector{T},
     σ::AbstractVector{T},
     msd::T,
     dims::Integer = 3,
@@ -114,16 +129,16 @@ function simulate!(
     x .+= reshape(μ, 1, dims, :)
 end
 
-# function simulate!(
-#     x::AbstractArray{T,3},
-#     μ::AbstractArray{T,3},
-#     σ::AbstractVector{T},
-#     msd::T,
-# ) where {T}
-#     _randn!(x, √msd, σ)
-#     cumsum!(x, x, dims = 1)
-#     x .+= μ
-# end
+function simulate!(
+    x::AbstractArray{T,3},
+    μ::AbstractArray{T,3},
+    σ::AbstractVector{T},
+    msd::T,
+) where {T}
+    _randn!(x, √msd, σ)
+    cumsum!(x, x, dims = 1)
+    x .+= μ
+end
 
 function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T}
     σ = fill!(similar(x, size(x, 2)), 0)
@@ -151,14 +166,14 @@ propose!(y::AbstractArray{T,3}, x::AbstractArray{T,3}, σ::AbstractVector{T}) wh
     σ::AbstractVector{T},
 ) where {T} = sum(vec(@. ((x₁ - μ)^2 - (y₁ - μ)^2) / (2 * σ^2)))
 
-Δlogπ₁(x::AbstractArray{T,3}, y::AbstractArray{T,3}, prior::Normal₃) where {T} =
+Δlogπ₁(x::AbstractArray{T,3}, y::AbstractArray{T,3}, prior::DNormal) where {T} =
     @views Δlogπ₁(x[1, :, :], y[1, :, :], prior.μ, prior.σ)
 
 function addΔlogπ₁!(
     ln𝓇::AbstractVector{T},
     x::AbstractArray{T,3},
     y::AbstractArray{T,3},
-    prior::Normal₃,
+    prior::DNormal,
 ) where {T}
     ln𝓇[1] += Δlogπ₁(x, y, prior)
     return ln𝓇

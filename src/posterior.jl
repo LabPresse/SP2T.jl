@@ -1,4 +1,4 @@
-_logπ(ℕ::Normal₃{T}, x::AbstractArray{T}) where {T} = sum(vec(@. -(x - ℕ.μ) / (2 * ℕ.σ^2)))
+_logπ(ℕ::DNormal{T}, x::AbstractArray) where {T} = sum(vec(@. -(x - ℕ.μ) / (2 * ℕ.σ^2)))
 
 function logprior(x::Tracks{T}, M::Integer, msd::T, Δx²::AbstractArray{T,3}) where {T}
     xᵒⁿ = view(x.value, :, :, 1:M)

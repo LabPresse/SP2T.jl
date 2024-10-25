@@ -1,8 +1,8 @@
-mutable struct NEmitters{T,Tv}
+mutable struct NEmitters{T,V}
     value::Int
-    logprior::Tv
-    logℒ::Tv
-    log𝒫::Tv
+    logprior::V
+    logℒ::V
+    log𝒫::V
 end
 
 function NEmitters{T}(;

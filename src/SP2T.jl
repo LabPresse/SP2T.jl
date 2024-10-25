@@ -20,7 +20,7 @@ export Tracks,
     Chain,
     Sample,
     Data,
-    Normal₃,
+    DNormal,
     CircularGaussianLorentzian,
     ConstantAnnealing,
     PolynomialAnnealing
