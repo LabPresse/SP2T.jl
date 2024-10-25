@@ -22,8 +22,8 @@ function logℒ(
     sum(Sᵥ)
 end
 
-logℒ(D::Data, A::AuxiliaryVariables) =
-    logℒ(D.frames, D.filter, D.batchsize, A.U, A.Sₐ, A.Sᵥ)
+logℒ(data::Data, auxvar::AuxiliaryVariables) =
+    logℒ(data.frames, data.filter, data.batchsize, auxvar.U, auxvar.Sₐ, auxvar.Sᵥ)
 
 # dangerous hack
 # function unsafe_Δlogℒ!(
@@ -64,8 +64,15 @@ function Δlogℒ!(
     mul!(Δlogℒ, transpose(reshape(S, length(F), :)), vec(F))
 end
 
-Δlogℒ!(D::Data, A::AuxiliaryVariables) =
-    Δlogℒ!(A.Sᵥ, D.frames, D.filter, D.batchsize, A.U, A.V, A.Sₐ)
+Δlogℒ!(data::Data, auxvar::AuxiliaryVariables) = Δlogℒ!(
+    auxvar.Sᵥ,
+    data.frames,
+    data.filter,
+    data.batchsize,
+    auxvar.U,
+    auxvar.V,
+    auxvar.Sₐ,
+)
 
 anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇
 

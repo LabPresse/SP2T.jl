@@ -1,14 +1,30 @@
-mutable struct Brightness{T}
+mutable struct Brightness{T,P}
     value::T
-    priorparams::NTuple{2,T}
+    prior::P
     proposalparam::T
 end
 
-Brightness(; value, priorparams, proposalparam, scale::T) where {T} = Brightness(
-    convert(T, value * scale),
-    convert.(T, (priorparams[1], priorparams[2] * scale)),
+Brightness{T}(
+    value::Real,
+    prior::ContinuousUnivariateDistribution,
+    proposalparam::Real,
+) where {T<:AbstractFloat} = Brightness(
+    convert(T, value),
+    unionalltypeof(prior)(convert.(T, params(prior))...),
     convert(T, proposalparam),
 )
+
+Brightness{T}(;
+    value::Real,
+    prior::ContinuousUnivariateDistribution,
+    proposalparam::Real,
+) where {T<:AbstractFloat} = Brightness{T}(value, prior, proposalparam)
+
+# Brightness(; value, priorparams, proposalparam, scale::T) where {T} = Brightness(
+#     convert(T, value * scale),
+#     convert.(T, (priorparams[1], priorparams[2] * scale)),
+#     convert(T, proposalparam),
+# )
 
 # function get_ϵ(𝒬::Beta)
 #     ϵ = rand(𝒬)
@@ -20,47 +36,47 @@ function proposebrightness(h::T, 𝒬::Beta{T}) where {T<:AbstractFloat}
     return bitrand() ? h * ϵ : h / ϵ
 end
 
-function diff_lnℒ_h(
-    W::AbstractArray{UInt16,3},
-    G::AbstractArray{T,3},
-    hᵖ::T,
-    hᵒ::T,
-    F::AbstractMatrix{T},
-) where {T<:AbstractFloat}
-    uᵖ = F .+ hᵖ .* G
-    uᵒ = F .+ hᵒ .* G
-    lnℒ_diff = W .* (logexpm1.(uᵖ) .- logexpm1.(uᵒ)) .- (uᵖ .- uᵒ)
-    return dot(CUDA.ones(eltype(lnℒ_diff), size(lnℒ_diff)), lnℒ_diff)
-end
+# function diff_lnℒ_h(
+#     W::AbstractArray{UInt16,3},
+#     G::AbstractArray{T,3},
+#     hᵖ::T,
+#     hᵒ::T,
+#     F::AbstractMatrix{T},
+# ) where {T<:AbstractFloat}
+#     uᵖ = F .+ hᵖ .* G
+#     uᵒ = F .+ hᵒ .* G
+#     lnℒ_diff = W .* (logexpm1.(uᵖ) .- logexpm1.(uᵒ)) .- (uᵖ .- uᵒ)
+#     return dot(CUDA.ones(eltype(lnℒ_diff), size(lnℒ_diff)), lnℒ_diff)
+# end
 
-diff_ln𝒫_h(hᵖ::T, hᵒ::T, 𝒫::Gamma{T}) where {T<:AbstractFloat} =
-    (shape(𝒫) - 1) * log(hᵖ / hᵒ) - (hᵖ - hᵒ) / scale(𝒫)
+# diff_ln𝒫_h(hᵖ::T, hᵒ::T, 𝒫::Gamma{T}) where {T<:AbstractFloat} =
+#     (shape(𝒫) - 1) * log(hᵖ / hᵒ) - (hᵖ - hᵒ) / scale(𝒫)
 
-diff_ln𝒬_h(hᵖ::T, hᵒ::T) where {T<:AbstractFloat} = log(hᵖ / hᵒ)
+# diff_ln𝒬_h(hᵖ::T, hᵒ::T) where {T<:AbstractFloat} = log(hᵖ / hᵒ)
 
-get_ln𝓇_h(
-    W::AbstractArray{UInt16,3},
-    G::AbstractArray{T,3},
-    hᵖ::T,
-    hᵒ::T,
-    F::AbstractMatrix{T},
-    𝒫::Gamma{T},
-) where {T<:AbstractFloat} =
-    diff_lnℒ_h(W, G, hᵖ, hᵒ, F) + diff_ln𝒫_h(hᵖ, hᵒ, 𝒫) + diff_ln𝒬_h(hᵖ, hᵒ)
+# get_ln𝓇_h(
+#     W::AbstractArray{UInt16,3},
+#     G::AbstractArray{T,3},
+#     hᵖ::T,
+#     hᵒ::T,
+#     F::AbstractMatrix{T},
+#     𝒫::Gamma{T},
+# ) where {T<:AbstractFloat} =
+#     diff_lnℒ_h(W, G, hᵖ, hᵒ, F) + diff_ln𝒫_h(hᵖ, hᵒ, 𝒫) + diff_ln𝒬_h(hᵖ, hᵒ)
 
-function sample_h(
-    W::AbstractArray{UInt16},
-    G::AbstractArray{T},
-    hᵒ::T,
-    F::AbstractMatrix{T},
-    𝒬::Beta{T},
-    𝒫::Gamma{T},
-) where {T<:AbstractFloat}
-    hᵖ = proposebrightness(hᵒ, 𝒬)
-    ln𝓇 = get_ln𝓇_h(W, G, hᵖ, hᵒ, F, 𝒫)
-    ln𝓊 = log(rand())
-    return ln𝓇 > ln𝓊 ? hᵖ : hᵒ
-end
+# function sample_h(
+#     W::AbstractArray{UInt16},
+#     G::AbstractArray{T},
+#     hᵒ::T,
+#     F::AbstractMatrix{T},
+#     𝒬::Beta{T},
+#     𝒫::Gamma{T},
+# ) where {T<:AbstractFloat}
+#     hᵖ = proposebrightness(hᵒ, 𝒬)
+#     ln𝓇 = get_ln𝓇_h(W, G, hᵖ, hᵒ, F, 𝒫)
+#     ln𝓊 = log(rand())
+#     return ln𝓇 > ln𝓊 ? hᵖ : hᵒ
+# end
 
 # function update_h!(s::ChainStatus, 𝒫::Sampleable, proposal::Proposal, w::AbstractArray{UInt16})
 #     hᵒ, 𝒬 = s.h, proposal.distritbution

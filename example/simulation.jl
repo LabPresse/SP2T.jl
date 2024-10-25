@@ -1,6 +1,5 @@
 using SP2T
 using Random
-
 using JLD2
 
 Random.seed!(9)
@@ -13,32 +12,35 @@ metadata = Dict{String,Any}(
     "wavelength" => 0.665,
     "period" => 1e-5,
     "pixel size" => 0.1,
+    "batchsize" => 1,
+    "description" => "example run",
 )
 
-# data = Data(
-#     FloatType,
-#     Array{UInt16}(undef, 50, 50, 2550),
-#     metadata["period"],
-#     metadata["pixel size"],
-#     load("./data/beads/darkcounts1.jld2", "darkcounts"),
-#     metadata["numerical aperture"],
-#     metadata["refractive index"],
-#     metadata["wavelength"],
-# )
-
-data = Data(
-    FloatType,
-    Array{UInt16}(undef, 50, 50, 2550),
-    metadata["period"],
+PSF = CircularGaussianLorentzian{Float64}(
+    metadata["numerical aperture"],
+    metadata["refractive index"],
+    metadata["wavelength"],
     metadata["pixel size"],
-    load("./data/beads/darkcounts1.jld2", "darkcounts"),
-    11.14 * 12 / 1000,
-    1.2 * 100 / 1000,
 )
 
-data, groundtruth = simulate!(data; diffusivity = 2, brightness = 5e5, nemitters = 1)
+msd = 2 * 10 * metadata["period"]
+darkcounts = load("./example/darkcounts.jld2", "darkcounts")
+xᵖ = range(0, step = metadata["pixel size"], length = size(darkcounts, 1) + 1)
+yᵖ = range(0, step = metadata["pixel size"], length = size(darkcounts, 2) + 1)
 
-# visualize(groundtruth, data)
+tracks = Array{Float64}(undef, 2550, 3, 1)
+simulate!(
+    tracks,
+    metadata["pixel size"] ./ 2 .* [size(darkcounts)..., 0],
+    [0.0, 0.0, 0.0],
+    msd,
+)
 
-jldsave("./example/data.jld2"; data)
-jldsave("./example/groundtruth.jld2"; groundtruth)
+brightness = 4e4 * metadata["period"]
+
+intensity = SP2T.pxcounts(tracks, brightness, darkcounts, xᵖ, yᵖ, PSF)
+frames = SP2T.simframes(intensity)
+
+jldsave("./example/metadata.jld2"; metadata)
+jldsave("./example/frames.jld2"; frames)
+jldsave("./example/groundtruth.jld2"; tracks = tracks, msd = msd)

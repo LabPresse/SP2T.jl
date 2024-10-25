@@ -5,8 +5,8 @@ struct Normal₃{T} <: SimplifiedDistribution{T}
     σ::T
 end
 
-_params(n::Normal₃) = n.μ, n.σ
-struct Tracks{Ta,Tv,B}
+Distributions.params(n::Normal₃) = n.μ, n.σ
+struct Tracks{T,Ta,Tv,B}
     value::Ta
     valueᵖ::Ta
     prior::Normal₃{Tv}
@@ -16,22 +16,62 @@ struct Tracks{Ta,Tv,B}
     counter::Matrix{Int}
 end
 
-function Tracks(
-    x::AbstractArray{T,3},
-    xᵖ::AbstractArray{T,3},
-    prior::Normal₃{<:AbstractVector{T}},
-    perturbsize::AbstractVector{T},
-) where {T}
-    logratio = similar(x, axes(x, 1))
-    accepted = fill!(similar(logratio, Bool), false)
-    return Tracks(x, xᵖ, prior, perturbsize, logratio, accepted, zeros(Int, 2, 2))
+# function Tracks{T}(
+#     x::AbstractArray{<:Real,3},
+#     xᵖ::AbstractArray{<:Real,3},
+#     prior::Normal₃{<:AbstractVector{<:Real}},
+#     perturbsize::AbstractVector{<:Real},
+# ) where {T<:AbstractFloat}
+#     logratio = similar(x, T, axes(x, 1))
+#     accepted = fill!(similar(logratio, Bool), false)
+#     return Tracks{T,typeof(x),typeof(logratio),typeof(accepted)}(
+#         convert.(T, x),
+#         xᵖ,
+#         prior,
+#         perturbsize,
+#         logratio,
+#         accepted,
+#         zeros(Int, 2, 2),
+#     )
+# end
+
+function Tracks{T}(;
+    value::AbstractArray{<:Real,3},
+    prior::Normal₃{<:AbstractVector{<:Real}},
+    perturbsize::AbstractVector{<:Real},
+) where {T<:AbstractFloat}
+    value = convert.(T, value)
+    valueᵖ = similar(value)
+    logratio = similar(value, T, axes(value, 1))
+    accepted = similar(logratio, Bool)
+    return Tracks{T,typeof(value),typeof(logratio),typeof(accepted)}(
+        value,
+        valueᵖ,
+        prior,
+        perturbsize,
+        logratio,
+        accepted,
+        zeros(Int, 2, 2),
+    )
 end
 
-function Tracks(; value, prior, perturbsize)
+function Tracks(;
+    value::AbstractArray{<:Real,3},
+    prior::Normal₃{<:AbstractVector{<:Real}},
+    perturbsize::AbstractVector{<:Real},
+)
     valueᵖ = similar(value)
     logratio = similar(value, axes(value, 1))
     accepted = similar(logratio, Bool)
-    return Tracks(value, valueᵖ, prior, perturbsize, logratio, accepted, zeros(Int, 2, 2))
+    return Tracks{eltype(value),typeof(value),typeof(logratio),typeof(accepted)}(
+        value,
+        valueᵖ,
+        prior,
+        perturbsize,
+        logratio,
+        accepted,
+        zeros(Int, 2, 2),
+    )
 end
 
 ontracks(x::Tracks, M::Integer) = @views x.value[:, :, 1:M], x.valueᵖ[:, :, 1:M]
@@ -54,39 +94,40 @@ function simulate!(
     x::AbstractArray{T,3},
     μ::AbstractVector{T},
     σ::AbstractVector{T},
-    D::T,
+    msd::T,
     y::AbstractArray{T,3},
 ) where {T}
-    _randn!(y, √(2 * D), σ)
+    _randn!(y, √msd, σ)
     cumsum!(x, y, dims = 1)
     x .+= reshape(μ, 1, :)
 end
 
 function simulate!(
     x::AbstractArray{T,3},
-    μ::AbstractVector{T},
+    μ::AbstractArray{T},
     σ::AbstractVector{T},
-    D::T,
+    msd::T,
+    dims::Integer = 3,
 ) where {T}
-    _randn!(x, √(2 * D), σ)
+    _randn!(x, √msd, σ)
     cumsum!(x, x, dims = 1)
-    x .+= reshape(μ, 1, :)
+    x .+= reshape(μ, 1, dims, :)
 end
 
-function simulate!(
-    x::AbstractArray{T,3},
-    μ::AbstractArray{T,3},
-    σ::AbstractVector{T},
-    D::T,
-) where {T}
-    _randn!(x, √(2 * D), σ)
-    cumsum!(x, x, dims = 1)
-    x .+= μ
-end
+# function simulate!(
+#     x::AbstractArray{T,3},
+#     μ::AbstractArray{T,3},
+#     σ::AbstractVector{T},
+#     msd::T,
+# ) where {T}
+#     _randn!(x, √msd, σ)
+#     cumsum!(x, x, dims = 1)
+#     x .+= μ
+# end
 
-function bridge!(x::AbstractArray{T,3}, D::T, xend::AbstractArray{T,3}) where {T}
+function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T}
     σ = fill!(similar(x, size(x, 2)), 0)
-    simulate!(x, -diff(xend, dims = 1), σ, D)
+    simulate!(x, -diff(xend, dims = 1), σ, msd)
     N = size(x, 1) - 1
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
@@ -97,14 +138,8 @@ function MHinit!(x::Tracks)
     return x
 end
 
-function propose!(
-    y::AbstractArray{T,3},
-    x::AbstractArray{T,3},
-    σ::AbstractVector{T},
-) where {T}
-    randn!(y)
-    y .= y .* transpose(σ) .+ x
-end
+propose!(y::AbstractArray{T,3}, x::AbstractArray{T,3}, σ::AbstractVector{T}) where {T} =
+    y .= x .+ transpose(σ) .* randn(T, size(y))
 
 # propose!(y::AbstractArray{T}, x::AbstractArray{T}, t::BrownianTracks) where {T} =
 #     propose!(y, x, t.perturbsize)
@@ -151,11 +186,11 @@ function ΣΔΔx²!(
     ΔΔx²::AbstractArray{T,3},
     Δx²::AbstractArray{T,3},
     Δy²::AbstractArray{T,3},
-    D::T,
+    msd::T,
 ) where {T}
     ΔΔx² .= Δx² .- Δy²
     sum!(ΣΔΔx², ΔΔx²)
-    ΣΔΔx² ./= 4 * D
+    ΣΔΔx² ./= 2 * msd
 end
 
 function counter!(x::Tracks)
@@ -195,13 +230,13 @@ function oddΔlogπ!(
     y::AbstractArray{T,3},
     Δx²::AbstractArray{T,3},
     Δy²::AbstractArray{T,3},
-    D::T,
+    msd::T,
     ΔΔx²::AbstractArray{T,3},
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
     diff²!(Δx², x)
     staggered_diff²!(Δy², x, y)
-    ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², D)
+    ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², msd)
     oddΔlogπ!(Δlogπ, ΣΔΔx²)
 end
 
@@ -211,12 +246,12 @@ function evenΔlogπ!(
     y::AbstractArray{T,3},
     Δx²::AbstractArray{T,3},
     Δy²::AbstractArray{T,3},
-    D::T,
+    msd::T,
     ΔΔx²::AbstractArray{T,3},
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
     diff²!(Δx², x)
     staggered_diff²!(Δy², y, x)
-    ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², D)
+    ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², msd)
     evenΔlogπ!(Δlogπ, ΣΔΔx²)
 end

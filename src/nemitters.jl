@@ -1,21 +1,38 @@
-mutable struct NEmitters{Tv}
+mutable struct NEmitters{T,Tv}
     value::Int
-    logπ::Tv
+    logprior::Tv
     logℒ::Tv
     log𝒫::Tv
 end
 
-function NEmitters(; value::Integer, maxcount::Integer, logonprob::Real)
-    logprior = collect((0:maxcount) .* logonprob)
-    return NEmitters(value, logprior, similar(logprior), similar(logprior))
+function NEmitters{T}(;
+    value::Integer,
+    limit::Integer,
+    logonprob::Real,
+) where {T<:AbstractFloat}
+    logprior = collect((0:limit) .* convert(T, logonprob))
+    return NEmitters{T,typeof(logprior)}(
+        value,
+        logprior,
+        similar(logprior),
+        similar(logprior),
+    )
 end
 
-maxcount(M::NEmitters) = length(M.log𝒫) - 1
+function Base.getproperty(M::NEmitters, s::Symbol)
+    if s == :limit
+        return length(getfield(M, :log𝒫)) - 1
+    else
+        return getfield(M, s)
+    end
+end
 
-anyactive(M::NEmitters) = M.value > 0
+# maxcount(M::NEmitters) = length(M.log𝒫) - 1
+
+Base.any(M::NEmitters) = M.value > 0
 
 function setlog𝒫!(M::NEmitters, 𝑇::Real)
-    @. M.log𝒫 = M.logπ + M.logℒ / 𝑇
+    @. M.log𝒫 = M.logprior + M.logℒ / 𝑇
     return M
 end
 
@@ -23,12 +40,12 @@ function setlogℒ!(
     M::NEmitters,
     x::AbstractArray{T,3},
     h::T,
-    data::Data,
+    data::Data{T},
     A::AuxiliaryVariables,
 ) where {T}
     A.U .= data.darkcounts
     @inbounds for m = 1:size(x, 3)
-        add_pxcounts!(A.U, view(x, :, :, m:m), h, data)
+        add_pxcounts!(A.U, view(x, :, :, m:m), h, data.pxboundsx, data.pxboundsy, data.PSF)
         M.logℒ[m+1] = logℒ(data, A)
     end
     return M

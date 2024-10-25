@@ -1,5 +1,5 @@
-struct Sample{T<:AbstractFloat,AofT<:AbstractArray{T,3}}
-    tracks::AofT
+struct Sample{T<:AbstractFloat,A<:AbstractArray{T,3}}
+    tracks::A
     diffusivity::T
     brightness::T
     iteration::Int # iteration
@@ -11,28 +11,47 @@ end
 Sample(
     x::AbstractArray{T,3},
     M::Integer,
-    D::T,
+    msd::T,
     h::T,
     i::Integer,
     𝑇::T,
     log𝒫::T,
     logℒ::T,
-) where {T} = Sample(collect(view(x, :, :, 1:M)), D, h, i, 𝑇, log𝒫, logℒ)
+) where {T} = Sample(collect(view(x, :, :, 1:M)), msd, h, i, 𝑇, log𝒫, logℒ)
 
-Sample(x::AbstractArray{T,3}, M::Integer, D::T, h::T) where {T<:AbstractFloat} =
-    Sample(x, M, D, h, 0, oneunit(T), convert(T, NaN), convert(T, NaN))
+Sample(x::AbstractArray{T,3}, M::Integer, msd::T, h::T) where {T<:AbstractFloat} =
+    Sample(x, M, msd, h, 0, oneunit(T), convert(T, NaN), convert(T, NaN))
 
 get_B(v::AbstractVector{Sample}) = [size(s.tracks, 2) for s in v]
 
-get_D(v::AbstractVector{Sample}) = [s.D for s in v]
+# get_D(v::AbstractVector{Sample}) = [s.D for s in v]
 
-get_h(v::AbstractVector{Sample}) = [s.h for s in v]
+# get_h(v::AbstractVector{Sample}) = [s.h for s in v]
 
-struct Chain{VofS<:AbstractVector{<:Sample},A<:AbstractAnnealing}
+mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:AbstractAnnealing{T}}
     samples::VofS
     sizelimit::Int
     annealing::A
 end
+
+function Base.getproperty(c::Chain, s::Symbol)
+    if s === :msd
+        return [sample.diffusivity for sample in getfield(c, :samples)]
+    elseif s === :nemitters
+        return [size(sample.tracks, 3) for sample in getfield(c, :samples)]
+    elseif s === :logposterior
+        return [sample.log𝒫 for sample in getfield(c, :samples)]
+    elseif s === :loglikelihood
+        return [sample.logℒ for sample in getfield(c, :samples)]
+    elseif s === :stride
+        return length(getfield(c, :samples)) == 1 ? 1 :
+               getfield(c, :samples)[2].iteration - getfield(c, :samples)[1].iteration
+    else
+        return getfield(c, s)
+    end
+end
+
+Base.length(c::Chain) = length(c.samples)
 
 isfull(chain::Chain) = length(chain.samples) == chain.sizelimit
 
@@ -43,13 +62,10 @@ end
 
 temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 
-saveperiod(chain::Chain) =
-    length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
+# saveperiod(chain::Chain) =
+#     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
 
-struct AuxiliaryVariables{
-    A<:AbstractArray{<:AbstractFloat,3},
-    V<:AbstractVector{<:AbstractFloat},
-}
+struct AuxiliaryVariables{T<:AbstractFloat,A<:AbstractArray{T,3},V<:AbstractVector{T}}
     Δ𝐱²::A
     Δ𝐲²::A
     ΔΔ𝐱²::A

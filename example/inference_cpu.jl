@@ -1,38 +1,61 @@
 using SP2T
 using JLD2
-using Random
+using Distributions
 
-Random.seed!(1)
+metadata = load("./example/metadata.jld2", "metadata")
+frames = load("./example/frames.jld2", "frames")
+darkcounts = load("./example/darkcounts.jld2", "darkcounts")
 
-data = load("./example/data.jld2", "data")
-groundtruth = load("./example/groundtruth.jld2", "groundtruth")
+FloatType = Float32
 
-FloatType = typeof(data.period)
-
-D = Diffusivity(value = 2, priorparams = (2, 0.1), scale = data.period)
-
-h = Brightness(value = 5e5, priorparams = (1, 1), proposalparam = 1, scale = data.period)
-
-M = NEmitters(value = 0, maxcount = 10, onprob = oftype(data.period, 0.1))
-
-x = BrownianTracks(
-    value = Array{FloatType}(undef, 3, maxcount(M), size(data.frames, 3)),
-    prior = Normal₃(
-        [data.pxboundsx[end] / 2, data.pxboundsy[end] / 2, 0],
-        [data.pxboundsx[end] / 4, data.pxboundsy[end] / 4, convert(FloatType, 0.5)],
-    ),
-    perturbsize = fill(sqrt(2 * D.value), 3),
+data = Data{FloatType}(
+    frames,
+    metadata["period"],
+    metadata["pixel size"],
+    darkcounts,
+    (eps(), Inf),
+    metadata["numerical aperture"],
+    metadata["refractive index"],
+    metadata["wavelength"],
 )
+
+msd = MeanSquaredDisplacement{FloatType}(
+    value = 2 * 1 * metadata["period"],
+    prior = InverseGamma(2, 1e-5),
+)
+
+h = Brightness{FloatType}(
+    value = 4e4 * metadata["period"],
+    prior = Gamma(1, 1),
+    proposalparam = 1,
+)
+
+M = NEmitters{FloatType}(value = 0, limit = 10, logonprob = -10)
+
+x = Tracks(
+    value = Array{FloatType}(undef, data.nframes, 3, M.limit),
+    prior = Normal₃(
+        [data.framecenter..., 0],
+        Array{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10, 0.5]),
+    ),
+    perturbsize = fill(√msd.value, 3),
+)
+
+groundtruth = load("./example/groundtruth.jld2")
+copyto!(x.value, groundtruth["tracks"])
+M.value = 1
 
 chain = runMCMC(
     tracks = x,
     nemitters = M,
-    diffusivity = D,
+    diffusivity = msd,
     brightness = h,
     data = data,
-    niters = 999,
+    niters = 10,
     sizelimit = 1000,
 );
+
+runMCMC!(chain, x, M, msd, h, data, 100, true);
 
 jldsave("./example/chain_cpu.jld2"; chain)
 
