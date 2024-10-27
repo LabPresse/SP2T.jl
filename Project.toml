@@ -1,7 +1,7 @@
 name = "SP2T"
 uuid = "34fb1bd2-35c9-4575-83d4-13ca8a095b37"
 authors = ["lanceXwq <lance.xwq@gmail.com> and contributors"]
-version = "0.6.0-DEV"
+version = "0.5.1"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
