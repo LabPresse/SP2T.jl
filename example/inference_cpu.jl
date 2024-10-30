@@ -8,15 +8,19 @@ darkcounts = load("./example/darkcounts.jld2", "darkcounts")
 
 FloatType = Float32
 
-data = Data{FloatType}(
-    frames,
+detector = SPAD{FloatType}(
     metadata["period"],
     metadata["pixel size"],
     darkcounts,
     (eps(), Inf),
+    size(frames, 3),
+)
+
+psf = CircularGaussianLorentzian{FloatType}(
     metadata["numerical aperture"],
     metadata["refractive index"],
     metadata["wavelength"],
+    metadata["pixel size"],
 )
 
 msd = MeanSquaredDisplacement{FloatType}(
@@ -32,10 +36,10 @@ h = Brightness{FloatType}(
 
 M = NEmitters{FloatType}(value = 0, limit = 10, logonprob = -10)
 
-x = Tracks(
-    value = Array{FloatType}(undef, data.nframes, 3, M.limit),
-    prior = Normal₃(
-        [data.framecenter..., 0],
+x = Tracks{FloatType}(
+    value = Array{FloatType}(undef, size(frames, 3), 3, M.limit),
+    prior = DNormal(
+        [detector.framecenter..., 0],
         Array{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10, 0.5]),
     ),
     perturbsize = fill(√msd.value, 3),
@@ -48,14 +52,16 @@ M.value = 1
 chain = runMCMC(
     tracks = x,
     nemitters = M,
-    diffusivity = msd,
+    msd = msd,
     brightness = h,
-    data = data,
-    niters = 10,
+    measurements = frames,
+    detector = detector,
+    psf = psf,
+    niters = 100,
     sizelimit = 1000,
 );
 
-runMCMC!(chain, x, M, msd, h, data, 100, true);
+runMCMC!(chain, x, M, msd, h, frames, detector, psf, 100, true);
 
 jldsave("./example/chain_cpu.jld2"; chain)
 

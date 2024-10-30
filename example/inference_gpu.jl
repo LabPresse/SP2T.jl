@@ -9,15 +9,19 @@ darkcounts = load("./example/darkcounts.jld2", "darkcounts")
 
 FloatType = Float32
 
-data = Data{FloatType}(
-    CuArray(frames),
+detector = SPAD{FloatType}(
     metadata["period"],
     metadata["pixel size"],
-    CuArray(darkcounts),
+    CuArray{FloatType}(darkcounts),
     (eps(), Inf),
+    size(frames, 3),
+)
+
+psf = CircularGaussianLorentzian{FloatType}(
     metadata["numerical aperture"],
     metadata["refractive index"],
     metadata["wavelength"],
+    metadata["pixel size"],
 )
 
 msd = MeanSquaredDisplacement{FloatType}(
@@ -31,12 +35,12 @@ h = Brightness{FloatType}(
     proposalparam = 1,
 )
 
-M = NEmitters{FloatType}(value = 0, limit = 10, logonprob = convert(FloatType, -10))
+M = NEmitters{FloatType}(value = 0, limit = 10, logonprob = -10)
 
-x = Tracks(
-    value = CuArray{FloatType}(undef, data.nframes, 3, M.limit),
-    prior = Normal₃(
-        CuArray([data.framecenter..., 0]),
+x = Tracks{FloatType}(
+    value = CuArray{FloatType}(undef, size(frames, 3), 3, M.limit),
+    prior = DNormal{FloatType}(
+        CuArray([detector.framecenter..., 0]),
         CuArray{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10, 0.5]),
     ),
     perturbsize = CUDA.fill(√msd.value, 3),
@@ -49,14 +53,16 @@ M.value = 1
 chain = runMCMC(
     tracks = x,
     nemitters = M,
-    diffusivity = msd,
+    msd = msd,
     brightness = h,
-    data = data,
-    niters = 5,
+    measurements = frames,
+    detector = detector,
+    psf = psf,
+    niters = 100,
     sizelimit = 1000,
 );
 
-runMCMC!(chain, x, M, msd, h, data, 100, true);
+runMCMC!(chain, x, M, msd, h, frames, detector, psf, 100, true);
 
 jldsave("./example/chain_gpu.jld2"; chain)
 

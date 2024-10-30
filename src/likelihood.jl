@@ -9,21 +9,31 @@
 #     F::AbstractMatrix{Bool},
 # ) where {T,N} = sum(logexpm1.(U[W.&F])) - sum(U .* F)
 
-function logℒ(
-    W::AbstractArray{UInt16,3},
-    F::AbstractMatrix{Bool},
-    B::Integer,
-    U::AbstractArray{T,3},
-    Sₐ::AbstractArray{T,3},
-    Sᵥ::AbstractVector{T},
-) where {T}
-    @. Sₐ = W * logexpm1(U) - B * U
-    mul!(Sᵥ, transpose(reshape(Sₐ, length(F), :)), vec(F))
-    sum(Sᵥ)
-end
+# pxlogℒ!(
+#     likelihood::AbstractArray{T,3},
+#     measurements::AbstractArray{UInt16,3},
+#     intensity::AbstractArray{T,3},
+#     batchsize::Integer,
+# ) where {T} = @. likelihood = frames * logexpm1(intensity) - batchsize * intensity
 
-logℒ(data::Data, auxvar::AuxiliaryVariables) =
-    logℒ(data.frames, data.filter, data.batchsize, auxvar.U, auxvar.Sₐ, auxvar.Sᵥ)
+# function logℒ(
+#     W::AbstractArray{UInt16,3},
+#     F::AbstractMatrix{Bool},
+#     B::Integer,
+#     U::AbstractArray{T,3},
+#     Sₐ::AbstractArray{T,3},
+#     Sᵥ::AbstractVector{T},
+# ) where {T}
+#     pxlogℒ!(Sₐ, W, U, B)
+#     framelogℒ!(Sᵥ, Sₐ, F)
+#     return sum(Sᵥ)
+# end
+
+# function logℒ(data::Data{T}, auxvar::AuxiliaryVariables{T}) where {T}
+#     pxlogℒ!(auxvar.Sₐ, data.frames, auxvar.U, data.detector)
+#     framesum!(auxvar.Sᵥ, auxvar.Sₐ, data.filter)
+#     return sum(auxvar.Sᵥ)
+# end
 
 # dangerous hack
 # function unsafe_Δlogℒ!(
@@ -51,29 +61,28 @@ logℒ(data::Data, auxvar::AuxiliaryVariables) =
 #     sum!(Δlogℒ, S)
 # end
 
-function Δlogℒ!(
-    Δlogℒ::AbstractVector{T},
-    W::AbstractArray{UInt16,3},
-    F::AbstractMatrix{Bool},
-    B::Integer,
-    U::AbstractArray{T,3},
-    V::AbstractArray{T,3},
-    S::AbstractArray{T,3},
-) where {T}
-    @. S = W * (logexpm1(V) - logexpm1(U)) - B * (V - U)
-    mul!(Δlogℒ, transpose(reshape(S, length(F), :)), vec(F))
-end
+# function Δlogℒ!(
+#     Δlogℒ::AbstractVector{T},
+#     W::AbstractArray{UInt16,3},
+#     F::AbstractMatrix{Bool},
+#     B::Integer,
+#     U::AbstractArray{T,3},
+#     V::AbstractArray{T,3},
+#     S::AbstractArray{T,3},
+# ) where {T}
+#     @. S = W * (logexpm1(V) - logexpm1(U)) - B * (V - U)
+#     mul!(Δlogℒ, transpose(reshape(S, length(F), :)), vec(F))
+# end
 
-Δlogℒ!(data::Data, auxvar::AuxiliaryVariables) = Δlogℒ!(
-    auxvar.Sᵥ,
-    data.frames,
-    data.filter,
-    data.batchsize,
-    auxvar.U,
-    auxvar.V,
-    auxvar.Sₐ,
-)
 
-anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇
 
-anneal!(logℒ::AbstractVector{T}, 𝑇::T) where {T} = logℒ ./= 𝑇
+# Δlogℒ!(data::Data, auxvar::AuxiliaryVariables) = Δlogℒ!(
+#     auxvar.Sᵥ,
+#     data.frames,
+#     data.filter,
+#     data.batchsize,
+#     auxvar.U,
+#     auxvar.V,
+#     auxvar.Sₐ,
+# )
+

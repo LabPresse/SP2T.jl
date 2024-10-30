@@ -19,27 +19,30 @@ export Tracks,
     Brightness,
     Chain,
     Sample,
-    Data,
     DNormal,
     CircularGaussianLorentzian,
     ConstantAnnealing,
-    PolynomialAnnealing
+    PolynomialAnnealing,
+    SPAD
 
 export simulate!, bridge!, runMCMC!, runMCMC
 
+include("basetypes.jl")
 include("utils.jl")
-include("psf.jl")
-include("data.jl")
-include("annealing.jl")
-include("chain.jl")
+include("3dpsf.jl")
+include("pixeldetector.jl")
+# include("data.jl")
 
 include("msd.jl")
 include("track.jl")
 include("nemitters.jl")
 include("brightness.jl")
-# include("permutation.jl")
 
-include("likelihood.jl")
+include("annealing.jl")
+include("chain.jl")
+
+# include("likelihood.jl")
+include("permutation.jl")
 include("posterior.jl")
 include("updater.jl")
 

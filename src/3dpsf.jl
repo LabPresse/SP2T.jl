@@ -1,5 +1,3 @@
-abstract type PointSpreadFunction{T} end
-
 struct CircularGaussianLorentzian{T} <: PointSpreadFunction{T}
     A::T # maximum intensity possible in one pixel
     σ₀::T # [length] std of PSF along xy (image plane)

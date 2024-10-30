@@ -9,18 +9,51 @@ struct Sample{T<:AbstractFloat,A<:AbstractArray{T,3}}
 end
 
 Sample(
-    x::AbstractArray{T,3},
-    M::Integer,
+    tracks::AbstractArray{T,3},
+    nemitters::Integer,
     msd::T,
-    h::T,
-    i::Integer,
+    brightness::T,
+    iter::Integer,
     𝑇::T,
     log𝒫::T,
     logℒ::T,
-) where {T} = Sample(collect(view(x, :, :, 1:M)), msd, h, i, 𝑇, log𝒫, logℒ)
+) where {T} =
+    Sample(collect(view(tracks, :, :, 1:nemitters)), msd, brightness, iter, 𝑇, log𝒫, logℒ)
 
-Sample(x::AbstractArray{T,3}, M::Integer, msd::T, h::T) where {T<:AbstractFloat} =
-    Sample(x, M, msd, h, 0, oneunit(T), convert(T, NaN), convert(T, NaN))
+Sample(
+    tracks::Tracks{T},
+    nemitters::NEmitters{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    iter::Integer,
+    𝑇::T,
+    log𝒫::T,
+    logℒ::T,
+) where {T} =
+    Sample(tracks.value, nemitters.value, msd.value, brightness.value, iter, 𝑇, log𝒫, logℒ)
+
+Sample(
+    tracksᵥ::AbstractArray{T,3},
+    nemittersᵥ::Integer,
+    msdᵥ::T,
+    brightnessᵥ::T,
+) where {T<:AbstractFloat} = Sample(
+    tracksᵥ,
+    nemittersᵥ,
+    msdᵥ,
+    brightnessᵥ,
+    0,
+    oneunit(T),
+    convert(T, NaN),
+    convert(T, NaN),
+)
+
+Sample(
+    tracks::Tracks{T},
+    nemitters::NEmitters{T},
+    brightness::MeanSquaredDisplacement{T},
+    𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠::Brightness{T},
+) where {T} = Sample(tracks.value, nemitters.value, brightness.value, 𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠.value)
 
 get_B(v::AbstractVector{Sample}) = [size(s.tracks, 2) for s in v]
 
@@ -62,33 +95,38 @@ end
 
 temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 
-# saveperiod(chain::Chain) =
-#     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
-
-struct AuxiliaryVariables{T<:AbstractFloat,A<:AbstractArray{T,3},V<:AbstractVector{T}}
-    Δ𝐱²::A
-    Δ𝐲²::A
-    ΔΔ𝐱²::A
-    ΣΔΔ𝐱²::V
-    Sᵥ::V # scratch vector
-    U::A
-    V::A
-    Sₐ::A # scratch array
+function extend!(
+    chain::Chain{T},
+    tracks::Tracks{T},
+    nemitters::NEmitters{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    measurements::AbstractArray{<:Union{T,Integer}},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+    iter::Integer,
+    𝑇::T,
+) where {T}
+    if iter % chain.stride == 0
+        log𝒫, logℒ =
+            log𝒫logℒ(tracks, nemitters, msd, brightness, measurements, detector, psf)
+        push!(
+            chain.samples,
+            Sample(
+                tracks.value,
+                nemitters.value,
+                msd.value,
+                brightness.value,
+                iter,
+                𝑇,
+                log𝒫,
+                logℒ,
+            ),
+        )
+        isfull(chain) && shrink!(chain)
+    end
+    return chain
 end
 
-AuxiliaryVariables(
-    x::AbstractArray{T,3},
-    dims::Tuple{<:Integer,<:Integer,<:Integer},
-) where {T} = AuxiliaryVariables(
-    similar(x, dims[3] - 1, size(x, 2), size(x, 3)),
-    similar(x, dims[3] - 1, size(x, 2), size(x, 3)),
-    similar(x, dims[3] - 1, size(x, 2), size(x, 3)),
-    similar(x, dims[3] - 1),
-    similar(x, dims[3]),
-    similar(x, dims[1], dims[2], dims[3]),
-    similar(x, dims[1], dims[2], dims[3]),
-    similar(x, dims[1], dims[2], dims[3]),
-)
-
-displacements(aux::AuxiliaryVariables, M::Integer) =
-    @views aux.Δ𝐱²[:, :, 1:M], aux.Δ𝐲²[:, :, 1:M], aux.ΔΔ𝐱²[:, :, 1:M]
+# saveperiod(chain::Chain) =
+#     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration

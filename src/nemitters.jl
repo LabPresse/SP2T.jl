@@ -19,64 +19,47 @@ function NEmitters{T}(;
     )
 end
 
-function Base.getproperty(M::NEmitters, s::Symbol)
+function Base.getproperty(nemitters::NEmitters, s::Symbol)
     if s == :limit
-        return length(getfield(M, :log𝒫)) - 1
+        return length(getfield(nemitters, :log𝒫)) - 1
     else
-        return getfield(M, s)
+        return getfield(nemitters, s)
     end
 end
 
-# maxcount(M::NEmitters) = length(M.log𝒫) - 1
+Base.any(nemitters::NEmitters) = nemitters.value > 0
 
-Base.any(M::NEmitters) = M.value > 0
-
-function setlog𝒫!(M::NEmitters, 𝑇::Real)
-    @. M.log𝒫 = M.logprior + M.logℒ / 𝑇
-    return M
+function setlog𝒫!(nemitters::NEmitters{T}, 𝑇::T) where {T}
+    @. nemitters.log𝒫 = nemitters.logprior + nemitters.logℒ / 𝑇
+    return nemitters
 end
 
 function setlogℒ!(
-    M::NEmitters,
-    x::AbstractArray{T,3},
-    h::T,
-    data::Data{T},
-    A::AuxiliaryVariables,
+    nemitters::NEmitters,
+    tracksᵥ::AbstractArray{T,3},
+    brightnessᵥ::T,
+    measurements::AbstractArray{<:Union{T,UInt16}},
+    detector::PixelDetector{T},
+    psf::PointSpreadFunction{T},
 ) where {T}
-    A.U .= data.darkcounts
-    @inbounds for m = 1:size(x, 3)
-        add_pxcounts!(A.U, view(x, :, :, m:m), h, data.pxboundsx, data.pxboundsy, data.PSF)
-        M.logℒ[m+1] = logℒ(data, A)
+    initintensity!(detector)
+    @inbounds for m = 1:size(tracksᵥ, 3)
+        add_pxcounts!(
+            detector.intensity₁,
+            view(tracksᵥ, :, :, m:m),
+            brightnessᵥ,
+            detector.pxboundsx,
+            detector.pxboundsy,
+            psf,
+        )
+        nemitters.logℒ[m+1] = logℒ!(detector, measurements)
     end
-    return M
+    return nemitters
 end
 
 randc(logp::AbstractArray) = argmax(logp .- log.(randexp!(similar(logp))))
 
-function sample!(M::NEmitters)
-    M.value = randc(M.log𝒫) - 1
-    return M
+function sample!(nemitters::NEmitters)
+    nemitters.value = randc(nemitters.log𝒫) - 1
+    return nemitters
 end
-
-function _permute!(
-    x::AbstractArray{T,3},
-    p::AbstractVector{<:Integer},
-    y::AbstractArray{T,3},
-) where {T}
-    @views copyto!(y, x[:, :, p])
-    copyto!(x, y)
-end
-
-function permuteemitters!(
-    x::AbstractArray{T,3},
-    y::AbstractArray{T,3},
-    M::Integer,
-) where {T}
-    p = randperm(M)
-    isequal(p, 1:M) && return x
-    @views _permute!(x[:, :, 1:M], p, y[:, :, 1:M])
-    return x
-end
-
-permuteemitters!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, M::NEmitters) where {T} =
-    permuteemitters!(x, y, M.value)

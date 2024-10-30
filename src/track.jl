@@ -1,5 +1,3 @@
-abstract type SimplifiedDistribution{T} end
-
 struct DNormal{T<:AbstractFloat,V<:AbstractVector{T}} <: SimplifiedDistribution{T}
     μ::V
     σ::V
@@ -21,75 +19,74 @@ end
 
 Distributions.params(n::DNormal) = n.μ, n.σ
 
-struct Tracks{T,A,V,B}
-    value::A
-    valueᵖ::A
-    prior::DNormal{T,V}
+struct NormalPerturbationAux{
+    T,
+    A<:AbstractArray{T,3},
+    V<:AbstractVector{T},
+    B<:AbstractVector{Bool},
+} <: AuxiliaryVariables{T}
+    proposal::A
+    displacement₁²::A
+    displacement₂²::A
+    Δdisplacement²::A
+    ΣΔdisplacement²::V
     perturbsize::V
     logratio::V
     accepted::B
     counter::Matrix{Int}
 end
 
-# function Tracks{T}(
-#     x::AbstractArray{<:Real,3},
-#     xᵖ::AbstractArray{<:Real,3},
-#     prior::Normal₃{<:AbstractVector{<:Real}},
-#     perturbsize::AbstractVector{<:Real},
-# ) where {T<:AbstractFloat}
-#     logratio = similar(x, T, axes(x, 1))
-#     accepted = fill!(similar(logratio, Bool), false)
-#     return Tracks{T,typeof(x),typeof(logratio),typeof(accepted)}(
-#         convert.(T, x),
-#         xᵖ,
-#         prior,
-#         perturbsize,
-#         logratio,
-#         accepted,
-#         zeros(Int, 2, 2),
-#     )
-# end
+struct Tracks{
+    T,
+    A<:AbstractArray{T,3},
+    P<:SimplifiedDistribution{T},
+    V<:AbstractVector{T},
+    B<:AbstractVector{Bool},
+} <: AbstractRandomVariable{T}
+    value::A
+    prior::P
+    proposal::A
+    displacement₁²::A
+    displacement₂²::A
+    Δdisplacement²::A
+    ΣΔdisplacement²::V
+    perturbsize::V
+    logratio::V
+    accepted::B
+    counter::Matrix{Int}
+end
 
 function Tracks{T}(;
     value::AbstractArray{<:Real,3},
-    prior::DNormal{<:Real,<:AbstractVector{<:Real}},
+    prior::SimplifiedDistribution{<:Real},
     perturbsize::AbstractVector{<:Real},
 ) where {T<:AbstractFloat}
     value = convert.(T, value)
-    valueᵖ = similar(value)
-    logratio = similar(value, T, axes(value, 1))
-    accepted = similar(logratio, Bool)
-    return Tracks{T,typeof(value),typeof(logratio),typeof(accepted)}(
+    nframes, ndims, nemitters = size(value)
+    displacements = similar(value, nframes - 1, ndims, nemitters)
+    logratio = similar(value, nframes)
+    accepted = similar(value, Bool, nframes)
+    counter = zeros(Int, 2, 2)
+    return Tracks(
         value,
-        valueᵖ,
         prior,
+        similar(value),
+        displacements,
+        similar(displacements),
+        similar(displacements),
+        similar(logratio, nframes - 1),
         perturbsize,
         logratio,
         accepted,
-        zeros(Int, 2, 2),
+        counter,
     )
 end
 
-function Tracks(;
-    value::AbstractArray{<:Real,3},
-    prior::DNormal{<:Real,<:AbstractVector{<:Real}},
-    perturbsize::AbstractVector{<:Real},
-)
-    valueᵖ = similar(value)
-    logratio = similar(value, axes(value, 1))
-    accepted = similar(logratio, Bool)
-    return Tracks{eltype(value),typeof(value),typeof(logratio),typeof(accepted)}(
-        value,
-        valueᵖ,
-        prior,
-        perturbsize,
-        logratio,
-        accepted,
-        zeros(Int, 2, 2),
-    )
-end
-
-ontracks(x::Tracks, M::Integer) = @views x.value[:, :, 1:M], x.valueᵖ[:, :, 1:M]
+trackviews(tracks::Tracks, M::Integer) = @views tracks.value[:, :, 1:M],
+tracks.proposal[:, :, 1:M],
+tracks.displacement₁²[:, :, 1:M],
+tracks.displacement₂²[:, :, 1:M],
+tracks.Δdisplacement²[:, :, 1:M]
 
 logrand!(x::AbstractArray) = x .= log.(rand!(x))
 
@@ -147,14 +144,21 @@ function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where 
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
 
-function MHinit!(x::Tracks)
-    neglogrand!(x.logratio)
-    fill!(x.accepted, false)
-    return x
+function MHinit!(tracks::Tracks)
+    neglogrand!(tracks.logratio)
+    fill!(tracks.accepted, false)
+    return tracks
 end
 
 propose!(y::AbstractArray{T,3}, x::AbstractArray{T,3}, σ::AbstractVector{T}) where {T} =
     y .= x .+ transpose(σ) .* randn(T, size(y))
+
+# propose!(
+#     aux::NormalPerturbationAux{T},
+#     x::AbstractArray{T,3},
+#     nemitters::Integer,
+# ) where {T} =
+#     @views propose!(aux.proposal[:, :, 1:nemitters], x[:, :, 1:nemitters], aux.perturbsize)
 
 # propose!(y::AbstractArray{T}, x::AbstractArray{T}, t::BrownianTracks) where {T} =
 #     propose!(y, x, t.perturbsize)
@@ -208,9 +212,9 @@ function ΣΔΔx²!(
     ΣΔΔx² ./= 2 * msd
 end
 
-function counter!(x::Tracks)
-    @views x.counter[:, 2] .+= count(x.accepted), length(x.accepted)
-    return x
+function counter!(tracks::Tracks)
+    @views tracks.counter[:, 2] .+= count(tracks.accepted), length(tracks.accepted)
+    return tracks
 end
 
 function copyidxto!(
