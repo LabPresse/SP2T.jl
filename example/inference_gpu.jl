@@ -55,10 +55,10 @@ chain = runMCMC(
     nemitters = M,
     msd = msd,
     brightness = h,
-    measurements = frames,
+    measurements = CuArray(frames),
     detector = detector,
     psf = psf,
-    niters = 100,
+    niters = 998,
     sizelimit = 1000,
 );
 

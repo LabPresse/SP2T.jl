@@ -16,7 +16,7 @@ metadata = Dict{String,Any}(
     "description" => "example run",
 )
 
-PSF = CircularGaussianLorentzian{Float64}(
+psf = CircularGaussianLorentzian{Float64}(
     metadata["numerical aperture"],
     metadata["refractive index"],
     metadata["wavelength"],
@@ -38,7 +38,7 @@ simulate!(
 
 brightness = 4e4 * metadata["period"]
 
-intensity = SP2T.pxcounts(tracks, brightness, darkcounts, xᵖ, yᵖ, PSF)
+intensity = SP2T.pxcounts(tracks, brightness, darkcounts, xᵖ, yᵖ, psf)
 frames = SP2T.simframes(intensity)
 
 jldsave("./example/metadata.jld2"; metadata)
