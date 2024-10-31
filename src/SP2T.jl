@@ -19,10 +19,13 @@ export Tracks,
     Brightness,
     Chain,
     Sample,
+    SimplifiedDistribution,
     DNormal,
+    PointSpreadFunction,
     CircularGaussianLorentzian,
     ConstantAnnealing,
     PolynomialAnnealing,
+    PixelDetector,
     SPAD
 
 export simulate!, bridge!, runMCMC!, runMCMC
