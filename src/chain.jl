@@ -55,7 +55,15 @@ Sample(
     𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠::Brightness{T},
 ) where {T} = Sample(tracks.value, nemitters.value, brightness.value, 𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠.value)
 
-get_B(v::AbstractVector{Sample}) = [size(s.tracks, 2) for s in v]
+function Base.getproperty(sample::Sample, s::Symbol)
+    if s === :nemitters
+        return size(sample.tracks, 3)
+    else
+        return getfield(sample, s)
+    end
+end
+
+# get_B(v::AbstractVector{Sample}) = [size(s.tracks, 2) for s in v]
 
 # get_D(v::AbstractVector{Sample}) = [s.D for s in v]
 
@@ -87,6 +95,11 @@ end
 Base.length(c::Chain) = length(c.samples)
 
 isfull(chain::Chain) = length(chain.samples) == chain.sizelimit
+
+findmap(chain::Chain; burn_in::Real = 0) = @views findmax(chain.logposterior[burn_in+1:end])
+
+findmle(chain::Chain; burn_in::Real = 0) =
+    @views findmax(chain.loglikelihood[burn_in+1:end])
 
 function shrink!(chain::Chain)
     deleteat!(chain.samples, 2:2:lastindex(chain.samples))
