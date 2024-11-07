@@ -2,6 +2,11 @@ struct CircularGaussianLorentzian{T} <: PointSpreadFunction{T}
     A::T # maximum intensity possible in one pixel
     σ₀::T # [length] std of PSF along xy (image plane)
     z₀::T # [length] std of PSF along z (optical axis)
+    CircularGaussianLorentzian{T}(
+        σ₀::Real,
+        z₀::Real,
+        pxsize::Real,
+    ) where {T<:AbstractFloat} = new{T}(peakintensityCGL(σ₀, pxsize), σ₀, z₀)
 end
 
 function CircularGaussianLorentzian{T}(
@@ -11,8 +16,7 @@ function CircularGaussianLorentzian{T}(
     pxsize::Real,
 ) where {T<:AbstractFloat}
     σ₀, z₀ = getσ₀z₀(na, nᵣ, λ)
-    A = peakintensityCGL(σ₀, pxsize)
-    return CircularGaussianLorentzian{T}(A, σ₀, z₀)
+    return CircularGaussianLorentzian{T}(σ₀, z₀, pxsize)
 end
 
 function getσ₀z₀(na::Real, nᵣ::Real, λ::Real)
