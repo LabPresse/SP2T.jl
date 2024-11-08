@@ -144,6 +144,22 @@ function add_pxcounts!(
     brightnessᵥ::T,
     xᵖ::AbstractVector{T},
     yᵖ::AbstractVector{T},
+    psf::CircularGaussian{T},
+    β = 1,
+) where {T<:AbstractFloat}
+    @views begin
+        𝐗 = _erf(tracksᵥ[:, 1:1, :], xᵖ, psf.σ)
+        𝐘 = _erf(tracksᵥ[:, 2:2, :], yᵖ, psf.σ)
+    end
+    return batched_mul!(intensity, 𝐗, batched_transpose(𝐘), brightnessᵥ / psf.A, β)
+end
+
+function add_pxcounts!(
+    intensity::AbstractArray{T,3},
+    tracksᵥ::AbstractArray{T,3},
+    brightnessᵥ::T,
+    xᵖ::AbstractVector{T},
+    yᵖ::AbstractVector{T},
     psf::CircularGaussianLorentzian{T},
     β = 1,
 ) where {T<:AbstractFloat}

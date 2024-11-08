@@ -22,6 +22,7 @@ export Tracks,
     SimplifiedDistribution,
     DNormal,
     PointSpreadFunction,
+    CircularGaussian,
     CircularGaussianLorentzian,
     ConstantAnnealing,
     PolynomialAnnealing,
@@ -32,7 +33,7 @@ export simulate!, bridge!, runMCMC!, runMCMC
 
 include("basetypes.jl")
 include("utils.jl")
-include("3dpsf.jl")
+include("gaussianpsf.jl")
 include("pixeldetector.jl")
 # include("data.jl")
 

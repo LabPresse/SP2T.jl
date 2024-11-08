@@ -1,3 +1,20 @@
+struct CircularGaussian{T} <: PointSpreadFunction{T}
+    A::T # maximum intensity possible in one pixel
+    σ::T # [length] std of PSF along xy (image plane)
+    CircularGaussian{T}(σ::Real, pxsize::Real) where {T<:AbstractFloat} =
+        new{T}(gaussianpeak(σ, pxsize), σ)
+end
+
+function CircularGaussian{T}(
+    na::Real,
+    nᵣ::Real,
+    λ::Real,
+    pxsize::Real,
+) where {T<:AbstractFloat}
+    σ, ~ = getσ₀z₀(na, nᵣ, λ)
+    return CircularGaussian{T}(σ, pxsize)
+end
+
 struct CircularGaussianLorentzian{T} <: PointSpreadFunction{T}
     A::T # maximum intensity possible in one pixel
     σ₀::T # [length] std of PSF along xy (image plane)
@@ -6,7 +23,7 @@ struct CircularGaussianLorentzian{T} <: PointSpreadFunction{T}
         σ₀::Real,
         z₀::Real,
         pxsize::Real,
-    ) where {T<:AbstractFloat} = new{T}(peakintensityCGL(σ₀, pxsize), σ₀, z₀)
+    ) where {T<:AbstractFloat} = new{T}(gaussianpeak(σ₀, pxsize), σ₀, z₀)
 end
 
 function CircularGaussianLorentzian{T}(
@@ -32,8 +49,8 @@ end
 
 semiangle(na::T, nᵣ::T) where {T<:AbstractFloat} = asin(na / nᵣ)
 
-function peakintensityCGL(σ₀::Real, pxsize::Real)
-    x = pxsize / 2 / (√2 * σ₀)
+function gaussianpeak(σ::Real, pxsize::Real)
+    x = pxsize / 2 / (√2 * σ)
     return erf(-x, x)^2 / 4
 end
 
@@ -51,7 +68,11 @@ function lateral_std(
     return lateral_std!(similar(z′), z′, PSF)
 end
 
-function _erf(x::AbstractArray{T}, bnds::AbstractVector{T}, σ::AbstractArray{T}) where {T}
+function _erf(
+    x::AbstractArray{T},
+    bnds::AbstractVector{T},
+    σ::Union{T,AbstractArray{T}},
+) where {T}
     𝐗 = @. (bnds - $PermutedDimsArray(x, (2, 3, 1))) / (√convert(T, 2) * σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end

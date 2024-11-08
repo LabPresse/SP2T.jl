@@ -119,11 +119,10 @@ function simulate!(
     μ::AbstractVector{T},
     σ::AbstractVector{T},
     msd::T,
-    dims::Integer = 3,
 ) where {T}
     _randn!(x, √msd, σ)
     cumsum!(x, x, dims = 1)
-    x .+= reshape(μ, 1, dims, :)
+    x .+= reshape(μ, 1, size(x, 2), :)
 end
 
 function simulate!(
