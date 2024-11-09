@@ -19,20 +19,21 @@ export Tracks,
     Brightness,
     Chain,
     Sample,
-    SimplifiedDistribution,
+    # SimplifiedDistribution,
     DNormal,
-    PointSpreadFunction,
+    # PointSpreadFunction,
     CircularGaussian,
     CircularGaussianLorentzian,
     ConstantAnnealing,
     PolynomialAnnealing,
-    PixelDetector,
+    # PixelDetector,
     SPAD
 
 export simulate!, bridge!, runMCMC!, runMCMC
 
 include("basetypes.jl")
 include("utils.jl")
+include("distributions.jl")
 include("gaussianpsf.jl")
 include("pixeldetector.jl")
 # include("data.jl")
