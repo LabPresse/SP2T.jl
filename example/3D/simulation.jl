@@ -38,7 +38,7 @@ simulate!(
 
 brightness = 4e4 * metadata["period"]
 
-intensity = SP2T.pxcounts(tracks, brightness, darkcounts, xᵖ, yᵖ, psf)
+intensity = SP2T.getincident(tracks, brightness, darkcounts, xᵖ, yᵖ, psf)
 frames = SP2T.simframes(intensity)
 
 jldsave("./example/metadata.jld2"; metadata)

@@ -32,15 +32,15 @@ tracks = Array{Float64}(undef, 2550, 2, 1)
 simulate!(
     tracks,
     metadata["pixel size"] ./ 2 .* collect(size(darkcounts)),
-    [0.0, 0.0, 0.0],
+    [0.0, 0.0],
     msd,
 )
 
 brightness = 1e4 * metadata["period"]
 
-intensity = SP2T.pxcounts(tracks, brightness, darkcounts, xᵖ, yᵖ, psf)
+intensity = SP2T.getincident(tracks, brightness, darkcounts, xᵖ, yᵖ, psf)
 frames = SP2T.simframes(intensity)
 
-jldsave("./example/metadata.jld2"; metadata)
-jldsave("./example/frames.jld2"; frames)
-jldsave("./example/groundtruth.jld2"; tracks = tracks, msd = msd)
+jldsave("./example/2D/metadata.jld2"; metadata)
+jldsave("./example/2D/frames.jld2"; frames)
+jldsave("./example/2D/groundtruth.jld2"; tracks = tracks, msd = msd)
