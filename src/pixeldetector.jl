@@ -233,7 +233,7 @@ function pxcounts!(
     )
 end
 
-function pxcounts(
+function getincident(
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     darkcounts::AbstractMatrix{T},

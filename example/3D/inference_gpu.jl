@@ -35,7 +35,7 @@ h = Brightness{FloatType}(
     proposalparam = 1,
 )
 
-M = NEmitters{FloatType}(value = 0, limit = 10, logonprob = -10)
+M = NTracks{FloatType}(value = 0, limit = 10, logonprob = -10)
 
 x = Tracks{FloatType}(
     value = CuArray{FloatType}(undef, size(frames, 3), 3, M.limit),
