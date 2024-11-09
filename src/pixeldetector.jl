@@ -1,24 +1,14 @@
-# struct PixelDetectorAuxiliary{
-#     T<:AbstractFloat,
-#     A<:AbstractArray{T,3},
-#     V<:AbstractVector{T},
-# } <: AuxiliaryVariables{T}
-#     intensity₁::A
-#     intensity₂::A
-#     pxlogℒ::A # scratch array
-#     framelogℒ::V # scratch vector
-# end
+abstract type PixelDetector{T} <: Detector{T} end
 
-# function PixelDetectorAuxiliary(nframes::Integer, detector::Detector{T}) where {T}
-#     intensity₁ = repeat(detector.darkcounts, 1, 1, nframes)
-#     intensity₂ = copy(intensity₁)
-#     pxlogℒ = fill!(similar(intensity₁), NaN)
-#     framelogℒ = fill!(similar(intensity₁, nframes), NaN)
-#     return PixelDetectorAuxiliary(intensity₁, intensity₂, pxlogℒ, framelogℒ)
-# end
+function Base.getproperty(detector::PixelDetector, s::Symbol)
+    if s == :framecenter
+        return mean(detector.pxboundsx), mean(detector.pxboundsy)
+    else
+        return getfield(detector, s)
+    end
+end
 
-# detectoraux(measurements::AbstractArray, detector::PixelDetector{T}) where {T} =
-#     PixelDetectorAuxiliary(size(measurements, 3), detector)
+Base.size(detector::PixelDetector) = size(detector.darkcounts)
 
 struct SPAD{
     T<:AbstractFloat,

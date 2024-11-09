@@ -106,7 +106,7 @@ function update!(
 end
 
 function update!(
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -122,7 +122,7 @@ end
 
 function parametricMCMC!(
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -151,7 +151,7 @@ end
 
 function nonparametricMCMC!(
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -181,7 +181,7 @@ end
 function runMCMC!(
     chain::Chain{T},
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -214,7 +214,7 @@ end
 
 function runMCMC(;
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},

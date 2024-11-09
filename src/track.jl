@@ -1,10 +1,10 @@
 struct Tracks{
     T,
     A<:AbstractArray{T,3},
-    P<:SimplifiedDistribution{T},
+    P<:SP2TDistribution{T},
     V<:AbstractVector{T},
     B<:AbstractVector{Bool},
-} <: AbstractRandomVariable{T}
+} <: RandomVariable{T}
     value::A
     prior::P
     proposal::A
@@ -20,7 +20,7 @@ end
 
 function Tracks{T}(;
     value::AbstractArray{<:Real,3},
-    prior::SimplifiedDistribution{<:Real},
+    prior::SP2TDistribution{<:Real},
     perturbsize::AbstractVector{<:Real},
 ) where {T<:AbstractFloat}
     value = convert.(T, value)

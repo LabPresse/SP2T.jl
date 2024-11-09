@@ -14,7 +14,7 @@ using NNlib: batched_mul!, batched_transpose
 using ProgressMeter: @showprogress
 
 export Tracks,
-    NEmitters,
+    NTracks,
     MeanSquaredDisplacement,
     Brightness,
     Chain,

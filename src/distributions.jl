@@ -1,4 +1,6 @@
-struct DNormal{T<:AbstractFloat,V<:AbstractVector{T}} <: SimplifiedDistribution{T}
+abstract type SP2TDistribution{T} end
+
+struct DNormal{T<:AbstractFloat,V<:AbstractVector{T}} <: SP2TDistribution{T}
     μ::V
     σ::V
 end

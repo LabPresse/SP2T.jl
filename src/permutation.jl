@@ -19,7 +19,7 @@ function shuffleactive!(
     return x
 end
 
-shuffleactive!(tracks::Tracks{T}, nemitters::NEmitters{T}) where {T} =
+shuffleactive!(tracks::Tracks{T}, nemitters::NTracks{T}) where {T} =
     shuffleactive!(tracks.value, tracks.proposal, nemitters.value)
 
 # _randperm!(i::AbstractVector{<:Integer}, M::Integer) = copyto!(i, randperm(M))

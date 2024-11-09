@@ -13,7 +13,7 @@ logprior(msd::MeanSquaredDisplacement{T,P}) where {T,P<:InverseGamma{T}} =
 
 logprior_norm(msd::MeanSquaredDisplacement{T,P}) where {T,P} = logpdf(msd.prior, msd.value)
 
-logprior(nemitters::NEmitters) = nemitters.logprior[nemitters.value+1]
+logprior(nemitters::NTracks) = nemitters.logprior[nemitters.value+1]
 
 logprior(brightness::Brightness{T,P}) where {T,P<:Gamma{T}} =
     (shape(brightness.prior) - 1) * log(brightness.value) -
@@ -24,7 +24,7 @@ logprior_norm(brightness::Brightness{T,P}) where {T,P} =
 
 function log𝒫logℒ(
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer},3},

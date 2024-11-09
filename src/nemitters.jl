@@ -1,17 +1,17 @@
-mutable struct NEmitters{T,V}
+mutable struct NTracks{T,V}
     value::Int
     logprior::V
     logℒ::V
     log𝒫::V
 end
 
-function NEmitters{T}(;
+function NTracks{T}(;
     value::Integer,
     limit::Integer,
     logonprob::Real,
 ) where {T<:AbstractFloat}
     logprior = collect((0:limit) .* convert(T, logonprob))
-    return NEmitters{T,typeof(logprior)}(
+    return NTracks{T,typeof(logprior)}(
         value,
         logprior,
         similar(logprior),
@@ -19,7 +19,7 @@ function NEmitters{T}(;
     )
 end
 
-function Base.getproperty(nemitters::NEmitters, s::Symbol)
+function Base.getproperty(nemitters::NTracks, s::Symbol)
     if s == :limit
         return length(getfield(nemitters, :log𝒫)) - 1
     else
@@ -27,15 +27,15 @@ function Base.getproperty(nemitters::NEmitters, s::Symbol)
     end
 end
 
-Base.any(nemitters::NEmitters) = nemitters.value > 0
+Base.any(nemitters::NTracks) = nemitters.value > 0
 
-function setlog𝒫!(nemitters::NEmitters{T}, 𝑇::T) where {T}
+function setlog𝒫!(nemitters::NTracks{T}, 𝑇::T) where {T}
     @. nemitters.log𝒫 = nemitters.logprior + nemitters.logℒ / 𝑇
     return nemitters
 end
 
 function setlogℒ!(
-    nemitters::NEmitters,
+    nemitters::NTracks,
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     measurements::AbstractArray{<:Union{T,UInt16}},
@@ -59,7 +59,7 @@ end
 
 randc(logp::AbstractArray) = argmax(logp .- log.(randexp!(similar(logp))))
 
-function sample!(nemitters::NEmitters)
+function sample!(nemitters::NTracks)
     nemitters.value = randc(nemitters.log𝒫) - 1
     return nemitters
 end

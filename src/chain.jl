@@ -22,7 +22,7 @@ Sample(
 
 Sample(
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     iter::Integer,
@@ -50,7 +50,7 @@ Sample(
 
 Sample(
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     brightness::MeanSquaredDisplacement{T},
     𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠::Brightness{T},
 ) where {T} = Sample(tracks.value, nemitters.value, brightness.value, 𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠.value)
@@ -111,7 +111,7 @@ temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 function extend!(
     chain::Chain{T},
     tracks::Tracks{T},
-    nemitters::NEmitters{T},
+    nemitters::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
