@@ -1,15 +1,13 @@
 struct Tracks{
     T,
-    A2<:AbstractArray{T,4},
-    A<:AbstractArray{T,3},
+    A<:AbstractArray{T,4},
     P<:SP2TDistribution{T},
     V<:AbstractVector{T},
     B<:AbstractVector{Bool},
 } <: RandomVariable{T}
-    fullvalue::A2
+    fullvalue::A
     prior::P
-    fulldisplacement²::A2
-    Δdisplacement²::A
+    fulldisplacement²::A
     ΣΔdisplacement²::V
     perturbsize::V
     logratio::V
@@ -25,7 +23,6 @@ function Tracks{T}(;
     fullvalue = similar(value, T, size(value)..., 2)
     nframes, ndims, nemitters = size(value)
     fulldisplacement² = similar(fullvalue, nframes - 1, ndims, nemitters, 2)
-    Δdisplacement² = similar(fullvalue, nframes - 1, ndims, nemitters)
     logratio = similar(fullvalue, nframes)
     accepted = similar(fullvalue, Bool, nframes)
     counter = zeros(Int, 2, 2)
@@ -33,7 +30,6 @@ function Tracks{T}(;
         fullvalue,
         prior,
         fulldisplacement²,
-        Δdisplacement²,
         similar(logratio, nframes - 1),
         perturbsize,
         logratio,
@@ -60,8 +56,7 @@ trackviews(tracks::Tracks, ntracksᵥ::Integer) =
     @views tracks.fullvalue[:, :, 1:ntracksᵥ, 1],
     tracks.fullvalue[:, :, 1:ntracksᵥ, 2],
     tracks.fulldisplacement²[:, :, 1:ntracksᵥ, 1],
-    tracks.fulldisplacement²[:, :, 1:ntracksᵥ, 2],
-    tracks.Δdisplacement²[:, :, 1:ntracksᵥ]
+    tracks.fulldisplacement²[:, :, 1:ntracksᵥ, 2]
 
 function logprior(tracks::Tracks{T}, ntracksᵥ::Integer, msdᵥ::T) where {T}
     xᵒⁿ, ~, Δxᵒⁿ² = trackviews(tracks, ntracksᵥ)
@@ -140,33 +135,16 @@ function addΔlogπ₁!(
     return ln𝓇
 end
 
-diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}, y::AbstractArray{T,3}) where {T} =
-    @views Δx² .= (y[2:end, :, :] .- x[1:end-1, :, :]) .^ 2
-
-diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}) where {T} = diff²!(Δx², x, x)
-
 function staggered_diff²!(
     Δx²::AbstractArray{T,3},
-    x1::AbstractArray{T,3},
-    x2::AbstractArray{T,3},
+    even::AbstractArray{T,3},
+    odd::AbstractArray{T,3},
 ) where {T}
     @views begin
-        Δx²[1:2:end, :, :] .= (x1[2:2:end, :, :] .- x2[1:2:end-1, :, :]) .^ 2
-        Δx²[2:2:end, :, :] .= (x2[3:2:end, :, :] .- x1[2:2:end-1, :, :]) .^ 2
+        Δx²[1:2:end, :, :] .= (even[2:2:end, :, :] .- odd[1:2:end-1, :, :]) .^ 2
+        Δx²[2:2:end, :, :] .= (odd[3:2:end, :, :] .- even[2:2:end-1, :, :]) .^ 2
     end
     return Δx²
-end
-
-function ΣΔΔx²!(
-    ΣΔΔx²::AbstractVector{T},
-    ΔΔx²::AbstractArray{T,3},
-    Δx²::AbstractArray{T,3},
-    Δy²::AbstractArray{T,3},
-    msd::T,
-) where {T}
-    ΔΔx² .= Δx² .- Δy²
-    sum!(ΣΔΔx², ΔΔx²)
-    ΣΔΔx² ./= 2 * msd
 end
 
 function counter!(tracks::Tracks)
@@ -174,7 +152,7 @@ function counter!(tracks::Tracks)
     return tracks
 end
 
-function copyidxto!(
+function _copyto!(
     dest::AbstractArray{T,3},
     src::AbstractArray{T,3},
     i::Vector{Bool},
@@ -194,45 +172,25 @@ function Δlogπ!(
     return logr
 end
 
-oddΔlogπ!(logr::AbstractVector{T}, ΣΔΔx²::AbstractVector{T}) where {T} =
-    Δlogπ!(logr, 1:2:length(ΣΔΔx²), 2:2:length(ΣΔΔx²), ΣΔΔx²)
-
-evenΔlogπ!(logr::AbstractVector{T}, ΣΔΔx²::AbstractVector{T}) where {T} =
-    Δlogπ!(logr, 2:2:length(ΣΔΔx²), 1:2:length(ΣΔΔx²), ΣΔΔx²)
-
-function oddΔlogπ!(
+function Δlogπ!(
     Δlogπ::AbstractVector{T},
     x::AbstractArray{T,3},
     y::AbstractArray{T,3},
     Δx²::AbstractArray{T,3},
     Δy²::AbstractArray{T,3},
     msd::T,
-    ΔΔx²::AbstractArray{T,3},
     ΣΔΔx²::AbstractVector{T},
+    i::Integer,
 ) where {T}
     diff²!(Δx², x)
-    staggered_diff²!(Δy², x, y)
-    ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², msd)
-    oddΔlogπ!(Δlogπ, ΣΔΔx²)
+    i == 1 ? staggered_diff²!(Δy², x, y) : staggered_diff²!(Δy², y, x)
+    Δx² .-= Δy²
+    sum!(ΣΔΔx², Δx²)
+    ΣΔΔx² ./= 2 * msd
+    Δlogπ!(Δlogπ, i:2:length(ΣΔΔx²), mod1(i + 1, 2):2:length(ΣΔΔx²), ΣΔΔx²)
 end
 
-function evenΔlogπ!(
-    Δlogπ::AbstractVector{T},
-    x::AbstractArray{T,3},
-    y::AbstractArray{T,3},
-    Δx²::AbstractArray{T,3},
-    Δy²::AbstractArray{T,3},
-    msd::T,
-    ΔΔx²::AbstractArray{T,3},
-    ΣΔΔx²::AbstractVector{T},
-) where {T}
-    diff²!(Δx², x)
-    staggered_diff²!(Δy², y, x)
-    ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², msd)
-    evenΔlogπ!(Δlogπ, ΣΔΔx²)
-end
-
-function update_odd!(
+function update!(
     𝐱::AbstractArray{T,3},
     𝐲::AbstractArray{T,3},
     Δ𝐱²::AbstractArray{T,3},
@@ -240,53 +198,16 @@ function update_odd!(
     msd::T,
     logr::AbstractVector{T},
     accept::AbstractVector{Bool},
-    ΔΔx²::AbstractArray{T,3},
     ΣΔΔ𝐱²::AbstractVector{T},
     Δlogℒ::AbstractVector{T},
+    i::Integer,
 ) where {T}
-    oddΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, ΔΔx², ΣΔΔ𝐱²)
+    Δlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, ΣΔΔ𝐱², i)
     @views begin
-        logr[1:2:end] .+= Δlogℒ[1:2:end]
-        accept[1:2:end] .= logr[1:2:end] .> 0
+        logr[i:2:end] .+= Δlogℒ[i:2:end]
+        accept[i:2:end] .= logr[i:2:end] .> 0
     end
-    copyidxto!(𝐱, 𝐲, accept)
-end
-
-function update_even!(
-    𝐱::AbstractArray{T,3},
-    𝐲::AbstractArray{T,3},
-    Δ𝐱²::AbstractArray{T,3},
-    Δ𝐲²::AbstractArray{T,3},
-    msd::T,
-    logr::AbstractVector{T},
-    accept::AbstractVector{Bool},
-    ΔΔx²::AbstractArray{T,3},
-    ΣΔΔ𝐱²::AbstractVector{T},
-    Δlogℒ::AbstractVector{T},
-) where {T}
-    evenΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, ΔΔx², ΣΔΔ𝐱²)
-    @views begin
-        logr[2:2:end] .+= Δlogℒ[2:2:end]
-        accept[2:2:end] .= logr[2:2:end] .> 0
-    end
-    copyidxto!(𝐱, 𝐲, accept)
-end
-
-function update_odd_even!(
-    𝐱::AbstractArray{T,3},
-    𝐲::AbstractArray{T,3},
-    Δ𝐱²::AbstractArray{T,3},
-    Δ𝐲²::AbstractArray{T,3},
-    msd::T,
-    logr::AbstractVector{T},
-    accept::AbstractVector{Bool},
-    ΔΔx²::AbstractArray{T,3},
-    ΣΔΔ𝐱²::AbstractVector{T},
-    Δlogℒ::AbstractVector{T},
-) where {T}
-    update_odd!(𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, logr, accept, ΔΔx², ΣΔΔ𝐱², Δlogℒ)
-    update_even!(𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, logr, accept, ΔΔx², ΣΔΔ𝐱², Δlogℒ)
-    return 𝐱
+    _copyto!(𝐱, 𝐲, accept)
 end
 
 function update_ontracks!(
@@ -300,13 +221,13 @@ function update_ontracks!(
     𝑇::T,
 ) where {T}
     MHinit!(tracks)
-    x, y, Δx², Δy², ΔΔx² = trackviews(tracks, ntracksᵥ)
+    x, y, Δx², Δy² = trackviews(tracks, ntracksᵥ)
     propose!(y, x, tracks.perturbsize)
     pxcounts!(detector, x, y, brightnessᵥ, psf)
     Δlogℒ!(detector, measurements)
     tracks.logratio .+= anneal!(detector.framelogℒ, 𝑇)
     addΔlogπ₁!(tracks.logratio, x, y, tracks.prior)
-    update_odd_even!(
+    update!(
         x,
         y,
         Δx²,
@@ -314,9 +235,21 @@ function update_ontracks!(
         msdᵥ,
         tracks.logratio,
         tracks.accepted,
-        ΔΔx²,
         tracks.ΣΔdisplacement²,
         detector.framelogℒ,
+        1,
+    )
+    update!(
+        x,
+        y,
+        Δx²,
+        Δy²,
+        msdᵥ,
+        tracks.logratio,
+        tracks.accepted,
+        tracks.ΣΔdisplacement²,
+        detector.framelogℒ,
+        2,
     )
     counter!(tracks)
     return tracks
