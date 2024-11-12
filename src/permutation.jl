@@ -8,19 +8,23 @@ function _permute!(
     copyto!(x, y)
 end
 
-function shuffleactive!(
-    x::AbstractArray{T,3},
-    y::AbstractArray{T,3},
-    nemittersᵥ::Integer,
-) where {T}
-    p = randperm(nemittersᵥ)
-    isequal(p, 1:nemittersᵥ) && return x
-    @views _permute!(x[:, :, 1:nemittersᵥ], p, y[:, :, 1:nemittersᵥ])
-    return x
-end
+# function shuffleactive!(
+#     x::AbstractArray{T,3},
+#     y::AbstractArray{T,3},
+#     ntracksᵥ::Integer,
+# ) where {T}
+#     p = randperm(ntracksᵥ)
+#     isequal(p, 1:ntracksᵥ) && return x
+#     @views _permute!(x[:, :, 1:ntracksᵥ], p, y[:, :, 1:ntracksᵥ])
+#     return x
+# end
 
-shuffleactive!(tracks::Tracks{T}, nemitters::NTracks{T}) where {T} =
-    shuffleactive!(tracks.value, tracks.proposal, nemitters.value)
+function shuffleactive!(tracks::Tracks{T}, ntracksᵥ::Integer) where {T}
+    x, y = trackviews(tracks, ntracksᵥ)
+    p = randperm(ntracksᵥ)
+    isequal(p, 1:ntracksᵥ) || _permute!(x, p, y)
+    return tracks
+end
 
 # _randperm!(i::AbstractVector{<:Integer}, M::Integer) = copyto!(i, randperm(M))
 

@@ -9,51 +9,23 @@ struct Sample{T<:AbstractFloat,A<:AbstractArray{T,3}}
 end
 
 Sample(
-    tracks::AbstractArray{T,3},
-    nemitters::Integer,
-    msd::T,
-    brightness::T,
-    iter::Integer,
-    𝑇::T,
-    log𝒫::T,
-    logℒ::T,
-) where {T} =
-    Sample(collect(view(tracks, :, :, 1:nemitters)), msd, brightness, iter, 𝑇, log𝒫, logℒ)
-
-Sample(
     tracks::Tracks{T},
-    nemitters::NTracks{T},
+    ntracks::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    iter::Integer,
-    𝑇::T,
-    log𝒫::T,
-    logℒ::T,
-) where {T} =
-    Sample(tracks.value, nemitters.value, msd.value, brightness.value, iter, 𝑇, log𝒫, logℒ)
-
-Sample(
-    tracksᵥ::AbstractArray{T,3},
-    nemittersᵥ::Integer,
-    msdᵥ::T,
-    brightnessᵥ::T,
-) where {T<:AbstractFloat} = Sample(
-    tracksᵥ,
-    nemittersᵥ,
-    msdᵥ,
-    brightnessᵥ,
-    0,
-    oneunit(T),
-    convert(T, NaN),
-    convert(T, NaN),
+    iter::Integer = 0,
+    𝑇::Real = 1,
+    log𝒫::Real = NaN,
+    logℒ::Real = NaN,
+) where {T} = Sample(
+    collect(view(tracks.value, :, :, 1:ntracks.value)),
+    msd.value,
+    brightness.value,
+    iter,
+    convert(T, 𝑇),
+    convert(T, log𝒫),
+    convert(T, logℒ),
 )
-
-Sample(
-    tracks::Tracks{T},
-    nemitters::NTracks{T},
-    brightness::MeanSquaredDisplacement{T},
-    𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠::Brightness{T},
-) where {T} = Sample(tracks.value, nemitters.value, brightness.value, 𝑏𝑟𝑖𝑔ℎ𝑡𝑛𝑒𝑠𝑠.value)
 
 function Base.getproperty(sample::Sample, s::Symbol)
     if s === :nemitters
@@ -62,12 +34,6 @@ function Base.getproperty(sample::Sample, s::Symbol)
         return getfield(sample, s)
     end
 end
-
-# get_B(v::AbstractVector{Sample}) = [size(s.tracks, 2) for s in v]
-
-# get_D(v::AbstractVector{Sample}) = [s.D for s in v]
-
-# get_h(v::AbstractVector{Sample}) = [s.h for s in v]
 
 mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:AbstractAnnealing{T}}
     samples::VofS
@@ -111,7 +77,7 @@ temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 function extend!(
     chain::Chain{T},
     tracks::Tracks{T},
-    nemitters::NTracks{T},
+    ntracks::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -121,21 +87,8 @@ function extend!(
     𝑇::T,
 ) where {T}
     if iter % chain.stride == 0
-        log𝒫, logℒ =
-            log𝒫logℒ(tracks, nemitters, msd, brightness, measurements, detector, psf)
-        push!(
-            chain.samples,
-            Sample(
-                tracks.value,
-                nemitters.value,
-                msd.value,
-                brightness.value,
-                iter,
-                𝑇,
-                log𝒫,
-                logℒ,
-            ),
-        )
+        log𝒫, logℒ = log𝒫logℒ(tracks, ntracks, msd, brightness, measurements, detector, psf)
+        push!(chain.samples, Sample(tracks, ntracks, msd, brightness, iter, 𝑇, log𝒫, logℒ))
         isfull(chain) && shrink!(chain)
     end
     return chain
@@ -143,3 +96,142 @@ end
 
 # saveperiod(chain::Chain) =
 #     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
+
+function log𝒫logℒ(
+    tracks::Tracks{T},
+    ntracks::NTracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    measurements::AbstractArray{<:Union{T,Integer},3},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+) where {T}
+    pxcounts!(detector, view(tracks.value, :, :, 1:ntracks.value), brightness.value, psf)
+    logℒ1 = logℒ!(detector, measurements)
+    log𝒫1 =
+        logℒ1 +
+        logprior(tracks, ntracks.value, msd.value) +
+        logprior(msd) +
+        logprior(ntracks)
+    return log𝒫1, logℒ1
+end
+
+function parametricMCMC!(
+    tracks::Tracks{T},
+    ntracks::NTracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    measurements::AbstractArray{<:Union{T,Integer}},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+    𝑇::T,
+) where {T}
+    update_ontracks!(
+        tracks,
+        ntracks.value,
+        msd.value,
+        brightness.value,
+        measurements,
+        detector,
+        psf,
+        𝑇,
+    )
+    x, ~, Δx² = trackviews(tracks, ntracks.value)
+    diff²!(Δx², x)
+    update!(msd, Δx², 𝑇)
+    return tracks, msd
+end
+
+function nonparametricMCMC!(
+    tracks::Tracks{T},
+    ntracks::NTracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    measurements::AbstractArray{<:Union{T,Integer}},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+    𝑇::T,
+) where {T}
+    update_offtracks!(tracks, ntracks.value, msd.value)
+    if any(ntracks)
+        update_ontracks!(
+            tracks,
+            ntracks.value,
+            msd.value,
+            brightness.value,
+            measurements,
+            detector,
+            psf,
+            𝑇,
+        )
+        shuffleactive!(tracks, ntracks.value)
+    end
+    diff²!(tracks.displacement², tracks.value)
+    update!(msd, tracks.displacement², 𝑇)
+    update!(ntracks, tracks.value, brightness.value, measurements, detector, psf, 𝑇)
+    return tracks, msd, ntracks
+end
+
+function runMCMC!(
+    chain::Chain{T},
+    tracks::Tracks{T},
+    ntracks::NTracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    measurements::AbstractArray{<:Union{T,Integer}},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+    niters::Integer,
+    parametric::Bool,
+) where {T}
+    prev_niters = chain.samples[end].iteration
+    reset!(detector, 1)
+    ntracks.logℒ[1] = logℒ!(detector, measurements)
+    nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
+    @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
+        𝑇 = temperature(chain, iter)
+        nextsample!(tracks, ntracks, msd, brightness, measurements, detector, psf, 𝑇)
+        extend!(
+            chain,
+            tracks,
+            ntracks,
+            msd,
+            brightness,
+            measurements,
+            detector,
+            psf,
+            iter,
+            𝑇,
+        )
+    end
+end
+
+function runMCMC(;
+    tracks::Tracks{T},
+    ntracks::NTracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    measurements::AbstractArray{<:Union{T,Integer}},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+    niters::Integer = 1000,
+    sizelimit::Integer = 1000,
+    annealing::Union{AbstractAnnealing{T},Nothing} = nothing,
+    parametric::Bool = false,
+) where {T}
+    isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
+    chain = Chain([Sample(tracks, ntracks, msd, brightness)], sizelimit, annealing)
+    runMCMC!(
+        chain,
+        tracks,
+        ntracks,
+        msd,
+        brightness,
+        measurements,
+        detector,
+        psf,
+        niters,
+        parametric,
+    )
+    return chain
+end

@@ -19,57 +19,48 @@ function NTracks{T}(;
     )
 end
 
-function Base.getproperty(nemitters::NTracks, s::Symbol)
+function Base.getproperty(n::NTracks, s::Symbol)
     if s == :limit
-        return length(getfield(nemitters, :log𝒫)) - 1
+        return length(getfield(n, :log𝒫)) - 1
     else
-        return getfield(nemitters, s)
+        return getfield(n, s)
     end
 end
 
-Base.any(nemitters::NTracks) = nemitters.value > 0
+Base.any(ntracks::NTracks) = ntracks.value > 0
 
-logprior(nemitters::NTracks) = nemitters.logprior[nemitters.value+1]
+logprior(ntracks::NTracks) = ntracks.logprior[ntracks.value+1]
 
-function setlog𝒫!(nemitters::NTracks{T}, 𝑇::T) where {T}
-    @. nemitters.log𝒫 = nemitters.logprior + nemitters.logℒ / 𝑇
-    return nemitters
+function setlog𝒫!(ntracks::NTracks{T}, 𝑇::T) where {T}
+    @. ntracks.log𝒫 = ntracks.logprior + ntracks.logℒ / 𝑇
+    return ntracks
 end
 
 function setlogℒ!(
-    nemitters::NTracks,
+    ntracks::NTracks,
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     measurements::AbstractArray{<:Union{T,UInt16}},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
 ) where {T}
-    initintensity!(detector)
+    reset!(detector, 1)
     @inbounds for m = 1:size(tracksᵥ, 3)
-        add_pxcounts!(
-            detector.intensity₁,
+        addincident!(
+            detector.intensity,
             view(tracksᵥ, :, :, m:m),
             brightnessᵥ,
             detector.pxboundsx,
             detector.pxboundsy,
             psf,
         )
-
-
-        nemitters.logℒ[m+1] = logℒ!(detector, measurements)
+        ntracks.logℒ[m+1] = logℒ!(detector, measurements)
     end
-    return nemitters
-end
-
-randc(logp::AbstractArray) = argmax(logp .- log.(randexp!(similar(logp))))
-
-function sample!(nemitters::NTracks)
-    nemitters.value = randc(nemitters.log𝒫) - 1
-    return nemitters
+    return ntracks
 end
 
 function update!(
-    nemitters::NTracks{T},
+    ntracks::NTracks{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -77,8 +68,8 @@ function update!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    setlogℒ!(nemitters, trackᵥ, brightnessᵥ, measurements, detector, psf)
-    setlog𝒫!(nemitters, 𝑇)
-    sample!(nemitters)
-    return nemitters
+    setlogℒ!(ntracks, trackᵥ, brightnessᵥ, measurements, detector, psf)
+    setlog𝒫!(ntracks, 𝑇)
+    ntracks.value = randc(ntracks.log𝒫) - 1
+    return ntracks
 end

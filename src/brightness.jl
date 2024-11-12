@@ -20,6 +20,13 @@ Brightness{T}(;
     proposalparam::Real,
 ) where {T<:AbstractFloat} = Brightness{T}(value, prior, proposalparam)
 
+logprior(brightness::Brightness{T,P}) where {T,P<:Gamma{T}} =
+    (shape(brightness.prior) - 1) * log(brightness.value) -
+    brightness.value / scale(brightness.prior)
+
+logprior_norm(brightness::Brightness{T,P}) where {T,P} =
+    logpdf(brightness.prior, brightness.value)
+
 # Brightness(; value, priorparams, proposalparam, scale::T) where {T} = Brightness(
 #     convert(T, value * scale),
 #     convert.(T, (priorparams[1], priorparams[2] * scale)),

@@ -1,22 +1,11 @@
 abstract type PixelDetector{T} <: Detector{T} end
-
-function Base.getproperty(detector::PixelDetector, s::Symbol)
-    if s == :framecenter
-        return mean(detector.pxboundsx), mean(detector.pxboundsy)
-    else
-        return getfield(detector, s)
-    end
-end
-
-Base.size(detector::PixelDetector) = size(detector.darkcounts)
-
 struct SPAD{
     T<:AbstractFloat,
     V<:AbstractVector{T},
     M<:AbstractMatrix{T},
     A<:AbstractArray{T,3},
+    A2<:AbstractArray{T,4},
     MB<:AbstractMatrix{Bool},
-    # AV<:PixelDetectorAuxiliary{T},
 } <: PixelDetector{T}
     batchsize::UInt16
     period::T
@@ -25,8 +14,7 @@ struct SPAD{
     pxboundsy::V
     darkcounts::M
     filter::MB
-    intensity₁::A
-    intensity₂::A
+    fullintensity::A2
     pxlogℒ::A
     framelogℒ::V
 end
@@ -49,10 +37,9 @@ function SPAD{T}(
     pxboundsx .= 0:pxsize:width*pxsize
     pxboundsy = similar(darkcounts, height + 1)
     pxboundsy .= 0:pxsize:height*pxsize
-    intensity₁ = repeat(darkcounts, 1, 1, nframes)
-    intensity₂ = copy(intensity₁)
-    pxlogℒ = fill!(similar(intensity₁), NaN)
-    framelogℒ = fill!(similar(intensity₁, nframes), NaN)
+    fullintensity = repeat(darkcounts, 1, 1, nframes, 2)
+    pxlogℒ = fill!(similar(fullintensity, width, height, nframes), NaN)
+    framelogℒ = fill!(similar(fullintensity, nframes), NaN)
     return SPAD(
         batchsize,
         period,
@@ -61,16 +48,26 @@ function SPAD{T}(
         pxboundsy,
         darkcounts,
         filter,
-        intensity₁,
-        intensity₂,
+        fullintensity,
         pxlogℒ,
         framelogℒ,
     )
 end
 
-function initintensity!(detector::PixelDetector, both::Bool = false)
-    detector.intensity₁ .= detector.darkcounts
-    both && (detector.intensity₂ .= detector.darkcounts)
+function Base.getproperty(detector::SPAD, s::Symbol)
+    if s === :framecenter
+        return mean(detector.pxboundsx), mean(detector.pxboundsy)
+    elseif s === :intensity
+        return selectdim(getfield(detector, :fullintensity), 4, 1)
+    else
+        return getfield(detector, s)
+    end
+end
+
+Base.size(detector::SPAD) = size(detector.darkcounts)
+
+function reset!(detector::PixelDetector, i::Integer)
+    detector.fullintensity[:, :, :, i] .= detector.darkcounts
     return detector
 end
 
@@ -81,26 +78,15 @@ pxlogℒ!(
     batchsize::UInt16,
 ) where {T} = @. logℒ = measurements * logexpm1(intensity) - batchsize * intensity
 
-pxlogℒ!(detector::SPAD, measurements::AbstractArray{UInt16,3}) =
-    pxlogℒ!(detector.pxlogℒ, measurements, detector.intensity₁, detector.batchsize)
-
 Δpxlogℒ!(
     Δlogℒ::AbstractArray{T,3},
     measurements::AbstractArray{UInt16,3},
-    intensity₁::AbstractArray{T,3},
-    intensity₂::AbstractArray{T,3},
+    fullintensity::AbstractArray{T,4},
     batchsize::UInt16,
-) where {T} = @. Δlogℒ =
-    measurements * (logexpm1(intensity₂) - logexpm1(intensity₁)) -
-    batchsize * (intensity₂ - intensity₁)
-
-Δpxlogℒ!(detector::SPAD, measurements::AbstractArray{UInt16,3}) = Δpxlogℒ!(
-    detector.pxlogℒ,
-    measurements,
-    detector.intensity₁,
-    detector.intensity₂,
-    detector.batchsize,
-)
+) where {T} = @views @. Δlogℒ =
+    measurements *
+    (logexpm1(fullintensity[:, :, :, 2]) - logexpm1(fullintensity[:, :, :, 1])) -
+    batchsize * (fullintensity[:, :, :, 2] - fullintensity[:, :, :, 1])
 
 framesum!(
     framelogℒ::AbstractVector{T},
@@ -108,15 +94,12 @@ framesum!(
     filter::AbstractMatrix{Bool},
 ) where {T} = mul!(framelogℒ, transpose(reshape(pxlogℒ, length(filter), :)), vec(filter))
 
-framesum!(detector::PixelDetector) =
-    framesum!(detector.framelogℒ, detector.pxlogℒ, detector.filter)
-
 function logℒ!(
     detector::PixelDetector{T},
     measurements::AbstractArray{<:Union{T,Integer},3},
 ) where {T}
-    pxlogℒ!(detector, measurements)
-    framesum!(detector)
+    pxlogℒ!(detector.pxlogℒ, measurements, detector.intensity, detector.batchsize)
+    framesum!(detector.framelogℒ, detector.pxlogℒ, detector.filter)
     return sum(detector.framelogℒ)
 end
 
@@ -124,11 +107,11 @@ function Δlogℒ!(
     detector::PixelDetector{T},
     measurements::AbstractArray{<:Union{T,Integer},3},
 ) where {T}
-    Δpxlogℒ!(detector, measurements)
-    return framesum!(detector)
+    Δpxlogℒ!(detector.pxlogℒ, measurements, detector.fullintensity, detector.batchsize)
+    return framesum!(detector.framelogℒ, detector.pxlogℒ, detector.filter)
 end
 
-function add_pxcounts!(
+function addincident!(
     intensity::AbstractArray{T,3},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
@@ -144,7 +127,7 @@ function add_pxcounts!(
     return batched_mul!(intensity, 𝐗, batched_transpose(𝐘), brightnessᵥ / psf.A, β)
 end
 
-function add_pxcounts!(
+function addincident!(
     intensity::AbstractArray{T,3},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
@@ -161,76 +144,48 @@ function add_pxcounts!(
     return batched_mul!(intensity, 𝐗, batched_transpose(𝐘), brightnessᵥ / psf.A, β)
 end
 
-# function pxcounts!(
-#     intensity::AbstractArray{T,3},
-#     tracks::AbstractArray{T,3},
-#     brightness::T,
-#     darkcounts::AbstractMatrix{T},
-#     xbnds::AbstractVector{T},
-#     ybnds::AbstractVector{T},
-#     psf::PointSpreadFunction{T},
-# ) where {T}
-#     intensity .= darkcounts
-#     return add_pxcounts!(intensity, tracks, brightness, xbnds, ybnds, psf)
-# end
-
-# pxcounts!(
-#     intensity::AbstractArray{T,3},
-#     tracks::AbstractArray{T,3},
-#     brightness::T,
-#     detector::PixelBasedDetector{T},
-#     psf::PointSpreadFunction{T},
-# ) where {T} = pxcounts!(
-#     intensity,
-#     tracks,
-#     brightness,
-#     detector.darkcounts,
-#     detector.pxboundsx,
-#     detector.pxboundsy,
-#     psf,
-# )
-
 function pxcounts!(
     detector::PixelDetector{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     psf::PointSpreadFunction{T},
+    i::Integer = 1,
 ) where {T}
-    initintensity!(detector)
-    add_pxcounts!(
-        detector.intensity₁,
+    reset!(detector, i)
+    addincident!(
+        selectdim(detector.fullintensity, 4, i),
         tracksᵥ,
         brightnessᵥ,
         detector.pxboundsx,
         detector.pxboundsy,
         psf,
     )
+    return detector
 end
 
 function pxcounts!(
     detector::PixelDetector{T},
-    tracks₁::AbstractArray{T,3},
-    tracks₂::AbstractArray{T,3},
+    tracksᵥ₁::AbstractArray{T,3},
+    tracksᵥ₂::AbstractArray{T,3},
     brightnessᵥ::T,
     psf::PointSpreadFunction{T},
 ) where {T}
-    initintensity!(detector, true)
-    add_pxcounts!(
-        detector.intensity₁,
-        tracks₁,
-        brightnessᵥ,
-        detector.pxboundsx,
-        detector.pxboundsy,
-        psf,
-    )
-    add_pxcounts!(
-        detector.intensity₂,
-        tracks₂,
-        brightnessᵥ,
-        detector.pxboundsx,
-        detector.pxboundsy,
-        psf,
-    )
+    pxcounts!(detector, tracksᵥ₁, brightnessᵥ, psf, 1)
+    pxcounts!(detector, tracksᵥ₂, brightnessᵥ, psf, 2)
+    return detector
+end
+
+function pxcounts!(
+    detector::PixelDetector{T},
+    tracksᵥ::AbstractArray{T,3},
+    brightnessᵥ₁::T,
+    brightnessᵥ₂::T,
+    psf::PointSpreadFunction{T},
+) where {T}
+    #TODO optimize!
+    pxcounts!(detector, tracksᵥ, brightnessᵥ₁, psf, 1)
+    pxcounts!(detector, tracksᵥ, brightnessᵥ₂, psf, 2)
+    return detector
 end
 
 function getincident(
@@ -242,22 +197,8 @@ function getincident(
     psf::PointSpreadFunction{T},
 ) where {T}
     𝐔 = repeat(darkcounts, 1, 1, size(tracksᵥ, 1))
-    return add_pxcounts!(𝐔, tracksᵥ, brightnessᵥ, xᵖ, yᵖ, psf)
+    return addincident!(𝐔, tracksᵥ, brightnessᵥ, xᵖ, yᵖ, psf)
 end
-
-# pxcounts(
-#     tracks::AbstractArray{T,3},
-#     brightness::T,
-#     detector::PixelDetector{T},
-#     psf::PointSpreadFunction{T},
-# ) where {T} = pxcounts(
-#     tracks,
-#     brightness,
-#     detector.darkcounts,
-#     detector.pxboundsx,
-#     detector.pxboundsy,
-#     psf,
-# )
 
 simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}) =
     @. W = $rand!($similar(U)) < -expm1(-U)

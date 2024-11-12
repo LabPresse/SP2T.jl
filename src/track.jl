@@ -1,15 +1,14 @@
 struct Tracks{
     T,
+    A2<:AbstractArray{T,4},
     A<:AbstractArray{T,3},
     P<:SP2TDistribution{T},
     V<:AbstractVector{T},
     B<:AbstractVector{Bool},
 } <: RandomVariable{T}
-    value::A
+    fullvalue::A2
     prior::P
-    proposal::A
-    displacement₁²::A
-    displacement₂²::A
+    fulldisplacement²::A2
     Δdisplacement²::A
     ΣΔdisplacement²::V
     perturbsize::V
@@ -23,19 +22,18 @@ function Tracks{T}(;
     prior::SP2TDistribution{<:Real},
     perturbsize::AbstractVector{<:Real},
 ) where {T<:AbstractFloat}
-    value = convert.(T, value)
+    fullvalue = similar(value, T, size(value)..., 2)
     nframes, ndims, nemitters = size(value)
-    displacements = similar(value, nframes - 1, ndims, nemitters)
-    logratio = similar(value, nframes)
-    accepted = similar(value, Bool, nframes)
+    fulldisplacement² = similar(fullvalue, nframes - 1, ndims, nemitters, 2)
+    Δdisplacement² = similar(fullvalue, nframes - 1, ndims, nemitters)
+    logratio = similar(fullvalue, nframes)
+    accepted = similar(fullvalue, Bool, nframes)
     counter = zeros(Int, 2, 2)
     return Tracks(
-        value,
+        fullvalue,
         prior,
-        similar(value),
-        displacements,
-        similar(displacements),
-        similar(displacements),
+        fulldisplacement²,
+        Δdisplacement²,
         similar(logratio, nframes - 1),
         perturbsize,
         logratio,
@@ -44,24 +42,32 @@ function Tracks{T}(;
     )
 end
 
-trackviews(tracks::Tracks, M::Integer) = @views tracks.value[:, :, 1:M],
-tracks.proposal[:, :, 1:M],
-tracks.displacement₁²[:, :, 1:M],
-tracks.displacement₂²[:, :, 1:M],
-tracks.Δdisplacement²[:, :, 1:M]
-
-logrand!(x::AbstractArray) = x .= log.(rand!(x))
-
-neglogrand!(x::AbstractArray) = x .= .-log.(rand!(x))
-
-function _randn!(x::AbstractArray{T}, σ::Union{T,AbstractMatrix{T}}) where {T}
-    randn!(x)
-    x .*= σ
+function Base.getproperty(tracks::Tracks, s::Symbol)
+    if s === :value
+        return selectdim(getfield(tracks, :fullvalue), 4, 1)
+    elseif s === :proposal
+        return selectdim(getfield(tracks, :fullvalue), 4, 2)
+    elseif s === :displacement²
+        return selectdim(getfield(tracks, :fulldisplacement²), 4, 1)
+    elseif s === :proposaldisplacement²
+        return selectdim(getfield(tracks, :fulldisplacement²), 4, 1)
+    else
+        return getfield(tracks, s)
+    end
 end
 
-function _randn!(x::AbstractArray{T,3}, σ::T, σ₀::AbstractVecOrMat{T}) where {T}
-    _randn!(x, σ)
-    @views @. x[1, :, :] *= σ₀ / σ
+trackviews(tracks::Tracks, ntracksᵥ::Integer) =
+    @views tracks.fullvalue[:, :, 1:ntracksᵥ, 1],
+    tracks.fullvalue[:, :, 1:ntracksᵥ, 2],
+    tracks.fulldisplacement²[:, :, 1:ntracksᵥ, 1],
+    tracks.fulldisplacement²[:, :, 1:ntracksᵥ, 2],
+    tracks.Δdisplacement²[:, :, 1:ntracksᵥ]
+
+function logprior(tracks::Tracks{T}, ntracksᵥ::Integer, msdᵥ::T) where {T}
+    xᵒⁿ, ~, Δxᵒⁿ² = trackviews(tracks, ntracksᵥ)
+    diff²!(Δxᵒⁿ², xᵒⁿ)
+    return -(log(msdᵥ) * length(Δxᵒⁿ²) + sum(vec(Δxᵒⁿ²)) / msdᵥ) / 2 -
+           _logπ(tracks.prior, view(xᵒⁿ, 1, :, :))
 end
 
 function simulate!(
@@ -113,16 +119,6 @@ end
 
 propose!(y::AbstractArray{T,3}, x::AbstractArray{T,3}, σ::AbstractVector{T}) where {T} =
     y .= x .+ transpose(σ) .* randn(T, size(y))
-
-# propose!(
-#     aux::NormalPerturbationAux{T},
-#     x::AbstractArray{T,3},
-#     nemitters::Integer,
-# ) where {T} =
-#     @views propose!(aux.proposal[:, :, 1:nemitters], x[:, :, 1:nemitters], aux.perturbsize)
-
-# propose!(y::AbstractArray{T}, x::AbstractArray{T}, t::BrownianTracks) where {T} =
-#     propose!(y, x, t.perturbsize)
 
 Δlogπ₁(
     x₁::AbstractMatrix{T},
@@ -234,4 +230,101 @@ function evenΔlogπ!(
     staggered_diff²!(Δy², y, x)
     ΣΔΔx²!(ΣΔΔx², ΔΔx², Δx², Δy², msd)
     evenΔlogπ!(Δlogπ, ΣΔΔx²)
+end
+
+function update_odd!(
+    𝐱::AbstractArray{T,3},
+    𝐲::AbstractArray{T,3},
+    Δ𝐱²::AbstractArray{T,3},
+    Δ𝐲²::AbstractArray{T,3},
+    msd::T,
+    logr::AbstractVector{T},
+    accept::AbstractVector{Bool},
+    ΔΔx²::AbstractArray{T,3},
+    ΣΔΔ𝐱²::AbstractVector{T},
+    Δlogℒ::AbstractVector{T},
+) where {T}
+    oddΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, ΔΔx², ΣΔΔ𝐱²)
+    @views begin
+        logr[1:2:end] .+= Δlogℒ[1:2:end]
+        accept[1:2:end] .= logr[1:2:end] .> 0
+    end
+    copyidxto!(𝐱, 𝐲, accept)
+end
+
+function update_even!(
+    𝐱::AbstractArray{T,3},
+    𝐲::AbstractArray{T,3},
+    Δ𝐱²::AbstractArray{T,3},
+    Δ𝐲²::AbstractArray{T,3},
+    msd::T,
+    logr::AbstractVector{T},
+    accept::AbstractVector{Bool},
+    ΔΔx²::AbstractArray{T,3},
+    ΣΔΔ𝐱²::AbstractVector{T},
+    Δlogℒ::AbstractVector{T},
+) where {T}
+    evenΔlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, ΔΔx², ΣΔΔ𝐱²)
+    @views begin
+        logr[2:2:end] .+= Δlogℒ[2:2:end]
+        accept[2:2:end] .= logr[2:2:end] .> 0
+    end
+    copyidxto!(𝐱, 𝐲, accept)
+end
+
+function update_odd_even!(
+    𝐱::AbstractArray{T,3},
+    𝐲::AbstractArray{T,3},
+    Δ𝐱²::AbstractArray{T,3},
+    Δ𝐲²::AbstractArray{T,3},
+    msd::T,
+    logr::AbstractVector{T},
+    accept::AbstractVector{Bool},
+    ΔΔx²::AbstractArray{T,3},
+    ΣΔΔ𝐱²::AbstractVector{T},
+    Δlogℒ::AbstractVector{T},
+) where {T}
+    update_odd!(𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, logr, accept, ΔΔx², ΣΔΔ𝐱², Δlogℒ)
+    update_even!(𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, logr, accept, ΔΔx², ΣΔΔ𝐱², Δlogℒ)
+    return 𝐱
+end
+
+function update_ontracks!(
+    tracks::Tracks{T},
+    ntracksᵥ::Integer,
+    msdᵥ::T,
+    brightnessᵥ::T,
+    measurements::AbstractArray{<:Union{T,UInt16}},
+    detector::PixelDetector{T},
+    psf::PointSpreadFunction{T},
+    𝑇::T,
+) where {T}
+    MHinit!(tracks)
+    x, y, Δx², Δy², ΔΔx² = trackviews(tracks, ntracksᵥ)
+    propose!(y, x, tracks.perturbsize)
+    pxcounts!(detector, x, y, brightnessᵥ, psf)
+    Δlogℒ!(detector, measurements)
+    tracks.logratio .+= anneal!(detector.framelogℒ, 𝑇)
+    addΔlogπ₁!(tracks.logratio, x, y, tracks.prior)
+    update_odd_even!(
+        x,
+        y,
+        Δx²,
+        Δy²,
+        msdᵥ,
+        tracks.logratio,
+        tracks.accepted,
+        ΔΔx²,
+        tracks.ΣΔdisplacement²,
+        detector.framelogℒ,
+    )
+    counter!(tracks)
+    return tracks
+end
+
+function update_offtracks!(tracks::Tracks{T}, ntracksᵥ::Integer, msdᵥ::T) where {T}
+    x = @view tracks.fullvalue[:, :, ntracksᵥ+1:end, 1]
+    μ, σ = params(tracks.prior)
+    simulate!(x, μ, σ, msdᵥ)
+    return tracks
 end
