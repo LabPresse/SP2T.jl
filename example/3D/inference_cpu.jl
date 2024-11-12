@@ -51,7 +51,7 @@ M.value = 1
 
 chain = runMCMC(
     tracks = x,
-    nemitters = M,
+    ntracks = M,
     msd = msd,
     brightness = h,
     measurements = frames,

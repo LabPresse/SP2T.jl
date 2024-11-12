@@ -52,7 +52,7 @@ x = Tracks{FloatType}(
 
 chain = runMCMC(
     tracks = x,
-    nemitters = M,
+    ntracks = M,
     msd = msd,
     brightness = h,
     measurements = CuArray(frames),
@@ -62,7 +62,7 @@ chain = runMCMC(
     sizelimit = 1000,
 );
 
-runMCMC!(chain, x, M, msd, h, frames, detector, psf, 10_000, true);
+runMCMC!(chain, x, M, msd, h, CuArray(frames), detector, psf, 50_000, true);
 
 jldsave("./example/2D/chain_gpu.jld2"; chain)
 

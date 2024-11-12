@@ -52,7 +52,7 @@ M.value = 1
 
 chain = runMCMC(
     tracks = x,
-    nemitters = M,
+    ntracks = M,
     msd = msd,
     brightness = h,
     measurements = CuArray(frames),
@@ -62,7 +62,7 @@ chain = runMCMC(
     sizelimit = 1000,
 );
 
-runMCMC!(chain, x, M, msd, h, frames, detector, psf, 100, true);
+runMCMC!(chain, x, M, msd, h, CuArray(frames), detector, psf, 100, true);
 
 jldsave("./example/chain_gpu.jld2"; chain)
 
