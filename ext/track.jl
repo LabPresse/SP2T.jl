@@ -8,7 +8,7 @@ function SP2T.addΔlogπ₁!(
     return ln𝓇
 end
 
-SP2T._copyto!(dest::CuArray{T,N}, src::CuArray{T,N}, i::CuVector{Bool}) where {T,N} =
+SP2T.boolcopyto!(dest::CuArray{T,N}, src::CuArray{T,N}, i::CuVector{Bool}) where {T,N} =
     @. dest = (i * src) + (~i * dest)
 
 function SP2T.propose!(y::CuArray{T,3}, x::CuArray{T,3}, σ::CuVector{T}) where {T}
