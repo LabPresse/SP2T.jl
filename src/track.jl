@@ -46,20 +46,20 @@ function Base.getproperty(tracks::Tracks, s::Symbol)
     elseif s === :displacement²
         return selectdim(getfield(tracks, :fulldisplacement²), 4, 1)
     elseif s === :proposaldisplacement²
-        return selectdim(getfield(tracks, :fulldisplacement²), 4, 1)
+        return selectdim(getfield(tracks, :fulldisplacement²), 4, 2)
     else
         return getfield(tracks, s)
     end
 end
 
-trackviews(tracks::Tracks, ntracksᵥ::Integer) =
+viewactive(tracks::Tracks, ntracksᵥ::Integer) =
     @views tracks.fullvalue[:, :, 1:ntracksᵥ, 1],
     tracks.fullvalue[:, :, 1:ntracksᵥ, 2],
     tracks.fulldisplacement²[:, :, 1:ntracksᵥ, 1],
     tracks.fulldisplacement²[:, :, 1:ntracksᵥ, 2]
 
 function logprior(tracks::Tracks{T}, ntracksᵥ::Integer, msdᵥ::T) where {T}
-    xᵒⁿ, ~, Δxᵒⁿ² = trackviews(tracks, ntracksᵥ)
+    xᵒⁿ, ~, Δxᵒⁿ² = viewactive(tracks, ntracksᵥ)
     diff²!(Δxᵒⁿ², xᵒⁿ)
     return -(log(msdᵥ) * length(Δxᵒⁿ²) + sum(vec(Δxᵒⁿ²)) / msdᵥ) / 2 -
            _logπ(tracks.prior, view(xᵒⁿ, 1, :, :))
@@ -106,7 +106,7 @@ function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where 
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
 
-function MHinit!(tracks::Tracks)
+function initacceptance!(tracks::Tracks)
     neglogrand!(tracks.logratio)
     fill!(tracks.accepted, false)
     return tracks
@@ -152,7 +152,7 @@ function counter!(tracks::Tracks)
     return tracks
 end
 
-function _copyto!(
+function boolcopyto!(
     dest::AbstractArray{T,3},
     src::AbstractArray{T,3},
     i::Vector{Bool},
@@ -178,16 +178,15 @@ function Δlogπ!(
     y::AbstractArray{T,3},
     Δx²::AbstractArray{T,3},
     Δy²::AbstractArray{T,3},
-    msd::T,
+    msdᵥ::T,
     ΣΔΔx²::AbstractVector{T},
     i::Integer,
 ) where {T}
     diff²!(Δx², x)
     i == 1 ? staggered_diff²!(Δy², x, y) : staggered_diff²!(Δy², y, x)
-    Δx² .-= Δy²
-    sum!(ΣΔΔx², Δx²)
-    ΣΔΔx² ./= 2 * msd
-    Δlogπ!(Δlogπ, i:2:length(ΣΔΔx²), mod1(i + 1, 2):2:length(ΣΔΔx²), ΣΔΔx²)
+    sum!(ΣΔΔx², Δx² .-= Δy²) ./= 2 * msdᵥ
+    nframem1 = length(ΣΔΔx²)
+    Δlogπ!(Δlogπ, i:2:nframem1, mod1(i + 1, 2):2:nframem1, ΣΔΔx²)
 end
 
 function update!(
@@ -195,19 +194,17 @@ function update!(
     𝐲::AbstractArray{T,3},
     Δ𝐱²::AbstractArray{T,3},
     Δ𝐲²::AbstractArray{T,3},
-    msd::T,
+    msdᵥ::T,
     logr::AbstractVector{T},
     accept::AbstractVector{Bool},
     ΣΔΔ𝐱²::AbstractVector{T},
     Δlogℒ::AbstractVector{T},
     i::Integer,
 ) where {T}
-    Δlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², msd, ΣΔΔ𝐱², i)
-    @views begin
-        logr[i:2:end] .+= Δlogℒ[i:2:end]
-        accept[i:2:end] .= logr[i:2:end] .> 0
-    end
-    _copyto!(𝐱, 𝐲, accept)
+    Δlogπ!(Δlogℒ, 𝐱, 𝐲, Δ𝐱², Δ𝐲², msdᵥ, ΣΔΔ𝐱², i)
+    @views logr[i:2:end] .+= Δlogℒ[i:2:end]
+    logaccept!(accept, logr, start = i, step = 2)
+    boolcopyto!(𝐱, 𝐲, accept)
 end
 
 function update_ontracks!(
@@ -220,8 +217,8 @@ function update_ontracks!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    MHinit!(tracks)
-    x, y, Δx², Δy² = trackviews(tracks, ntracksᵥ)
+    initacceptance!(tracks)
+    x, y, Δx², Δy² = viewactive(tracks, ntracksᵥ)
     propose!(y, x, tracks.perturbsize)
     pxcounts!(detector, x, y, brightnessᵥ, psf)
     Δlogℒ!(detector, measurements)

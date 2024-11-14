@@ -3,9 +3,9 @@ function SP2T._permute!(
     p::AbstractVector{<:Integer},
     y::CuArray{T,3},
 ) where {T}
-    N = size(x, 1) * size(x, 2)
+    n = size(y, 1) * size(y, 2)
     @views for (i, j) in enumerate(p)
-        CUBLAS.swap!(N, y[:, :, i], x[:, :, j])
+        CUBLAS.swap!(n, x[:, :, j], y[:, :, i])
     end
-    copyto!(x, y)
+    return copyto!(x, y)
 end

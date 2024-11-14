@@ -136,7 +136,7 @@ function parametricMCMC!(
         psf,
         𝑇,
     )
-    x, ~, Δx² = trackviews(tracks, ntracks.value)
+    x, ~, Δx² = viewactive(tracks, ntracks.value)
     diff²!(Δx², x)
     update!(msd, Δx², 𝑇)
     return tracks, msd

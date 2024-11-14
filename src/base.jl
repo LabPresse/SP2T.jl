@@ -52,3 +52,10 @@ diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}, prev::AbstractArray{T,
     @views Δx² .= (x[2:end, :, :] .- prev[1:end-1, :, :]) .^ 2
 
 diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}) where {T} = diff²!(Δx², x, x)
+
+logaccept!(
+    ans::AbstractVector,
+    logratio::AbstractVector;
+    start::Integer = 1,
+    step::Integer = 1,
+) = ans[start:step:end] .= (@view logratio[start:step:end]) .> 0
