@@ -12,5 +12,8 @@ extra
 *.png
 .DS_Store
 data
-*.jld2
+chain*.jld2
+metadata*.jld2
+frames*.jld2
+groundtruth*.jld2
 benchmarks
