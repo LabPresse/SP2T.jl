@@ -7,6 +7,7 @@
   - [Installation](#installation)
     - [SP²T](#spt)
     - [CUDA.jl](#cudajl)
+  - [Quick start](#quick-start)
   - [BNP-Track Framework](#bnp-track-framework)
   - [Citation](#citation)
 
@@ -16,7 +17,7 @@ Single-photon single-particle tracking (SP²T) is the first offline single-parti
 
 ### Julia
 
-SP²T is written in [Julia](https://julialang.org/), so please install it following its instructions. Thanks to Julia's built-in package manager, users usually are not required to install anything themselves. Please have a look at `Project.toml` if you want to check what Julia packages are used by SP²T.
+SP²T is written in [Julia](https://julialang.org/), so please download and install it following its [instructions](https://julialang.org/downloads/). Thanks to Julia's built-in package manager, users usually are not required to install anything themselves. Please have a look at `Project.toml` if you want to check what Julia packages are used by SP²T.
 
 ### GPU
 
@@ -39,6 +40,10 @@ in the Julia REPL.
 ### CUDA.jl
 
 As mentioned in the [Prerequisites](#prerequisites), using GPU is highly recommended. Please refer to the [JuliaGPU website](https://juliagpu.org/) for what and how to install based on your hardware.
+
+## Quick start
+
+Once SP²T is installed, you can have a look at the files in 'examples/2D'. Running 'simulation.jl' will generate some example data then you can run either 'inference_cpu.jl' or 'inference_gpu.jl' to run a test calculation using this example data on CPU or GPU, respectively.
 
 ## BNP-Track Framework
 
