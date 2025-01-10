@@ -4,9 +4,11 @@
   - [Prerequisites](#prerequisites)
     - [Julia](#julia)
     - [GPU](#gpu)
+    - [Visual Studio Code](#visual-studio-code)
   - [Installation](#installation)
     - [SP²T](#spt)
-    - [CUDA.jl](#cudajl)
+    - [Other packages](#other-packages)
+      - [CUDA.jl](#cudajl)
   - [Quick start](#quick-start)
   - [BNP-Track Framework](#bnp-track-framework)
   - [Citation](#citation)
@@ -29,11 +31,11 @@ Although tested mostly on Nvidia GPUs, SP²T itself is not limited to any GPU co
 
 ### Visual Studio Code
 
-This is not a requirement; however, for the best experience, you are encouraged to use an integrated development environment that supports Julia. (Visual Studio Code)[https://code.visualstudio.com/] (VSCode) is the best choice: it is free and the best-supported platform by the Julia community. Please check how to install VSCode and its Julia extension (here)[https://code.visualstudio.com/docs/languages/julia].
+This is not a requirement; however, for the best experience, you are encouraged to use an integrated development environment that supports Julia. [Visual Studio Code](https://code.visualstudio.com/) (VSCode) is the best choice: it is free and the best-supported platform by the Julia community. Please check how to install VSCode and its Julia extension [here](https://code.visualstudio.com/docs/languages/julia).
 
 ## Installation
 
-Once Julia, VSCode, and the Julia extension for VSCode are all installed. It is just one step away from getting SP²T installed. To run the commands in this section, please first open the Julia REPL in VSCode. You can do so by going to "Help>Show All Commands," then typing `Julia: Start REPL` and hitting Enter. 
+Once Julia, VSCode, and the Julia extension for VSCode are all installed. It is just one step away from getting SP²T installed. To run the commands in this section, please first open the Julia REPL in VSCode. You can do so by going to "Help>Show All Commands," then typing `Julia: Start REPL` and hitting Enter.
 ![Screenshot from 2025-01-09 18-35-53](https://github.com/user-attachments/assets/2a1ab46b-3453-45a7-bbea-d10e09515319)
 ![Screenshot from 2025-01-09 18-37-43](https://github.com/user-attachments/assets/f64be463-fb84-4ee8-a703-fa0d0cc710a3)
 Now Julia REPL should be running, and we are ready to proceed!
@@ -46,7 +48,7 @@ SP²T is currently under active development and is still experimental, so it is 
 ]add https://github.com/LabPresse/SP2T.jl
 ```
 
-and hitting Enter in the Julia REPL.
+and hitting `Enter` in the Julia REPL.
 
 ### Other packages
 
