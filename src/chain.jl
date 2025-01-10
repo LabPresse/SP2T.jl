@@ -9,8 +9,7 @@ struct Sample{T<:AbstractFloat,A<:AbstractArray{T,3}}
 end
 
 Sample(
-    tracks::Tracks{T},
-    ntracks::NTracks{T},
+    tracks::TrackParts{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     iter::Integer = 0,
@@ -18,7 +17,7 @@ Sample(
     log𝒫::Real = NaN,
     logℒ::Real = NaN,
 ) where {T} = Sample(
-    collect(view(tracks.value, :, :, 1:ntracks.value)),
+    collect(tracks.value),
     msd.value,
     brightness.value,
     iter,
@@ -77,7 +76,6 @@ temperature(chain::Chain, i::Real) = temperature(chain.annealing, i)
 function extend!(
     chain::Chain{T},
     tracks::Tracks{T},
-    ntracks::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -87,8 +85,8 @@ function extend!(
     𝑇::T,
 ) where {T}
     if iter % chain.stride == 0
-        log𝒫, logℒ = log𝒫logℒ(tracks, ntracks, msd, brightness, measurements, detector, psf)
-        push!(chain.samples, Sample(tracks, ntracks, msd, brightness, iter, 𝑇, log𝒫, logℒ))
+        log𝒫, logℒ = log𝒫logℒ(tracks, msd, brightness, measurements, detector, psf)
+        push!(chain.samples, Sample(tracks.onpart, msd, brightness, iter, 𝑇, log𝒫, logℒ))
         isfull(chain) && shrink!(chain)
     end
     return chain
@@ -99,26 +97,25 @@ end
 
 function log𝒫logℒ(
     tracks::Tracks{T},
-    ntracks::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer},3},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
 ) where {T}
-    pxcounts!(detector, view(tracks.value, :, :, 1:ntracks.value), brightness.value, psf)
+    seteffvalue!(tracks.onpart)
+    @views pxcounts!(detector, tracks.onpart.effvalue, brightness.value, psf)
     logℒ1 = logℒ!(detector, measurements)
     log𝒫1 =
         logℒ1 +
-        logprior(tracks, ntracks.value, msd.value) +
+        logprior(tracks.onpart, msd.value) +
         logprior(msd) +
-        logprior(ntracks)
+        logprior(tracks.ntracks)
     return log𝒫1, logℒ1
 end
 
 function parametricMCMC!(
     tracks::Tracks{T},
-    ntracks::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -126,56 +123,47 @@ function parametricMCMC!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    update_ontracks!(
-        tracks,
-        ntracks.value,
-        msd.value,
+    update_onpart!(tracks, msd.value, brightness.value, measurements, detector, psf, 𝑇)
+    setdisplacement²!(tracks)
+    update!(msd, tracks.displacement², 𝑇)
+    return tracks, msd
+end
+
+function nonparametricMCMC!(
+    tracks::Tracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    measurements::AbstractArray{<:Union{T,Integer}},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+    𝑇::T,
+) where {T}
+    simulate!(tracks.offpart, msd.value)
+    if any(tracks)
+        update_onpart!(tracks, msd.value, brightness.value, measurements, detector, psf, 𝑇)
+        onshuffle!(tracks)
+    end
+
+    seteffvalue!(tracks)
+    update!(
+        tracks.ntracks,
+        tracks.effvalue,
         brightness.value,
         measurements,
         detector,
         psf,
         𝑇,
     )
-    x, ~, Δx² = viewactive(tracks, ntracks.value)
-    diff²!(Δx², x)
-    update!(msd, Δx², 𝑇)
-    return tracks, msd
-end
+    reassign!(tracks)
 
-function nonparametricMCMC!(
-    tracks::Tracks{T},
-    ntracks::NTracks{T},
-    msd::MeanSquaredDisplacement{T},
-    brightness::Brightness{T},
-    measurements::AbstractArray{<:Union{T,Integer}},
-    detector::Detector{T},
-    psf::PointSpreadFunction{T},
-    𝑇::T,
-) where {T}
-    update_offtracks!(tracks, ntracks.value, msd.value)
-    if any(ntracks)
-        update_ontracks!(
-            tracks,
-            ntracks.value,
-            msd.value,
-            brightness.value,
-            measurements,
-            detector,
-            psf,
-            𝑇,
-        )
-        shuffleactive!(tracks, ntracks.value)
-    end
-    diff²!(tracks.displacement², tracks.value)
+    setdisplacement²!(tracks)
     update!(msd, tracks.displacement², 𝑇)
-    update!(ntracks, tracks.value, brightness.value, measurements, detector, psf, 𝑇)
-    return tracks, msd, ntracks
+    return tracks, msd
 end
 
 function runMCMC!(
     chain::Chain{T},
     tracks::Tracks{T},
-    ntracks::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -186,29 +174,17 @@ function runMCMC!(
 ) where {T}
     prev_niters = chain.samples[end].iteration
     reset!(detector, 1)
-    ntracks.logℒ[1] = logℒ!(detector, measurements)
+    tracks.ntracks.logℒ[1] = logℒ!(detector, measurements)
     nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
     @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
-        nextsample!(tracks, ntracks, msd, brightness, measurements, detector, psf, 𝑇)
-        extend!(
-            chain,
-            tracks,
-            ntracks,
-            msd,
-            brightness,
-            measurements,
-            detector,
-            psf,
-            iter,
-            𝑇,
-        )
+        nextsample!(tracks, msd, brightness, measurements, detector, psf, 𝑇)
+        extend!(chain, tracks, msd, brightness, measurements, detector, psf, iter, 𝑇)
     end
 end
 
 function runMCMC(;
     tracks::Tracks{T},
-    ntracks::NTracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     measurements::AbstractArray{<:Union{T,Integer}},
@@ -220,11 +196,10 @@ function runMCMC(;
     parametric::Bool = false,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
-    chain = Chain([Sample(tracks, ntracks, msd, brightness)], sizelimit, annealing)
+    chain = Chain([Sample(tracks.onpart, msd, brightness)], sizelimit, annealing)
     runMCMC!(
         chain,
         tracks,
-        ntracks,
         msd,
         brightness,
         measurements,

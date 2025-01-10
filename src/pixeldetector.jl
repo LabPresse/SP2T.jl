@@ -1,4 +1,3 @@
-abstract type PixelDetector{T} <: Detector{T} end
 struct SPAD{
     T<:AbstractFloat,
     V<:AbstractVector{T},
@@ -29,7 +28,7 @@ function SPAD{T}(
 ) where {T<:AbstractFloat}
     period = convert(T, period)
     pxsize = convert(T, pxsize)
-    darkcounts = convert(unionalltypeof(darkcounts){T}, darkcounts)
+    darkcounts = convert.(T, darkcounts)
     filter = similar(darkcounts, Bool)
     filter .= cutoffs[1] .< darkcounts .< cutoffs[2]
     width, height = size(darkcounts)
@@ -111,20 +110,31 @@ function Δlogℒ!(
     return framesum!(detector.framelogℒ, detector.pxlogℒ, detector.filter)
 end
 
-function addincident!(
-    intensity::AbstractArray{T,3},
+function getpsfcomponents(
     tracksᵥ::AbstractArray{T,3},
-    brightnessᵥ::T,
     xᵖ::AbstractVector{T},
     yᵖ::AbstractVector{T},
     psf::CircularGaussian{T},
-    β = 1,
 ) where {T<:AbstractFloat}
     @views begin
-        𝐗 = _erf(tracksᵥ[:, 1:1, :], xᵖ, psf.σ)
-        𝐘 = _erf(tracksᵥ[:, 2:2, :], yᵖ, psf.σ)
+        psfx = _erf(tracksᵥ[:, 1:1, :], xᵖ, psf.σ)
+        psfy = _erf(tracksᵥ[:, 2:2, :], yᵖ, psf.σ)
     end
-    return batched_mul!(intensity, 𝐗, batched_transpose(𝐘), brightnessᵥ / psf.A, β)
+    return psfx, psfy
+end
+
+function getpsfcomponents(
+    tracksᵥ::AbstractArray{T,3},
+    xᵖ::AbstractVector{T},
+    yᵖ::AbstractVector{T},
+    psf::CircularGaussianLorentzian{T},
+) where {T<:AbstractFloat}
+    @views begin
+        σ = lateral_std(tracksᵥ[:, 3:3, :], psf)
+        psfx = _erf(tracksᵥ[:, 1:1, :], xᵖ, σ)
+        psfy = _erf(tracksᵥ[:, 2:2, :], yᵖ, σ)
+    end
+    return psfx, psfy
 end
 
 function addincident!(
@@ -133,15 +143,10 @@ function addincident!(
     brightnessᵥ::T,
     xᵖ::AbstractVector{T},
     yᵖ::AbstractVector{T},
-    psf::CircularGaussianLorentzian{T},
-    β = 1,
+    psf::GaussianPSF{T},
 ) where {T<:AbstractFloat}
-    @views begin
-        σ = lateral_std(tracksᵥ[:, 3:3, :], psf)
-        𝐗 = _erf(tracksᵥ[:, 1:1, :], xᵖ, σ)
-        𝐘 = _erf(tracksᵥ[:, 2:2, :], yᵖ, σ)
-    end
-    return batched_mul!(intensity, 𝐗, batched_transpose(𝐘), brightnessᵥ / psf.A, β)
+    psfx, psfy = getpsfcomponents(tracksᵥ, xᵖ, yᵖ, psf)
+    return batched_mul!(intensity, psfx, batched_transpose(psfy), brightnessᵥ / psf.A, 1)
 end
 
 function pxcounts!(
@@ -175,18 +180,18 @@ function pxcounts!(
     return detector
 end
 
-function pxcounts!(
-    detector::PixelDetector{T},
-    tracksᵥ::AbstractArray{T,3},
-    brightnessᵥ₁::T,
-    brightnessᵥ₂::T,
-    psf::PointSpreadFunction{T},
-) where {T}
-    #TODO optimize!
-    pxcounts!(detector, tracksᵥ, brightnessᵥ₁, psf, 1)
-    pxcounts!(detector, tracksᵥ, brightnessᵥ₂, psf, 2)
-    return detector
-end
+# function pxcounts!(
+#     detector::PixelDetector{T},
+#     tracksᵥ::AbstractArray{T,3},
+#     brightnessᵥ₁::AbstractArray{T,3},
+#     brightnessᵥ₂::AbstractArray{T,3},
+#     psf::PointSpreadFunction{T},
+# ) where {T}
+#     #TODO optimize!
+#     pxcounts!(detector, tracksᵥ, brightnessᵥ₁, psf, 1)
+#     pxcounts!(detector, tracksᵥ, brightnessᵥ₂, psf, 2)
+#     return detector
+# end
 
 function getincident(
     tracksᵥ::AbstractArray{T,3},

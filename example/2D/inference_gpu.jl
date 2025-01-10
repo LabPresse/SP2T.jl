@@ -35,24 +35,19 @@ h = Brightness{FloatType}(
     proposalparam = 1,
 )
 
-M = NTracks{FloatType}(value = 0, limit = 10, logonprob = -10)
-
 x = Tracks{FloatType}(
-    value = CuArray{FloatType}(undef, size(frames, 3), 2, M.limit),
+    guess = CUDA.zeros(FloatType, size(frames, 3), 2, 1),
     prior = DNormal{FloatType}(
         CuArray(collect(detector.framecenter)),
         CuArray{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10]),
     ),
+    max_ntracks = 10,
     perturbsize = CUDA.fill(√msd.value, 2),
+    logonprob = -10,
 )
-
-# groundtruth = load("./example/2D/groundtruth.jld2")
-# copyto!(x.value, CuArray(groundtruth["tracks"]))
-# M.value = 1
 
 chain = runMCMC(
     tracks = x,
-    ntracks = M,
     msd = msd,
     brightness = h,
     measurements = CuArray(frames),
@@ -62,8 +57,6 @@ chain = runMCMC(
     sizelimit = 1000,
 );
 
-runMCMC!(chain, x, M, msd, h, CuArray(frames), detector, psf, 50_000, true);
+runMCMC!(chain, x, msd, h, CuArray(frames), detector, psf, 50_000, true);
 
 jldsave("./example/2D/chain_gpu.jld2"; chain)
-
-# visualize(data, groundtruth, chain, burn_in = 200)

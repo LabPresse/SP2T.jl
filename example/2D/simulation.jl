@@ -28,13 +28,11 @@ darkcounts = load("./example/2D/darkcounts.jld2", "darkcounts")
 xᵖ = range(0, step = metadata["pixel size"], length = size(darkcounts, 1) + 1)
 yᵖ = range(0, step = metadata["pixel size"], length = size(darkcounts, 2) + 1)
 
-tracks = Array{Float64}(undef, 2550, 2, 1)
-simulate!(
-    tracks,
-    metadata["pixel size"] ./ 2 .* collect(size(darkcounts)),
-    [0.0, 0.0],
-    msd,
-)
+nparticles = 2
+tracks = Array{Float64}(undef, 2550, 2, nparticles)
+simulate!(tracks, metadata["pixel size"] ./ 2 .* collect(size(darkcounts)), [0.0, 0.0], msd)
+
+# presence = fill!(similar(tracks, 2550, 1, 2), 1)
 
 brightness = 1e4 * metadata["period"]
 

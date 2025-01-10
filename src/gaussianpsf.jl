@@ -1,4 +1,4 @@
-struct CircularGaussian{T} <: PointSpreadFunction{T}
+struct CircularGaussian{T} <: GaussianPSF{T}
     A::T # maximum intensity possible in one pixel
     σ::T # [length] std of PSF along xy (image plane)
     CircularGaussian{T}(σ::Real, pxsize::Real) where {T<:AbstractFloat} =
@@ -15,7 +15,7 @@ function CircularGaussian{T}(
     return CircularGaussian{T}(σ, pxsize)
 end
 
-struct CircularGaussianLorentzian{T} <: PointSpreadFunction{T}
+struct CircularGaussianLorentzian{T} <: GaussianPSF{T}
     A::T # maximum intensity possible in one pixel
     σ₀::T # [length] std of PSF along xy (image plane)
     z₀::T # [length] std of PSF along z (optical axis)

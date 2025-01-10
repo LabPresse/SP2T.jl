@@ -46,9 +46,9 @@ x = Tracks{FloatType}(
     perturbsize = CUDA.fill(√msd.value, 3),
 )
 
-groundtruth = load("./example/groundtruth.jld2")
-copyto!(x.value, groundtruth["tracks"])
-M.value = 1
+# groundtruth = load("./example/groundtruth.jld2")
+# copyto!(x.value, groundtruth["tracks"])
+# M.value = 1
 
 chain = runMCMC(
     tracks = x,

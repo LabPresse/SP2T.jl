@@ -1,5 +1,3 @@
-abstract type AbstractAnnealing{T} end
-
 ftypof(::AbstractAnnealing{T}) where {T} = T
 
 struct ConstantAnnealing{T} <: AbstractAnnealing{T}

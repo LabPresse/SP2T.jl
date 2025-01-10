@@ -14,7 +14,6 @@ using NNlib: batched_mul!, batched_transpose
 using ProgressMeter: @showprogress
 
 export Tracks,
-    NTracks,
     MeanSquaredDisplacement,
     Brightness,
     Chain,
@@ -34,9 +33,9 @@ include("gaussianpsf.jl")
 include("pixeldetector.jl")
 
 include("msd.jl")
-include("track.jl")
 include("ntracks.jl")
 include("brightness.jl")
+include("track.jl")
 
 include("annealing.jl")
 include("permutation.jl")

@@ -1,11 +1,4 @@
-mutable struct NTracks{T,V}
-    value::Int
-    logprior::V
-    logℒ::V
-    log𝒫::V
-end
-
-function NTracks{T}(;
+function NTracks{T}(
     value::Integer,
     limit::Integer,
     logonprob::Real,
@@ -37,7 +30,7 @@ function setlog𝒫!(ntracks::NTracks{T}, 𝑇::T) where {T}
 end
 
 function setlogℒ!(
-    ntracks::NTracks,
+    ntracks::NTracks{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     measurements::AbstractArray{<:Union{T,UInt16}},
@@ -46,9 +39,9 @@ function setlogℒ!(
 ) where {T}
     reset!(detector, 1)
     @inbounds for m = 1:size(tracksᵥ, 3)
-        addincident!(
+        @views addincident!(
             detector.intensity,
-            view(tracksᵥ, :, :, m:m),
+            tracksᵥ[:, :, m:m],
             brightnessᵥ,
             detector.pxboundsx,
             detector.pxboundsy,
