@@ -17,7 +17,9 @@ Single-photon single-particle tracking (SP²T) is the first offline single-parti
 
 ### Julia
 
-SP²T is written in [Julia](https://julialang.org/), so please download and install it following its [instructions](https://julialang.org/downloads/). Thanks to Julia's built-in package manager, users usually are not required to install anything themselves. Please have a look at `Project.toml` if you want to check what Julia packages are used by SP²T.
+SP²T is written in [Julia](https://julialang.org/), so please download and install Julia following its [instructions](https://julialang.org/downloads/). Thanks to Julia's built-in package manager, most packages SP²T relies on do not require manual installation--they will be installed automatically when you install SP²T. The [Installation](#installation) section will list a few exceptions. 
+
+In case it is of interest, you can refer to (`Project.toml`)[https://github.com/LabPresse/SP2T.jl/blob/main/Project.toml] for the required Julia packages.
 
 ### GPU
 
@@ -29,7 +31,7 @@ Although tested mostly on Nvidia GPUs, SP²T itself is not limited to any GPU co
 
 ### SP²T
 
-SP²T is currently under active development and is still experimental, so it is not yet in Julia's official registry. However, you can try it by typing
+SP²T is currently under active development and is still experimental, so it is not yet in Julia's official registry. However, you can try it by typing.
 
 ```julia
 ]add https://github.com/LabPresse/SP2T.jl
@@ -39,11 +41,13 @@ in the Julia REPL.
 
 ### CUDA.jl
 
-As mentioned in the [Prerequisites](#prerequisites), using GPU is highly recommended. Please refer to the [JuliaGPU website](https://juliagpu.org/) for what and how to install based on your hardware.
+As mentioned in the [Prerequisites](#prerequisites), GPU is highly recommended. Please refer to the [JuliaGPU website](https://juliagpu.org/) for information on what and how to install it based on your hardware.
 
 ## Quick start
 
-Once SP²T is installed, you can have a look at the files in 'examples/2D'. Running 'simulation.jl' will generate some example data then you can run either 'inference_cpu.jl' or 'inference_gpu.jl' to run a test calculation using this example data on CPU or GPU, respectively.
+Once SP²T is installed, you can download the example scripts in `examples/2D`. If you are not an expert in Julia, it is highly recommended to open these files in Visual Studio Code
+
+Running `simulation.jl` will generate some example data. Then, you can run either `inference_cpu.jl` or `inference_gpu.jl` to run a test calculation using this example data on CPU or GPU, respectively.
 
 ## BNP-Track Framework
 
