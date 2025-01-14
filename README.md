@@ -19,7 +19,7 @@ Single-photon single-particle tracking (SP²T) is the first offline single-parti
 
 ### Julia
 
-SP²T is written in [Julia](https://julialang.org/), so please download and install Julia following its [instructions](https://julialang.org/downloads/). Thanks to Julia's built-in package manager, most packages SP²T relies on do not require manual installation--they will be installed automatically when you install SP²T. The [Installation](#installation) section will list a few exceptions. 
+SP²T is written in [Julia](https://julialang.org/), so please download and install Julia (v1.11 or newer) following its [instructions](https://julialang.org/downloads/). Thanks to Julia's built-in package manager, most packages SP²T relies on do not require manual installation--they will be installed automatically when you install SP²T. The [Installation](#installation) section will list a few exceptions. 
 
 If it interests you, `Project.toml` lists the required Julia packages.
 
