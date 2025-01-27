@@ -131,8 +131,8 @@ function parametricMCMC!(
     𝑇::T,
 ) where {T}
     update_onpart!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
-    setdisplacement²!(tracks)
-    update!(msd, tracks.displacement²s[1], 𝑇)
+    setdisplacement²!(tracks.onpart)
+    update!(msd, tracks.onpart.displacement², 𝑇)
     return tracks, msd
 end
 

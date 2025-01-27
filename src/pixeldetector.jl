@@ -23,12 +23,7 @@ function SPAD{T}(;
 ) where {T<:AbstractFloat}
     period = convert(T, period)
     pixel_size = convert(T, pixel_size)
-    if eltype(darkcounts) !== T
-        darkcounts2 = similar(darkcounts, T)
-        copyto!(darkcounts2, darkcounts)
-        darkcounts = darkcounts2
-    end
-    darkcounts = convert.(T, darkcounts)
+    darkcounts = elconvert(T, darkcounts)
     filter = similar(darkcounts)
     filter .= cutoffs[1] .< darkcounts .< cutoffs[2]
     width, height = size(darkcounts)

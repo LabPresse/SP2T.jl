@@ -59,17 +59,19 @@ function Tracks{T}(;
     max_ntracks::Integer,
     perturbsize::AbstractVector{<:Real},
     logonprob::Real,
+    presence::Union{Nothing,AbstractArray{<:Real,3}} = nothing,
 ) where {T}
-    if eltype(guess) !== T
-        guess2 = similar(guess, T)
-        copyto!(guess2, guess)
-        guess = guess2
-    end
+    guess = elconvert(T, guess)
     nframes, ndims, nguess = size(guess)
     value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
     value2 = similar(value)
-    presence = fill!(similar(value, nframes, 1, max_ntracks), true)
-    presence2 = similar(presence)
+
+    fullpresence = fill!(similar(value, nframes, 1, max_ntracks), true)
+    if !isnothing(presence)
+        copyto!(fullpresence, presence)
+    end
+    fullpresence2 = fill!(similar(fullpresence), true)
+
     displacement² = similar(value, nframes - 1, ndims, max_ntracks)
     displacement²2 = similar(displacement²)
     effvalue = similar(value)
@@ -78,21 +80,21 @@ function Tracks{T}(;
     @views begin
         onpart = TrackParts(
             value[:, :, 1:nguess],
-            presence[:, :, 1:nguess],
+            fullpresence[:, :, 1:nguess],
             displacement²[:, :, 1:nguess],
             effvalue[:, :, 1:nguess],
             prior,
         )
         offpart = TrackParts(
             value[:, :, nguess+1:end],
-            presence[:, :, nguess+1:end],
+            fullpresence[:, :, nguess+1:end],
             displacement²[:, :, nguess+1:end],
             effvalue[:, :, nguess+1:end],
             prior,
         )
         proposals = MHTrackParts(
             value2[:, :, 1:nguess],
-            presence2[:, :, 1:nguess],
+            fullpresence2[:, :, 1:nguess],
             displacement²2[:, :, 1:nguess],
             effvalue2[:, :, 1:nguess],
             similar(value, nframes - 1),
@@ -104,7 +106,7 @@ function Tracks{T}(;
     end
     return Tracks(
         (value, value2),
-        (presence, presence2),
+        (fullpresence, fullpresence2),
         (displacement², displacement²2),
         (effvalue, effvalue2),
         ntracks,

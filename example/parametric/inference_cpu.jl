@@ -2,7 +2,7 @@ using SP2T
 using JLD2
 using Distributions
 
-metadata = load("./example/2D/metadata.jld2", "metadata")
+metadata = load("./example/parametric/metadata.jld2", "metadata")
 
 FloatType = Float32
 
@@ -11,7 +11,7 @@ detector = SPAD{FloatType}(
     pixel_size = metadata["pixel size"],
     darkcounts = load("./example/darkcounts.jld2", "darkcounts"),
     cutoffs = (0, Inf),
-    readouts = load("./example/2D/frames.jld2", "frames"),
+    readouts = load("./example/parametric/frames.jld2", "frames"),
 )
 
 psf = CircularGaussian{FloatType}(
@@ -34,7 +34,8 @@ brightness = Brightness{FloatType}(
 
 nframes = size(detector.readouts, 3)
 tracks = Tracks{FloatType}(
-    guess = zeros(nframes, 2, 1),
+    guess = load("./example/parametric/groundtruth.jld2", "tracks"),
+    presence = load("./example/parametric/groundtruth.jld2", "presence"),
     prior = DNormal{FloatType}(
         collect(detector.framecenter),
         convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1],
@@ -52,8 +53,9 @@ chain = runMCMC(
     psf = psf,
     niters = 100,
     sizelimit = 1000,
+    parametric = true,
 );
 
 runMCMC!(chain, tracks, msd, brightness, detector, psf, 100, true);
 
-jldsave("./example/2D/chain_cpu.jld2"; chain)
+jldsave("./example/parametric/chain_cpu.jld2"; chain)

@@ -34,7 +34,7 @@ brightness = Brightness{FloatType}(
 
 nframes = size(detector.readouts, 3)
 tracks = Tracks{FloatType}(
-    guess = zeros(FloatType, nframes, 3, 1),
+    guess = zeros(nframes, 3, 1),
     prior = DNormal(
         [collect(detector.framecenter)..., 0],
         convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1, 1],
