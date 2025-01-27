@@ -15,10 +15,10 @@ Brightness{T}(
 )
 
 Brightness{T}(;
-    value::Real,
+    guess::Real,
     prior::ContinuousUnivariateDistribution,
     proposalparam::Real,
-) where {T<:AbstractFloat} = Brightness{T}(value, prior, proposalparam)
+) where {T<:AbstractFloat} = Brightness{T}(guess, prior, proposalparam)
 
 logprior(brightness::Brightness{T,P}) where {T,P<:Gamma{T}} =
     (shape(brightness.prior) - 1) * log(brightness.value) -

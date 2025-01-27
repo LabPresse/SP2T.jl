@@ -5,14 +5,14 @@ struct CircularGaussian{T} <: GaussianPSF{T}
         new{T}(gaussianpeak(σ, pxsize), σ)
 end
 
-function CircularGaussian{T}(
-    na::Real,
-    nᵣ::Real,
-    λ::Real,
-    pxsize::Real,
+function CircularGaussian{T}(;
+    numerical_aperture::Real,
+    refractive_index::Real,
+    emission_wavelength::Real,
+    pixels_size::Real,
 ) where {T<:AbstractFloat}
-    σ, ~ = getσ₀z₀(na, nᵣ, λ)
-    return CircularGaussian{T}(σ, pxsize)
+    σ, ~ = getσ₀z₀(numerical_aperture, refractive_index, emission_wavelength)
+    return CircularGaussian{T}(σ, pixels_size)
 end
 
 struct CircularGaussianLorentzian{T} <: GaussianPSF{T}
@@ -26,14 +26,14 @@ struct CircularGaussianLorentzian{T} <: GaussianPSF{T}
     ) where {T<:AbstractFloat} = new{T}(gaussianpeak(σ₀, pxsize), σ₀, z₀)
 end
 
-function CircularGaussianLorentzian{T}(
-    na::Real,
-    nᵣ::Real,
-    λ::Real,
-    pxsize::Real,
+function CircularGaussianLorentzian{T}(;
+    numerical_aperture::Real,
+    refractive_index::Real,
+    emission_wavelength::Real,
+    pixels_size::Real,
 ) where {T<:AbstractFloat}
-    σ₀, z₀ = getσ₀z₀(na, nᵣ, λ)
-    return CircularGaussianLorentzian{T}(σ₀, z₀, pxsize)
+    σ₀, z₀ = getσ₀z₀(numerical_aperture, refractive_index, emission_wavelength)
+    return CircularGaussianLorentzian{T}(σ₀, z₀, pixels_size)
 end
 
 function getσ₀z₀(na::Real, nᵣ::Real, λ::Real)

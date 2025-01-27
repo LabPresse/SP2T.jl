@@ -78,15 +78,19 @@ function extend!(
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    measurements::AbstractArray{<:Union{T,Integer}},
+    llarray::LogLikelihoodArray{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     iter::Integer,
     𝑇::T,
 ) where {T}
     if iter % chain.stride == 0
-        log𝒫, logℒ = log𝒫logℒ(tracks, msd, brightness, measurements, detector, psf)
-        push!(chain.samples, Sample(tracks.onpart, msd, brightness, iter, 𝑇, log𝒫, logℒ))
+        loglikelihood = get_loglikelihood!(llarray, tracks, brightness, detector, psf)
+        logposterior = get_logposterior(loglikelihood, tracks, msd)
+        push!(
+            chain.samples,
+            Sample(tracks.onpart, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
+        )
         isfull(chain) && shrink!(chain)
     end
     return chain
@@ -95,37 +99,40 @@ end
 # saveperiod(chain::Chain) =
 #     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
 
-function log𝒫logℒ(
+function get_loglikelihood!(
+    llarray::LogLikelihoodArray{T},
     tracks::Tracks{T},
-    msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    measurements::AbstractArray{<:Union{T,Integer},3},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
 ) where {T}
     seteffvalue!(tracks.onpart)
-    @views pxcounts!(detector, tracks.onpart.effvalue, brightness.value, psf)
-    logℒ1 = logℒ!(detector, measurements)
-    log𝒫1 =
-        logℒ1 +
-        logprior(tracks.onpart, msd.value) +
-        logprior(msd) +
-        logprior(tracks.ntracks)
-    return log𝒫1, logℒ1
+    set_poisson_mean!(llarray, detector, tracks.onpart.effvalue, brightness.value, psf)
+    return get_loglikelihood!(llarray, detector)
 end
+
+get_logposterior(
+    loglikelihood::T,
+    tracks::Tracks{T},
+    msd::MeanSquaredDisplacement{T},
+) where {T} =
+    loglikelihood +
+    logprior(tracks.onpart, msd.value) +
+    logprior(msd) +
+    logprior(tracks.ntracks)
 
 function parametricMCMC!(
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    measurements::AbstractArray{<:Union{T,Integer}},
+    llarray::LogLikelihoodArray{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    update_onpart!(tracks, msd.value, brightness.value, measurements, detector, psf, 𝑇)
+    update_onpart!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
     setdisplacement²!(tracks)
-    update!(msd, tracks.displacement², 𝑇)
+    update!(msd, tracks.displacement²s[1], 𝑇)
     return tracks, msd
 end
 
@@ -133,23 +140,23 @@ function nonparametricMCMC!(
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    measurements::AbstractArray{<:Union{T,Integer}},
+    llarray::LogLikelihoodArray{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
     simulate!(tracks.offpart, msd.value)
     if any(tracks)
-        update_onpart!(tracks, msd.value, brightness.value, measurements, detector, psf, 𝑇)
+        update_onpart!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
         onshuffle!(tracks)
     end
 
     seteffvalue!(tracks)
     update!(
         tracks.ntracks,
-        tracks.effvalue,
+        tracks.effvalues[1],
         brightness.value,
-        measurements,
+        llarray,
         detector,
         psf,
         𝑇,
@@ -157,7 +164,7 @@ function nonparametricMCMC!(
     reassign!(tracks)
 
     setdisplacement²!(tracks)
-    update!(msd, tracks.displacement², 𝑇)
+    update!(msd, tracks.displacement²s[1], 𝑇)
     return tracks, msd
 end
 
@@ -166,20 +173,20 @@ function runMCMC!(
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    measurements::AbstractArray{<:Union{T,Integer}},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     niters::Integer,
     parametric::Bool,
 ) where {T}
     prev_niters = chain.samples[end].iteration
-    reset!(detector, 1)
-    tracks.ntracks.logℒ[1] = logℒ!(detector, measurements)
+    llarray = LogLikelihoodArray{T}(detector.readouts)
+    reset!(llarray, detector, 1)
+    tracks.ntracks.logℒ[1] = get_loglikelihood!(llarray, detector)
     nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
     @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
-        nextsample!(tracks, msd, brightness, measurements, detector, psf, 𝑇)
-        extend!(chain, tracks, msd, brightness, measurements, detector, psf, iter, 𝑇)
+        nextsample!(tracks, msd, brightness, llarray, detector, psf, 𝑇)
+        extend!(chain, tracks, msd, brightness, llarray, detector, psf, iter, 𝑇)
     end
 end
 
@@ -187,7 +194,6 @@ function runMCMC(;
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    measurements::AbstractArray{<:Union{T,Integer}},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     niters::Integer = 1000,
@@ -197,16 +203,6 @@ function runMCMC(;
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
     chain = Chain([Sample(tracks.onpart, msd, brightness)], sizelimit, annealing)
-    runMCMC!(
-        chain,
-        tracks,
-        msd,
-        brightness,
-        measurements,
-        detector,
-        psf,
-        niters,
-        parametric,
-    )
+    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric)
     return chain
 end

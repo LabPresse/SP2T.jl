@@ -12,30 +12,30 @@ end
 
 function TrackParts(part::TrackParts{T}, tracks::Tracks{T}; ison::Bool = true) where {T}
     M = tracks.ntracks.value
-    if ison
-        return @views TrackParts(
-            tracks.fullvalue[:, :, 1:M, 1],
-            tracks.fullpresence[:, :, 1:M, 1],
-            tracks.fulldisplacement²[:, :, 1:M, 1],
-            tracks.fulleffvalue[:, :, 1:M, 1],
+    @views if ison
+        return TrackParts(
+            tracks.values[1][:, :, 1:M],
+            tracks.presences[1][:, :, 1:M],
+            tracks.displacement²s[1][:, :, 1:M],
+            tracks.effvalues[1][:, :, 1:M],
             part.prior,
         )
     else
-        return @views TrackParts(
-            tracks.fullvalue[:, :, M+1:end, 1],
-            tracks.fullpresence[:, :, M+1:end, 1],
-            tracks.fulldisplacement²[:, :, M+1:end, 1],
-            tracks.fulleffvalue[:, :, M+1:end, 1],
+        return TrackParts(
+            tracks.values[1][:, :, M+1:end],
+            tracks.presences[1][:, :, M+1:end],
+            tracks.displacement²s[1][:, :, M+1:end],
+            tracks.effvalues[1][:, :, M+1:end],
             part.prior,
         )
     end
 end
 
 MHTrackParts(mhpart::MHTrackParts{T}, tracks::Tracks{T}) where {T} = @views MHTrackParts(
-    tracks.fullvalue[:, :, 1:tracks.ntracks.value, 2],
-    tracks.fullpresence[:, :, 1:tracks.ntracks.value, 2],
-    tracks.fulldisplacement²[:, :, 1:tracks.ntracks.value, 2],
-    tracks.fulleffvalue[:, :, 1:tracks.ntracks.value, 2],
+    tracks.values[2][:, :, 1:tracks.ntracks.value],
+    tracks.presences[2][:, :, 1:tracks.ntracks.value],
+    tracks.displacement²s[2][:, :, 1:tracks.ntracks.value],
+    tracks.effvalues[2][:, :, 1:tracks.ntracks.value],
     mhpart.ΣΔdisplacement²,
     mhpart.perturbsize,
     mhpart.logacceptance,
@@ -54,39 +54,47 @@ function logprior(tracks::TrackParts{T}, msdᵥ::T) where {T}
 end
 
 function Tracks{T}(;
-    guess::AbstractArray{T,3},
+    guess::AbstractArray{<:Real,3},
     prior,
     max_ntracks::Integer,
     perturbsize::AbstractVector{<:Real},
     logonprob::Real,
 ) where {T}
+    if eltype(guess) !== T
+        guess2 = similar(guess, T)
+        copyto!(guess2, guess)
+        guess = guess2
+    end
     nframes, ndims, nguess = size(guess)
-    value = similar(guess, nframes, ndims, max_ntracks, 2)
-    copyto!(value, guess)
-    presence = fill!(similar(value, nframes, 1, max_ntracks, 2), true)
-    displacement² = similar(value, nframes - 1, ndims, max_ntracks, 2)
+    value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
+    value2 = similar(value)
+    presence = fill!(similar(value, nframes, 1, max_ntracks), true)
+    presence2 = similar(presence)
+    displacement² = similar(value, nframes - 1, ndims, max_ntracks)
+    displacement²2 = similar(displacement²)
     effvalue = similar(value)
+    effvalue2 = similar(effvalue)
     ntracks = NTracks{T}(nguess, max_ntracks, logonprob)
     @views begin
         onpart = TrackParts(
-            value[:, :, 1:nguess, 1],
-            presence[:, :, 1:nguess, 1],
-            displacement²[:, :, 1:nguess, 1],
-            effvalue[:, :, 1:nguess, 1],
+            value[:, :, 1:nguess],
+            presence[:, :, 1:nguess],
+            displacement²[:, :, 1:nguess],
+            effvalue[:, :, 1:nguess],
             prior,
         )
         offpart = TrackParts(
-            value[:, :, nguess+1:end, 1],
-            presence[:, :, nguess+1:end, 1],
-            displacement²[:, :, nguess+1:end, 1],
-            effvalue[:, :, nguess+1:end, 1],
+            value[:, :, nguess+1:end],
+            presence[:, :, nguess+1:end],
+            displacement²[:, :, nguess+1:end],
+            effvalue[:, :, nguess+1:end],
             prior,
         )
         proposals = MHTrackParts(
-            value[:, :, 1:nguess, 2],
-            presence[:, :, 1:nguess, 2],
-            displacement²[:, :, 1:nguess, 2],
-            effvalue[:, :, 1:nguess, 2],
+            value2[:, :, 1:nguess],
+            presence2[:, :, 1:nguess],
+            displacement²2[:, :, 1:nguess],
+            effvalue2[:, :, 1:nguess],
             similar(value, nframes - 1),
             perturbsize,
             similar(value, nframes),
@@ -95,10 +103,10 @@ function Tracks{T}(;
         )
     end
     return Tracks(
-        value,
-        presence,
-        displacement²,
-        effvalue,
+        (value, value2),
+        (presence, presence2),
+        (displacement², displacement²2),
+        (effvalue, effvalue2),
         ntracks,
         onpart,
         offpart,
@@ -108,13 +116,13 @@ end
 
 Base.any(tracks::Tracks) = any(tracks.ntracks)
 
-function setdisplacement²!(tracks::Tracks)
-    diff²!(tracks.displacement², tracks.value)
+function setdisplacement²!(tracks::Tracks, i::Integer = 1)
+    diff²!(tracks.displacement²s[i], tracks.values[i])
     return tracks
 end
 
-function seteffvalue!(tracks::Tracks)
-    @. tracks.effvalue = tracks.value / tracks.presence
+function seteffvalue!(tracks::Tracks, i::Integer = 1)
+    @. tracks.effvalues[i] = tracks.values[i] / tracks.presences[i]
     return tracks
 end
 
@@ -124,18 +132,6 @@ function reassign!(tracks::Tracks)
     tracks.proposals = MHTrackParts(tracks.proposals, tracks)
     return tracks
 end
-
-# function simulate!(
-#     x::AbstractArray{T,3},
-#     μ::AbstractVector{T},
-#     σ::AbstractVector{T},
-#     msd::T,
-#     y::AbstractArray{T,3},
-# ) where {T}
-#     _randn!(y, √msd, σ)
-#     cumsum!(x, y, dims = 1)
-#     x .+= reshape(μ, 1, :)
-# end
 
 function simulate!(
     x::AbstractArray{T,3},
@@ -303,7 +299,7 @@ function update_onpart!(
     tracks::Tracks{T},
     msdᵥ::T,
     brightnessᵥ::T,
-    measurements::AbstractArray{<:Union{T,UInt16}},
+    llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
@@ -314,12 +310,19 @@ function update_onpart!(
     propose!(tracksₚ, tracksₒ)
     seteffvalue!(tracksₒ)
     seteffvalue!(tracksₚ)
-    pxcounts!(detector, tracksₒ.effvalue, tracksₚ.effvalue, brightnessᵥ, psf)
-    Δlogℒ!(detector, measurements)
-    tracksₚ.logacceptance .+= anneal!(detector.framelogℒ, 𝑇)
+    set_poisson_mean!(
+        llarray,
+        detector,
+        tracksₒ.effvalue,
+        tracksₚ.effvalue,
+        brightnessᵥ,
+        psf,
+    )
+    set_Δloglikelihood!(llarray, detector)
+    tracksₚ.logacceptance .+= anneal!(llarray.frame, 𝑇)
     addΔlogπ₁!(tracksₚ, tracksₒ)
-    update!(tracksₒ, tracksₚ, msdᵥ, detector.framelogℒ, 1)
-    update!(tracksₒ, tracksₚ, msdᵥ, detector.framelogℒ, 2)
+    update!(tracksₒ, tracksₚ, msdᵥ, llarray.frame, 1)
+    update!(tracksₒ, tracksₚ, msdᵥ, llarray.frame, 2)
     countacceptance!(tracksₚ)
     return tracksₒ
 end

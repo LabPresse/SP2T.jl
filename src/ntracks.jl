@@ -24,30 +24,29 @@ Base.any(ntracks::NTracks) = ntracks.value > 0
 
 logprior(ntracks::NTracks) = ntracks.logprior[ntracks.value+1]
 
-function setlog𝒫!(ntracks::NTracks{T}, 𝑇::T) where {T}
+function set_logposterior!(ntracks::NTracks{T}, 𝑇::T) where {T}
     @. ntracks.log𝒫 = ntracks.logprior + ntracks.logℒ / 𝑇
     return ntracks
 end
 
-function setlogℒ!(
+function set_loglikelihood!(
     ntracks::NTracks{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
-    measurements::AbstractArray{<:Union{T,UInt16}},
+    llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
 ) where {T}
-    reset!(detector, 1)
+    reset!(llarray, detector, 1)
     @inbounds for m = 1:size(tracksᵥ, 3)
         @views addincident!(
-            detector.intensity,
+            llarray.means[1],
             tracksᵥ[:, :, m:m],
             brightnessᵥ,
-            detector.pxboundsx,
-            detector.pxboundsy,
+            detector.pxbounds,
             psf,
         )
-        ntracks.logℒ[m+1] = logℒ!(detector, measurements)
+        ntracks.logℒ[m+1] = get_loglikelihood!(llarray, detector)
     end
     return ntracks
 end
@@ -56,13 +55,13 @@ function update!(
     ntracks::NTracks{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
-    measurements::AbstractArray{<:Union{T,Integer}},
+    llarray::LogLikelihoodArray{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    setlogℒ!(ntracks, trackᵥ, brightnessᵥ, measurements, detector, psf)
-    setlog𝒫!(ntracks, 𝑇)
+    set_loglikelihood!(ntracks, trackᵥ, brightnessᵥ, llarray, detector, psf)
+    set_logposterior!(ntracks, 𝑇)
     ntracks.value = randc(ntracks.log𝒫) - 1
     return ntracks
 end

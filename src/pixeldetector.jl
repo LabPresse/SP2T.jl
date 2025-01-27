@@ -2,62 +2,54 @@ struct SPAD{
     T<:AbstractFloat,
     V<:AbstractVector{T},
     M<:AbstractMatrix{T},
-    A<:AbstractArray{T,3},
-    A2<:AbstractArray{T,4},
-    MB<:AbstractMatrix{Bool},
+    R<:AbstractArray{UInt16,3},
 } <: PixelDetector{T}
     batchsize::UInt16
     period::T
     pxsize::T
-    pxboundsx::V
-    pxboundsy::V
+    pxbounds::NTuple{2,V}
     darkcounts::M
-    filter::MB
-    fullintensity::A2
-    pxlogℒ::A
-    framelogℒ::V
+    filter::M
+    readouts::R
 end
 
-function SPAD{T}(
+function SPAD{T}(;
     period::Real,
-    pxsize::Real,
+    pixel_size::Real,
     darkcounts::AbstractMatrix{<:Real},
     cutoffs::Tuple{<:Real,<:Real},
-    nframes::Integer,
+    readouts::AbstractArray{UInt16,3},
     batchsize::Integer = one(UInt16),
 ) where {T<:AbstractFloat}
     period = convert(T, period)
-    pxsize = convert(T, pxsize)
+    pixel_size = convert(T, pixel_size)
+    if eltype(darkcounts) !== T
+        darkcounts2 = similar(darkcounts, T)
+        copyto!(darkcounts2, darkcounts)
+        darkcounts = darkcounts2
+    end
     darkcounts = convert.(T, darkcounts)
-    filter = similar(darkcounts, Bool)
+    filter = similar(darkcounts)
     filter .= cutoffs[1] .< darkcounts .< cutoffs[2]
     width, height = size(darkcounts)
     pxboundsx = similar(darkcounts, width + 1)
-    pxboundsx .= 0:pxsize:width*pxsize
+    pxboundsx .= 0:pixel_size:width*pixel_size
     pxboundsy = similar(darkcounts, height + 1)
-    pxboundsy .= 0:pxsize:height*pxsize
-    fullintensity = repeat(darkcounts, 1, 1, nframes, 2)
-    pxlogℒ = fill!(similar(fullintensity, width, height, nframes), NaN)
-    framelogℒ = fill!(similar(fullintensity, nframes), NaN)
-    return SPAD(
+    pxboundsy .= 0:pixel_size:height*pixel_size
+    return SPAD{T,typeof(pxboundsx),typeof(darkcounts),typeof(readouts)}(
         batchsize,
         period,
-        pxsize,
-        pxboundsx,
-        pxboundsy,
+        pixel_size,
+        (pxboundsx, pxboundsy),
         darkcounts,
         filter,
-        fullintensity,
-        pxlogℒ,
-        framelogℒ,
+        readouts,
     )
 end
 
 function Base.getproperty(detector::SPAD, s::Symbol)
     if s === :framecenter
-        return mean(detector.pxboundsx), mean(detector.pxboundsy)
-    elseif s === :intensity
-        return selectdim(getfield(detector, :fullintensity), 4, 1)
+        return mean(detector.pxbounds[1]), mean(detector.pxbounds[2])
     else
         return getfield(detector, s)
     end
@@ -65,74 +57,88 @@ end
 
 Base.size(detector::SPAD) = size(detector.darkcounts)
 
-function reset!(detector::PixelDetector, i::Integer)
-    detector.fullintensity[:, :, :, i] .= detector.darkcounts
-    return detector
+function reset!(
+    loglikelihood::LogLikelihoodArray{T},
+    detector::PixelDetector{T},
+    i::Integer,
+) where {T}
+    loglikelihood.means[i] .= detector.darkcounts
+    return loglikelihood
 end
 
-pxlogℒ!(
-    logℒ::AbstractArray{T,3},
-    measurements::AbstractArray{UInt16,3},
-    intensity::AbstractArray{T,3},
-    batchsize::UInt16,
-) where {T} = @. logℒ = measurements * logexpm1(intensity) - batchsize * intensity
-
-Δpxlogℒ!(
-    Δlogℒ::AbstractArray{T,3},
-    measurements::AbstractArray{UInt16,3},
-    fullintensity::AbstractArray{T,4},
-    batchsize::UInt16,
-) where {T} = @views @. Δlogℒ =
-    measurements *
-    (logexpm1(fullintensity[:, :, :, 2]) - logexpm1(fullintensity[:, :, :, 1])) -
-    batchsize * (fullintensity[:, :, :, 2] - fullintensity[:, :, :, 1])
-
-framesum!(
-    framelogℒ::AbstractVector{T},
-    pxlogℒ::AbstractArray{T,3},
-    filter::AbstractMatrix{Bool},
-) where {T} = mul!(framelogℒ, transpose(reshape(pxlogℒ, length(filter), :)), vec(filter))
-
-function logℒ!(
-    detector::PixelDetector{T},
-    measurements::AbstractArray{<:Union{T,Integer},3},
+function set_pixel_loglikelihood!(
+    loglikelihood::LogLikelihoodArray{T},
+    detector::SPAD{T},
 ) where {T}
-    pxlogℒ!(detector.pxlogℒ, measurements, detector.intensity, detector.batchsize)
-    framesum!(detector.framelogℒ, detector.pxlogℒ, detector.filter)
-    return sum(detector.framelogℒ)
+    set_binomial_loglikelihood!(
+        loglikelihood.pixel,
+        detector.readouts,
+        loglikelihood.means[1],
+        detector.batchsize,
+    )
+    return loglikelihood
 end
 
-function Δlogℒ!(
-    detector::PixelDetector{T},
-    measurements::AbstractArray{<:Union{T,Integer},3},
+function set_pixel_Δloglikelihood!(
+    loglikelihood::LogLikelihoodArray{T},
+    detector::SPAD{T},
 ) where {T}
-    Δpxlogℒ!(detector.pxlogℒ, measurements, detector.fullintensity, detector.batchsize)
-    return framesum!(detector.framelogℒ, detector.pxlogℒ, detector.filter)
+    set_binomial_Δloglikelihood!(
+        loglikelihood.pixel,
+        detector.readouts,
+        loglikelihood.means[1],
+        loglikelihood.means[2],
+        detector.batchsize,
+    )
+    return loglikelihood
+end
+
+function sum_pixel_loglikelihood!(
+    llarray::LogLikelihoodArray{T},
+    detector::PixelDetector{T},
+) where {T}
+    framesum!(llarray.frame, llarray.pixel, detector.filter)
+    return llarray
+end
+
+function get_loglikelihood!(
+    llarray::LogLikelihoodArray{T},
+    detector::PixelDetector{T},
+) where {T}
+    set_pixel_loglikelihood!(llarray, detector)
+    sum_pixel_loglikelihood!(llarray, detector)
+    return sum(llarray.frame)
+end
+
+function set_Δloglikelihood!(
+    llarray::LogLikelihoodArray{T},
+    detector::PixelDetector{T},
+) where {T}
+    set_pixel_Δloglikelihood!(llarray, detector)
+    return sum_pixel_loglikelihood!(llarray, detector)
 end
 
 function getpsfcomponents(
     tracksᵥ::AbstractArray{T,3},
-    xᵖ::AbstractVector{T},
-    yᵖ::AbstractVector{T},
+    bounds::NTuple{2,<:AbstractVector{T}},
     psf::CircularGaussian{T},
 ) where {T<:AbstractFloat}
     @views begin
-        psfx = _erf(tracksᵥ[:, 1:1, :], xᵖ, psf.σ)
-        psfy = _erf(tracksᵥ[:, 2:2, :], yᵖ, psf.σ)
+        psfx = _erf(tracksᵥ[:, 1:1, :], bounds[1], psf.σ)
+        psfy = _erf(tracksᵥ[:, 2:2, :], bounds[2], psf.σ)
     end
     return psfx, psfy
 end
 
 function getpsfcomponents(
     tracksᵥ::AbstractArray{T,3},
-    xᵖ::AbstractVector{T},
-    yᵖ::AbstractVector{T},
+    bounds::NTuple{2,<:AbstractVector{T}},
     psf::CircularGaussianLorentzian{T},
 ) where {T<:AbstractFloat}
     @views begin
         σ = lateral_std(tracksᵥ[:, 3:3, :], psf)
-        psfx = _erf(tracksᵥ[:, 1:1, :], xᵖ, σ)
-        psfy = _erf(tracksᵥ[:, 2:2, :], yᵖ, σ)
+        psfx = _erf(tracksᵥ[:, 1:1, :], bounds[1], σ)
+        psfy = _erf(tracksᵥ[:, 2:2, :], bounds[2], σ)
     end
     return psfx, psfy
 end
@@ -141,42 +147,36 @@ function addincident!(
     intensity::AbstractArray{T,3},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
-    xᵖ::AbstractVector{T},
-    yᵖ::AbstractVector{T},
+    bounds::NTuple{2,<:AbstractVector{T}},
     psf::GaussianPSF{T},
 ) where {T<:AbstractFloat}
-    psfx, psfy = getpsfcomponents(tracksᵥ, xᵖ, yᵖ, psf)
+    psfx, psfy = getpsfcomponents(tracksᵥ, bounds, psf)
     return batched_mul!(intensity, psfx, batched_transpose(psfy), brightnessᵥ / psf.A, 1)
 end
 
-function pxcounts!(
+function set_poisson_mean!(
+    llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     psf::PointSpreadFunction{T},
     i::Integer = 1,
 ) where {T}
-    reset!(detector, i)
-    addincident!(
-        selectdim(detector.fullintensity, 4, i),
-        tracksᵥ,
-        brightnessᵥ,
-        detector.pxboundsx,
-        detector.pxboundsy,
-        psf,
-    )
+    reset!(llarray, detector, i)
+    addincident!(llarray.means[i], tracksᵥ, brightnessᵥ, detector.pxbounds, psf)
     return detector
 end
 
-function pxcounts!(
+function set_poisson_mean!(
+    llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     tracksᵥ₁::AbstractArray{T,3},
     tracksᵥ₂::AbstractArray{T,3},
     brightnessᵥ::T,
     psf::PointSpreadFunction{T},
 ) where {T}
-    pxcounts!(detector, tracksᵥ₁, brightnessᵥ, psf, 1)
-    pxcounts!(detector, tracksᵥ₂, brightnessᵥ, psf, 2)
+    set_poisson_mean!(llarray, detector, tracksᵥ₁, brightnessᵥ, psf, 1)
+    set_poisson_mean!(llarray, detector, tracksᵥ₂, brightnessᵥ, psf, 2)
     return detector
 end
 
@@ -197,12 +197,11 @@ function getincident(
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     darkcounts::AbstractMatrix{T},
-    xᵖ::AbstractVector{T},
-    yᵖ::AbstractVector{T},
+    bounds::NTuple{2,<:AbstractVector{T}},
     psf::PointSpreadFunction{T},
 ) where {T}
-    𝐔 = repeat(darkcounts, 1, 1, size(tracksᵥ, 1))
-    return addincident!(𝐔, tracksᵥ, brightnessᵥ, xᵖ, yᵖ, psf)
+    incident = repeat(darkcounts, 1, 1, size(tracksᵥ, 1))
+    return addincident!(incident, tracksᵥ, brightnessᵥ, bounds, psf)
 end
 
 simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}) =

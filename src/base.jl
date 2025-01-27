@@ -14,14 +14,51 @@ abstract type AbstractAnnealing{T} end
 
 abstract type AbstractTrackParts{T} end
 
-mutable struct NTracks{T,V}
+abstract type LogLikelihoodAux{T} end
+
+struct LogLikelihoodArray{T<:AbstractFloat,A<:AbstractArray{T,3},V<:AbstractVector{T}} <:
+       LogLikelihoodAux{T}
+    pixel::A
+    frame::V
+    means::NTuple{2,A}
+end
+
+function LogLikelihoodArray{T}(frames::AbstractArray{<:Real,3}) where {T<:AbstractFloat}
+    nframes = size(frames, 3)
+    return LogLikelihoodArray(
+        similar(frames, T),
+        similar(frames, T, nframes),
+        (similar(frames, T), similar(frames, T)),
+    )
+end
+
+set_binomial_loglikelihood!(
+    l::AbstractArray{T,3},
+    k::AbstractArray{UInt16,3},
+    c::AbstractArray{T,3},
+    n::UInt16,
+) where {T} = @. l = k * logexpm1(c) - n * c
+
+set_binomial_Δloglikelihood!(
+    Δ::AbstractArray{T,3},
+    k::AbstractArray{UInt16,3},
+    c1::AbstractArray{T,3},
+    c2::AbstractArray{T,3},
+    n::UInt16,
+) where {T} = @. Δ = k * (logexpm1(c2) - logexpm1(c1)) - n * (c2 - c1)
+
+framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T} =
+    mul!(r, transpose(reshape(A, length(b), :)), vec(b))
+
+mutable struct NTracks{T<:AbstractFloat,V<:AbstractVector{T}}
     value::Int
     logprior::V
     logℒ::V
     log𝒫::V
 end
 
-struct TrackParts{T,A<:AbstractArray{T},P<:SP2TDistribution{T}} <: AbstractTrackParts{T}
+struct TrackParts{T<:AbstractFloat,A<:AbstractArray{T},P<:SP2TDistribution{T}} <:
+       AbstractTrackParts{T}
     value::A
     presence::A
     displacement²::A
@@ -29,7 +66,8 @@ struct TrackParts{T,A<:AbstractArray{T},P<:SP2TDistribution{T}} <: AbstractTrack
     prior::P
 end
 
-struct MHTrackParts{T,A<:AbstractArray{T},V<:AbstractVector{T}} <: AbstractTrackParts{T}
+struct MHTrackParts{T<:AbstractFloat,A<:AbstractArray{T},V<:AbstractVector{T}} <:
+       AbstractTrackParts{T}
     value::A
     presence::A
     displacement²::A
@@ -42,34 +80,20 @@ struct MHTrackParts{T,A<:AbstractArray{T},V<:AbstractVector{T}} <: AbstractTrack
 end
 
 mutable struct Tracks{
-    T,
-    A<:AbstractArray{T},
-    NT<:NTracks,
+    T<:AbstractFloat,
+    A<:AbstractArray{T,3},
+    NT<:NTracks{T},
     TR<:TrackParts{T},
     MH<:MHTrackParts{T},
 }
-    fullvalue::A
-    fullpresence::A
-    fulldisplacement²::A
-    fulleffvalue::A
+    values::NTuple{2,A}
+    presences::NTuple{2,A}
+    displacement²s::NTuple{2,A}
+    effvalues::NTuple{2,A}
     ntracks::NT
     onpart::TR
     offpart::TR
     proposals::MH
-end
-
-function Base.getproperty(tracks::Tracks, s::Symbol)
-    if s === :value
-        return selectdim(getfield(tracks, :fullvalue), 4, 1)
-    elseif s === :presence
-        return selectdim(getfield(tracks, :fullpresence), 4, 1)
-    elseif s === :displacement²
-        return selectdim(getfield(tracks, :fulldisplacement²), 4, 1)
-    elseif s === :effvalue
-        return selectdim(getfield(tracks, :fulleffvalue), 4, 1)
-    else
-        return getfield(tracks, s)
-    end
 end
 
 unionalltypeof(::Gamma) = Gamma

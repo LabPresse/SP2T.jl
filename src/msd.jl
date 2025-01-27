@@ -12,9 +12,9 @@ MeanSquaredDisplacement{T}(
 )
 
 MeanSquaredDisplacement{T}(;
-    value::Real,
+    guess::Real,
     prior::ContinuousUnivariateDistribution,
-) where {T<:AbstractFloat} = MeanSquaredDisplacement{T}(value, prior)
+) where {T<:AbstractFloat} = MeanSquaredDisplacement{T}(guess, prior)
 
 logprior(msd::MeanSquaredDisplacement{T,P}) where {T,P<:InverseGamma{T}} =
     -(shape(msd.prior) + 1) * log(msd.value) - scale(msd.prior) / msd.value

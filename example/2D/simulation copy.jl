@@ -24,17 +24,19 @@ psf = CircularGaussian{Float64}(
 )
 
 msd = 2 * 10 * metadata["period"]
-darkcounts = load("./example/darkcounts.jld2", "darkcounts")
+darkcounts = load("./example/2D/darkcounts.jld2", "darkcounts")
 xᵖ = range(0, step = metadata["pixel size"], length = size(darkcounts, 1) + 1)
 yᵖ = range(0, step = metadata["pixel size"], length = size(darkcounts, 2) + 1)
 
-ntracks = 2
-tracks = Array{Float64}(undef, 2550, 2, ntracks)
+nparticles = 2
+tracks = Array{Float64}(undef, 2550, 2, nparticles)
 simulate!(tracks, metadata["pixel size"] ./ 2 .* collect(size(darkcounts)), [0.0, 0.0], msd)
+
+# presence = fill!(similar(tracks, 2550, 1, 2), 1)
 
 brightness = 1e4 * metadata["period"]
 
-intensity = SP2T.getincident(tracks, brightness, darkcounts, (xᵖ, yᵖ), psf)
+intensity = SP2T.getincident(tracks, brightness, darkcounts, xᵖ, yᵖ, psf)
 frames = SP2T.simframes(intensity)
 
 jldsave("./example/2D/metadata.jld2"; metadata)

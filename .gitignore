@@ -1,7 +1,6 @@
 .vscode
 .JuliaFormatter.toml
 .VSCodeCounter
-example/*.jld2
 Manifest.toml
 test/scrach*
 test/benchmark*

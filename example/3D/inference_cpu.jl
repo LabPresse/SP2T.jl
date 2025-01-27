@@ -2,67 +2,58 @@ using SP2T
 using JLD2
 using Distributions
 
-metadata = load("./example/metadata.jld2", "metadata")
-frames = load("./example/frames.jld2", "frames")
-darkcounts = load("./example/darkcounts.jld2", "darkcounts")
+metadata = load("./example/3D/metadata.jld2", "metadata")
 
 FloatType = Float32
 
 detector = SPAD{FloatType}(
-    metadata["period"],
-    metadata["pixel size"],
-    darkcounts,
-    (eps(), Inf),
-    size(frames, 3),
+    period = metadata["period"],
+    pixel_size = metadata["pixel size"],
+    darkcounts = load("./example/darkcounts.jld2", "darkcounts"),
+    cutoffs = (0, Inf),
+    readouts = load("./example/3D/frames.jld2", "frames"),
 )
 
 psf = CircularGaussianLorentzian{FloatType}(
-    metadata["numerical aperture"],
-    metadata["refractive index"],
-    metadata["wavelength"],
-    metadata["pixel size"],
+    numerical_aperture = metadata["numerical aperture"],
+    refractive_index = metadata["refractive index"],
+    emission_wavelength = metadata["wavelength"],
+    pixels_size = metadata["pixel size"],
 )
 
 msd = MeanSquaredDisplacement{FloatType}(
-    value = 2 * 1 * metadata["period"],
+    guess = 2 * 1 * metadata["period"],
     prior = InverseGamma(2, 1e-5),
 )
 
-h = Brightness{FloatType}(
-    value = 4e4 * metadata["period"],
+brightness = Brightness{FloatType}(
+    guess = 1e4 * metadata["period"],
     prior = Gamma(1, 1),
     proposalparam = 1,
 )
 
-M = NTracks{FloatType}(value = 0, limit = 10, logonprob = -10)
-
-x = Tracks{FloatType}(
-    value = Array{FloatType}(undef, size(frames, 3), 3, M.limit),
+nframes = size(detector.readouts, 3)
+tracks = Tracks{FloatType}(
+    guess = zeros(FloatType, nframes, 3, 1),
     prior = DNormal(
-        [detector.framecenter..., 0],
-        Array{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10, 0.5]),
+        [collect(detector.framecenter)..., 0],
+        convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1, 1],
     ),
+    max_ntracks = 10,
     perturbsize = fill(√msd.value, 3),
+    logonprob = -10,
 )
 
-groundtruth = load("./example/groundtruth.jld2")
-copyto!(x.value, groundtruth["tracks"])
-M.value = 1
-
 chain = runMCMC(
-    tracks = x,
-    ntracks = M,
+    tracks = tracks,
     msd = msd,
-    brightness = h,
-    measurements = frames,
+    brightness = brightness,
     detector = detector,
     psf = psf,
     niters = 100,
     sizelimit = 1000,
 );
 
-runMCMC!(chain, x, M, msd, h, frames, detector, psf, 100, true);
+runMCMC!(chain, tracks, msd, brightness, detector, psf, 100, true);
 
-jldsave("./example/chain_cpu.jld2"; chain)
-
-# visualize(data, groundtruth, chain, burn_in = 200)
+jldsave("./example/3D/chain_cpu.jld2"; chain)
