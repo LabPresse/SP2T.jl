@@ -32,21 +32,6 @@ function LogLikelihoodArray{T}(frames::AbstractArray{<:Real,3}) where {T<:Abstra
     )
 end
 
-set_binomial_loglikelihood!(
-    l::AbstractArray{T,3},
-    k::AbstractArray{UInt16,3},
-    c::AbstractArray{T,3},
-    n::UInt16,
-) where {T} = @. l = k * logexpm1(c) - n * c
-
-set_binomial_Δloglikelihood!(
-    Δ::AbstractArray{T,3},
-    k::AbstractArray{UInt16,3},
-    c1::AbstractArray{T,3},
-    c2::AbstractArray{T,3},
-    n::UInt16,
-) where {T} = @. Δ = k * (logexpm1(c2) - logexpm1(c1)) - n * (c2 - c1)
-
 framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T} =
     mul!(r, transpose(reshape(A, length(b), :)), vec(b))
 
@@ -98,9 +83,7 @@ end
 
 unionalltypeof(::Gamma) = Gamma
 unionalltypeof(::InverseGamma) = InverseGamma
-unionalltypeof(::Matrix) = Matrix
-unionalltypeof(::Vector) = Vector
-unionalltypeof(::Array) = Array
+
 
 anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇
 anneal!(logℒ::AbstractVector{T}, 𝑇::T) where {T} = logℒ ./= 𝑇

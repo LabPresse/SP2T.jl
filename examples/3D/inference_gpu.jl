@@ -3,9 +3,9 @@ using JLD2
 using Distributions
 using CUDA
 
-metadata = load("./example/metadata.jld2", "metadata")
-frames = load("./example/frames.jld2", "frames")
-darkcounts = load("./example/darkcounts.jld2", "darkcounts")
+metadata = load("./examples/metadata.jld2", "metadata")
+frames = load("./examples/frames.jld2", "frames")
+darkcounts = load("./examples/darkcounts.jld2", "darkcounts")
 
 FloatType = Float32
 
@@ -46,7 +46,7 @@ x = Tracks{FloatType}(
     perturbsize = CUDA.fill(√msd.value, 3),
 )
 
-# groundtruth = load("./example/groundtruth.jld2")
+# groundtruth = load("./examples/groundtruth.jld2")
 # copyto!(x.value, groundtruth["tracks"])
 # M.value = 1
 
@@ -64,6 +64,6 @@ chain = runMCMC(
 
 runMCMC!(chain, x, M, msd, h, CuArray(frames), detector, psf, 100, true);
 
-jldsave("./example/chain_gpu.jld2"; chain)
+jldsave("./examples/chain_gpu.jld2"; chain)
 
 # visualize(data, groundtruth, chain, burn_in = 200)

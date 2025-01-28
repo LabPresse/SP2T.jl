@@ -23,7 +23,8 @@ export Tracks,
     CircularGaussianLorentzian,
     ConstantAnnealing,
     PolynomialAnnealing,
-    SPAD
+    SPAD,
+    EMCCD
 
 export simulate!, bridge!, runMCMC!, runMCMC
 
@@ -31,6 +32,9 @@ include("base.jl")
 include("distributions.jl")
 include("gaussianpsf.jl")
 include("pixeldetector.jl")
+
+include("spad.jl")
+include("emccd.jl")
 
 include("msd.jl")
 include("ntracks.jl")

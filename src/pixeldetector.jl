@@ -1,48 +1,4 @@
-struct SPAD{
-    T<:AbstractFloat,
-    V<:AbstractVector{T},
-    M<:AbstractMatrix{T},
-    R<:AbstractArray{UInt16,3},
-} <: PixelDetector{T}
-    batchsize::UInt16
-    period::T
-    pxsize::T
-    pxbounds::NTuple{2,V}
-    darkcounts::M
-    filter::M
-    readouts::R
-end
-
-function SPAD{T}(;
-    period::Real,
-    pixel_size::Real,
-    darkcounts::AbstractMatrix{<:Real},
-    cutoffs::Tuple{<:Real,<:Real},
-    readouts::AbstractArray{UInt16,3},
-    batchsize::Integer = one(UInt16),
-) where {T<:AbstractFloat}
-    period = convert(T, period)
-    pixel_size = convert(T, pixel_size)
-    darkcounts = elconvert(T, darkcounts)
-    filter = similar(darkcounts)
-    filter .= cutoffs[1] .< darkcounts .< cutoffs[2]
-    width, height = size(darkcounts)
-    pxboundsx = similar(darkcounts, width + 1)
-    pxboundsx .= 0:pixel_size:width*pixel_size
-    pxboundsy = similar(darkcounts, height + 1)
-    pxboundsy .= 0:pixel_size:height*pixel_size
-    return SPAD{T,typeof(pxboundsx),typeof(darkcounts),typeof(readouts)}(
-        batchsize,
-        period,
-        pixel_size,
-        (pxboundsx, pxboundsy),
-        darkcounts,
-        filter,
-        readouts,
-    )
-end
-
-function Base.getproperty(detector::SPAD, s::Symbol)
+function Base.getproperty(detector::PixelDetector, s::Symbol)
     if s === :framecenter
         return mean(detector.pxbounds[1]), mean(detector.pxbounds[2])
     else
@@ -50,7 +6,7 @@ function Base.getproperty(detector::SPAD, s::Symbol)
     end
 end
 
-Base.size(detector::SPAD) = size(detector.darkcounts)
+Base.size(detector::PixelDetector) = size(detector.darkcounts)
 
 function reset!(
     loglikelihood::LogLikelihoodArray{T},
@@ -58,33 +14,6 @@ function reset!(
     i::Integer,
 ) where {T}
     loglikelihood.means[i] .= detector.darkcounts
-    return loglikelihood
-end
-
-function set_pixel_loglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
-    detector::SPAD{T},
-) where {T}
-    set_binomial_loglikelihood!(
-        loglikelihood.pixel,
-        detector.readouts,
-        loglikelihood.means[1],
-        detector.batchsize,
-    )
-    return loglikelihood
-end
-
-function set_pixel_Δloglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
-    detector::SPAD{T},
-) where {T}
-    set_binomial_Δloglikelihood!(
-        loglikelihood.pixel,
-        detector.readouts,
-        loglikelihood.means[1],
-        loglikelihood.means[2],
-        detector.batchsize,
-    )
     return loglikelihood
 end
 
@@ -198,20 +127,3 @@ function getincident(
     incident = repeat(darkcounts, 1, 1, size(tracksᵥ, 1))
     return addincident!(incident, tracksᵥ, brightnessᵥ, bounds, psf)
 end
-
-simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}) =
-    @. W = $rand!($similar(U)) < -expm1(-U)
-
-simframes!(W::AbstractArray{UInt16,3}, U::AbstractArray{<:Real,3}, B::Integer) =
-    @. W = rand(Binomial(B, -expm1(-U)))
-
-function simframes(U::AbstractArray{<:Real,3}, B::Integer = 1)
-    W = similar(U, UInt16)
-    if B == 1
-        simframes!(W, U)
-    else
-        simframes!(W, U, B)
-    end
-end
-
-struct EMCCD{T} <: Detector{T} end

@@ -1,18 +1,20 @@
 using SP2T
 using JLD2
 using Distributions
-using CUDA
 
-metadata = load("./example/parametric/metadata.jld2", "metadata")
+metadata = load("./examples/EMCCD/metadata.jld2", "metadata")
 
 FloatType = Float32
 
-detector = SPAD{FloatType}(
+detector = EMCCD{FloatType}(
     period = metadata["period"],
     pixel_size = metadata["pixel size"],
-    darkcounts = CuArray(load("./example/darkcounts.jld2", "darkcounts")),
+    darkcounts = zeros(50, 50) .+ eps(),
     cutoffs = (0, Inf),
-    readouts = CuArray(load("./example/parametric/frames.jld2", "frames")),
+    readouts = load("./examples/EMCCD/frames.jld2", "frames"),
+    offset = 10,
+    gain = 1,
+    variance = 1,
 )
 
 psf = CircularGaussian{FloatType}(
@@ -23,26 +25,25 @@ psf = CircularGaussian{FloatType}(
 )
 
 msd = MeanSquaredDisplacement{FloatType}(
-    guess = 2 * 1 * metadata["period"],
+    guess = 2 * 0.2 * metadata["period"],
     prior = InverseGamma(2, 1e-5),
 )
 
 brightness = Brightness{FloatType}(
-    guess = 1e4 * metadata["period"],
+    guess = 1e3 * metadata["period"],
     prior = Gamma(1, 1),
     proposalparam = 1,
 )
 
 nframes = size(detector.readouts, 3)
 tracks = Tracks{FloatType}(
-    guess = CuArray(load("./example/parametric/groundtruth.jld2", "tracks")),
-    presence = CuArray(load("./example/parametric/groundtruth.jld2", "presence")),
+    guess = zeros(nframes, 2, 1),
     prior = DNormal{FloatType}(
-        CuArray(collect(detector.framecenter)),
-        CuArray{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10]),
+        collect(detector.framecenter),
+        convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1],
     ),
     max_ntracks = 10,
-    perturbsize = CUDA.fill(√msd.value, 2),
+    perturbsize = fill(√msd.value, 2),
     logonprob = -10,
 )
 
@@ -52,11 +53,10 @@ chain = runMCMC(
     brightness = brightness,
     detector = detector,
     psf = psf,
-    niters = 998,
+    niters = 2000,
     sizelimit = 1000,
-    parametric = true,
 );
 
-runMCMC!(chain, tracks, msd, brightness, detector, psf, 1000, true);
+runMCMC!(chain, tracks, msd, brightness, detector, psf, 100, true);
 
-jldsave("./example/parametric/chain_gpu.jld2"; chain)
+jldsave("./examples/EMCCD/chain_cpu.jld2"; chain)

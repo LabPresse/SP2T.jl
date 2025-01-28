@@ -1,20 +1,21 @@
 using SP2T
 using JLD2
 using Distributions
+using CUDA
 
-metadata = load("./example/3D/metadata.jld2", "metadata")
+metadata = load("./examples/2D/metadata.jld2", "metadata")
 
 FloatType = Float32
 
 detector = SPAD{FloatType}(
     period = metadata["period"],
     pixel_size = metadata["pixel size"],
-    darkcounts = load("./example/darkcounts.jld2", "darkcounts"),
+    darkcounts = CuArray(load("./examples/darkcounts.jld2", "darkcounts")),
     cutoffs = (0, Inf),
-    readouts = load("./example/3D/frames.jld2", "frames"),
+    readouts = CuArray(load("./examples/2D/frames.jld2", "frames")),
 )
 
-psf = CircularGaussianLorentzian{FloatType}(
+psf = CircularGaussian{FloatType}(
     numerical_aperture = metadata["numerical aperture"],
     refractive_index = metadata["refractive index"],
     emission_wavelength = metadata["wavelength"],
@@ -34,13 +35,13 @@ brightness = Brightness{FloatType}(
 
 nframes = size(detector.readouts, 3)
 tracks = Tracks{FloatType}(
-    guess = zeros(nframes, 3, 1),
-    prior = DNormal(
-        [collect(detector.framecenter)..., 0],
-        convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1, 1],
+    guess = CUDA.zeros(nframes, 2, 1),
+    prior = DNormal{FloatType}(
+        CuArray(collect(detector.framecenter)),
+        CuArray{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10]),
     ),
     max_ntracks = 10,
-    perturbsize = fill(√msd.value, 3),
+    perturbsize = CUDA.fill(√msd.value, 2),
     logonprob = -10,
 )
 
@@ -50,10 +51,10 @@ chain = runMCMC(
     brightness = brightness,
     detector = detector,
     psf = psf,
-    niters = 100,
+    niters = 998,
     sizelimit = 1000,
 );
 
-runMCMC!(chain, tracks, msd, brightness, detector, psf, 100, true);
+runMCMC!(chain, tracks, msd, brightness, detector, psf, 1000, true);
 
-jldsave("./example/3D/chain_cpu.jld2"; chain)
+jldsave("./examples/2D/chain_gpu.jld2"; chain)

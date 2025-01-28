@@ -16,3 +16,4 @@ metadata*.jld2
 frames*.jld2
 groundtruth*.jld2
 benchmarks
+note.md
