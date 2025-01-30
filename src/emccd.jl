@@ -53,10 +53,10 @@ set_emccd_loglikelihood!(
     l::AbstractArray{T,3},
     x::AbstractArray{T,3},
     c::AbstractArray{T,3},
-    g::Union{T,AbstractMatrix{T}},
-    μ::Union{T,AbstractMatrix{T}},
-    v::Union{T,AbstractMatrix{T}},
-) where {T} = @. l = -log(v) / 2 - (x - g * c - μ)^2 / (2 * v)
+    g::T,
+    μ::T,
+    v::T,
+) where {T} = l .= (-log(v) / 2) .- (x .- g .* c .- μ) .^ 2 ./ (2 * v)
 
 set_emccd_Δloglikelihood!(
     Δ::AbstractArray{T,3},
