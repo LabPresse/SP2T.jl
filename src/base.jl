@@ -80,6 +80,22 @@ mutable struct Tracks{
     proposals::MH
 end
 
+mutable struct MeanSquaredDisplacement{T<:AbstractFloat,P}
+    value::T
+    prior::P
+    fixed::Bool
+end
+
+mutable struct Brightness{T,P}
+    value::T
+    prior::P
+    proposalparam::T
+    fixed::Bool
+end
+
+isfixed(brightness::Brightness) = brightness.fixed
+isfixed(msd::MeanSquaredDisplacement) = msd.fixed
+
 unionalltypeof(::Gamma) = Gamma
 unionalltypeof(::InverseGamma) = InverseGamma
 

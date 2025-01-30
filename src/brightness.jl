@@ -1,24 +1,14 @@
-mutable struct Brightness{T,P}
-    value::T
-    prior::P
-    proposalparam::T
-end
-
-Brightness{T}(
-    value::Real,
-    prior::ContinuousUnivariateDistribution,
-    proposalparam::Real,
-) where {T<:AbstractFloat} = Brightness(
-    convert(T, value),
-    unionalltypeof(prior)(convert.(T, params(prior))...),
-    convert(T, proposalparam),
-)
-
 Brightness{T}(;
     guess::Real,
     prior::ContinuousUnivariateDistribution,
     proposalparam::Real,
-) where {T<:AbstractFloat} = Brightness{T}(guess, prior, proposalparam)
+    fixed::Bool = false,
+) where {T<:AbstractFloat} = Brightness(
+    convert(T, guess),
+    unionalltypeof(prior)(convert.(T, params(prior))...),
+    convert(T, proposalparam),
+    fixed,
+)
 
 logprior(brightness::Brightness{T,P}) where {T,P<:Gamma{T}} =
     (shape(brightness.prior) - 1) * log(brightness.value) -
@@ -26,12 +16,6 @@ logprior(brightness::Brightness{T,P}) where {T,P<:Gamma{T}} =
 
 logprior_norm(brightness::Brightness{T,P}) where {T,P} =
     logpdf(brightness.prior, brightness.value)
-
-# Brightness(; value, priorparams, proposalparam, scale::T) where {T} = Brightness(
-#     convert(T, value * scale),
-#     convert.(T, (priorparams[1], priorparams[2] * scale)),
-#     convert(T, proposalparam),
-# )
 
 # function get_ϵ(𝒬::Beta)
 #     ϵ = rand(𝒬)
