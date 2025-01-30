@@ -10,37 +10,27 @@ function seteffvalue!(tracks::AbstractTrackParts{T}) where {T}
     return tracks
 end
 
-function TrackParts(part::TrackParts{T}, tracks::Tracks{T}; ison::Bool = true) where {T}
-    M = tracks.ntracks.value
-    @views if ison
-        return TrackParts(
-            tracks.values[1][:, :, 1:M],
-            tracks.presences[1][:, :, 1:M],
-            tracks.displacement²s[1][:, :, 1:M],
-            tracks.effvalues[1][:, :, 1:M],
-            part.prior,
-        )
-    else
-        return TrackParts(
-            tracks.values[1][:, :, M+1:end],
-            tracks.presences[1][:, :, M+1:end],
-            tracks.displacement²s[1][:, :, M+1:end],
-            tracks.effvalues[1][:, :, M+1:end],
-            part.prior,
-        )
-    end
-end
-
-MHTrackParts(mhpart::MHTrackParts{T}, tracks::Tracks{T}) where {T} = @views MHTrackParts(
-    tracks.values[2][:, :, 1:tracks.ntracks.value],
-    tracks.presences[2][:, :, 1:tracks.ntracks.value],
-    tracks.displacement²s[2][:, :, 1:tracks.ntracks.value],
-    tracks.effvalues[2][:, :, 1:tracks.ntracks.value],
-    mhpart.ΣΔdisplacement²,
-    mhpart.perturbsize,
-    mhpart.logacceptance,
-    mhpart.acceptance,
-    mhpart.counter,
+get_track_parts(
+    value::AbstractArray{T,3},
+    presence::AbstractArray{T,3},
+    displacement²::AbstractArray{T,3},
+    effvalue::AbstractArray{T,3},
+    ntracks::Integer,
+    onprior,
+    offprior,
+) where {T} = @views TrackParts(
+    value[:, :, 1:ntracks],
+    presence[:, :, 1:ntracks],
+    displacement²[:, :, 1:ntracks],
+    effvalue[:, :, 1:ntracks],
+    onprior,
+),
+TrackParts(
+    value[:, :, ntracks+1:end],
+    presence[:, :, ntracks+1:end],
+    displacement²[:, :, ntracks+1:end],
+    effvalue[:, :, ntracks+1:end],
+    offprior,
 )
 
 setacceptance!(tracks::MHTrackParts; start::Integer, step::Integer) =
@@ -62,56 +52,50 @@ function Tracks{T}(;
     presence::Union{Nothing,AbstractArray{<:Real,3}} = nothing,
 ) where {T}
     guess = elconvert(T, guess)
-    nframes, ndims, nguess = size(guess)
+    nframes, ndims, nguesses = size(guess)
     value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
     value2 = similar(value)
 
     fullpresence = fill!(similar(value, nframes, 1, max_ntracks), true)
     if !isnothing(presence)
+        dimsmatch(guess, presence, dims = 1) || throw(
+            DimensionMismatch(
+                "size of guess dose not match size of presence in the first dimension",
+            ),
+        )
         copyto!(fullpresence, presence)
     end
     fullpresence2 = fill!(similar(fullpresence), true)
-
     displacement² = similar(value, nframes - 1, ndims, max_ntracks)
     displacement²2 = similar(displacement²)
-    effvalue = similar(value)
-    effvalue2 = similar(effvalue)
-    ntracks = NTracks{T}(nguess, max_ntracks, logonprob)
-    @views begin
-        onpart = TrackParts(
-            value[:, :, 1:nguess],
-            fullpresence[:, :, 1:nguess],
-            displacement²[:, :, 1:nguess],
-            effvalue[:, :, 1:nguess],
-            prior,
-        )
-        offpart = TrackParts(
-            value[:, :, nguess+1:end],
-            fullpresence[:, :, nguess+1:end],
-            displacement²[:, :, nguess+1:end],
-            effvalue[:, :, nguess+1:end],
-            prior,
-        )
-        proposals = MHTrackParts(
-            value2[:, :, 1:nguess],
-            fullpresence2[:, :, 1:nguess],
-            displacement²2[:, :, 1:nguess],
-            effvalue2[:, :, 1:nguess],
-            similar(value, nframes - 1),
-            perturbsize,
-            similar(value, nframes),
-            similar(value, nframes),
-            zeros(Int, 2, 2),
-        )
-    end
+    effvalue, effvalue2 = similar(value), similar(value)
+    ntracks = NTracks{T}(nguesses, max_ntracks, logonprob)
+    @views proposals = MHTrackParts(
+        value2[:, :, 1:nguesses],
+        fullpresence2[:, :, 1:nguesses],
+        displacement²2[:, :, 1:nguesses],
+        effvalue2[:, :, 1:nguesses],
+        similar(value, nframes - 1),
+        perturbsize,
+        similar(value, nframes),
+        similar(value, nframes),
+        zeros(Int, 2, 2),
+    )
     return Tracks(
         (value, value2),
         (fullpresence, fullpresence2),
         (displacement², displacement²2),
         (effvalue, effvalue2),
         ntracks,
-        onpart,
-        offpart,
+        get_track_parts(
+            value,
+            fullpresence,
+            displacement²,
+            effvalue,
+            nguesses,
+            prior,
+            prior,
+        )...,
         proposals,
     )
 end
@@ -128,10 +112,37 @@ function seteffvalue!(tracks::Tracks, i::Integer = 1)
     return tracks
 end
 
+function reassign_track_parts!(tracks::Tracks{T}) where {T}
+    tracks.onpart, tracks.offpart = get_track_parts(
+        tracks.values[1],
+        tracks.presences[1],
+        tracks.displacement²s[1],
+        tracks.effvalues[1],
+        tracks.ntracks.value,
+        tracks.onpart.prior,
+        tracks.offpart.prior,
+    )
+    return tracks
+end
+
+function reassign_proposals!(tracks::Tracks{T}) where {T}
+    tracks.proposals = @views MHTrackParts(
+        tracks.values[2][:, :, 1:tracks.ntracks.value],
+        tracks.presences[2][:, :, 1:tracks.ntracks.value],
+        tracks.displacement²s[2][:, :, 1:tracks.ntracks.value],
+        tracks.effvalues[2][:, :, 1:tracks.ntracks.value],
+        tracks.proposals.ΣΔdisplacement²,
+        tracks.proposals.perturbsize,
+        tracks.proposals.logacceptance,
+        tracks.proposals.acceptance,
+        tracks.proposals.counter,
+    )
+    return tracks
+end
+
 function reassign!(tracks::Tracks)
-    tracks.onpart = TrackParts(tracks.onpart, tracks)
-    tracks.offpart = TrackParts(tracks.offpart, tracks, ison = false)
-    tracks.proposals = MHTrackParts(tracks.proposals, tracks)
+    reassign_track_parts!(tracks)
+    reassign_proposals!(tracks)
     return tracks
 end
 

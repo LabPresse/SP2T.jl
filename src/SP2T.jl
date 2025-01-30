@@ -39,7 +39,7 @@ include("emccd.jl")
 include("msd.jl")
 include("ntracks.jl")
 include("brightness.jl")
-include("track.jl")
+include("tracks.jl")
 
 include("annealing.jl")
 include("permutation.jl")

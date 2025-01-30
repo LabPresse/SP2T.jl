@@ -3,12 +3,13 @@ function NTracks{T}(
     limit::Integer,
     logonprob::Real,
 ) where {T<:AbstractFloat}
-    logprior = collect((0:limit) .* convert(T, logonprob))
-    return NTracks{T,typeof(logprior)}(
+    logprior = convert(T, logonprob)
+    loglikelihood = Vector{T}(undef, limit + 1)
+    return NTracks{T,typeof(loglikelihood)}(
         value,
         logprior,
-        similar(logprior),
-        similar(logprior),
+        loglikelihood,
+        similar(loglikelihood),
     )
 end
 
@@ -22,10 +23,12 @@ end
 
 Base.any(ntracks::NTracks) = ntracks.value > 0
 
-logprior(ntracks::NTracks) = ntracks.logprior[ntracks.value+1]
+logprior(ntracks::NTracks) = ntracks.logprior * ntracks.value
 
 function set_logposterior!(ntracks::NTracks{T}, 𝑇::T) where {T}
-    @. ntracks.log𝒫 = ntracks.logprior + ntracks.logℒ / 𝑇
+    ntracks.logposterior .=
+        (0:length(ntracks.loglikelihood)-1) .* ntracks.logprior .+
+        ntracks.loglikelihood ./ 𝑇
     return ntracks
 end
 
@@ -46,7 +49,7 @@ function set_loglikelihood!(
             detector.pxbounds,
             psf,
         )
-        ntracks.logℒ[m+1] = get_loglikelihood!(llarray, detector)
+        ntracks.loglikelihood[m+1] = get_loglikelihood!(llarray, detector)
     end
     return ntracks
 end
@@ -62,6 +65,6 @@ function update!(
 ) where {T}
     set_loglikelihood!(ntracks, trackᵥ, brightnessᵥ, llarray, detector, psf)
     set_logposterior!(ntracks, 𝑇)
-    ntracks.value = randc(ntracks.log𝒫) - 1
+    ntracks.value = randc(ntracks.logposterior) - 1
     return ntracks
 end

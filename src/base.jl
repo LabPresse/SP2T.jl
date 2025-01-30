@@ -1,6 +1,5 @@
 abstract type Detector{T} end
 abstract type PixelDetector{T} <: Detector{T} end
-
 # abstract type StreamDetector{T} <: Detector{T} end
 
 abstract type PointSpreadFunction{T} end
@@ -37,9 +36,9 @@ framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) whe
 
 mutable struct NTracks{T<:AbstractFloat,V<:AbstractVector{T}}
     value::Int
-    logprior::V
-    logℒ::V
-    log𝒫::V
+    logprior::T
+    loglikelihood::V
+    logposterior::V
 end
 
 struct TrackParts{T<:AbstractFloat,A<:AbstractArray{T},P<:SP2TDistribution{T}} <:
@@ -84,9 +83,8 @@ end
 unionalltypeof(::Gamma) = Gamma
 unionalltypeof(::InverseGamma) = InverseGamma
 
-
 anneal(logℒ::T, 𝑇::T) where {T} = logℒ / 𝑇
-anneal!(logℒ::AbstractVector{T}, 𝑇::T) where {T} = logℒ ./= 𝑇
+anneal!(logℒ::AbstractArray{T}, 𝑇::T) where {T} = logℒ ./= 𝑇
 
 randc(logp::AbstractArray) = argmax(logp .- log.(randexp!(similar(logp))))
 
@@ -141,3 +139,6 @@ function elconvert(T::DataType, A::AbstractArray)
         return B
     end
 end
+
+dimsmatch(A::AbstractArray, B::AbstractArray; dims::Union{Integer,AbstractUnitRange}) =
+    size(A)[dims] == size(B)[dims]

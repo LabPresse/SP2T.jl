@@ -21,16 +21,14 @@ function SPAD{T}(;
     readouts::AbstractArray{UInt16,3},
     batchsize::Integer = one(UInt16),
 ) where {T<:AbstractFloat}
-    period = convert(T, period)
-    pixel_size = convert(T, pixel_size)
+    dimsmatch(darkcounts, readouts, dims = 1:2) ||
+        throw(DimensionMismatch("size of darkcounts dose not match size of readouts"))
+    period, pixel_size = convert.(T, (period, pixel_size))
     darkcounts = elconvert(T, darkcounts)
-    filter = similar(darkcounts)
-    filter .= cutoffs[1] .< darkcounts .< cutoffs[2]
+    filter = similar(darkcounts) .= cutoffs[1] .< darkcounts .< cutoffs[2]
     width, height = size(darkcounts)
-    pxboundsx = similar(darkcounts, width + 1)
-    pxboundsx .= 0:pixel_size:width*pixel_size
-    pxboundsy = similar(darkcounts, height + 1)
-    pxboundsy .= 0:pixel_size:height*pixel_size
+    pxboundsx = similar(darkcounts, width + 1) .= 0:pixel_size:width*pixel_size
+    pxboundsy = similar(darkcounts, height + 1) .= 0:pixel_size:height*pixel_size
     return SPAD{T,typeof(pxboundsx),typeof(darkcounts),typeof(readouts)}(
         period,
         pixel_size,

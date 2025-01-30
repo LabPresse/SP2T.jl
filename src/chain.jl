@@ -181,7 +181,7 @@ function runMCMC!(
     prev_niters = chain.samples[end].iteration
     llarray = LogLikelihoodArray{T}(detector.readouts)
     reset!(llarray, detector, 1)
-    tracks.ntracks.logℒ[1] = get_loglikelihood!(llarray, detector)
+    tracks.ntracks.loglikelihood[1] = get_loglikelihood!(llarray, detector)
     nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
     @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
