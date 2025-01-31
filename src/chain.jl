@@ -43,6 +43,8 @@ end
 function Base.getproperty(c::Chain, s::Symbol)
     if s === :msd
         return [sample.diffusivity for sample in getfield(c, :samples)]
+    elseif s === :brightnesses
+        return [sample.brightness for sample in getfield(c, :samples)]
     elseif s === :nemitters
         return [size(sample.tracks, 3) for sample in getfield(c, :samples)]
     elseif s === :logposterior
@@ -131,6 +133,7 @@ function parametricMCMC!(
     𝑇::T,
 ) where {T}
     update_onpart!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
+    update!(brightness, tracks.onpart.effvalue, llarray, detector, psf, 𝑇)
     setdisplacement²!(tracks.onpart)
     update!(msd, tracks.onpart.displacement², 𝑇)
     return tracks, msd
@@ -162,6 +165,8 @@ function nonparametricMCMC!(
         𝑇,
     )
     reassign!(tracks)
+
+    update!(brightness, tracks.onpart.effvalue, llarray, detector, psf, 𝑇)
 
     setdisplacement²!(tracks)
     update!(msd, tracks.displacement²s[1], 𝑇)

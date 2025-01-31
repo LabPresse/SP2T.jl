@@ -220,10 +220,7 @@ function addΔlogπ₁!(
     return ln𝓇
 end
 
-function addΔlogπ₁!(
-    tracksₚ::MHTrackParts{T,A},
-    tracksₒ::TrackParts{T,A},
-) where {T,A<:AbstractArray}
+function addΔlogπ₁!(tracksₚ::MHTrackParts{T,A}, tracksₒ::TrackParts{T,A}) where {T,A}
     addΔlogπ₁!(tracksₚ.logacceptance, tracksₒ.value, tracksₚ.value, tracksₒ.prior)
     return tracksₚ
 end
@@ -323,7 +320,7 @@ function update_onpart!(
     propose!(tracksₚ, tracksₒ)
     seteffvalue!(tracksₒ)
     seteffvalue!(tracksₚ)
-    set_poisson_mean!(
+    set_poisson_means!(
         llarray,
         detector,
         tracksₒ.effvalue,
@@ -331,7 +328,7 @@ function update_onpart!(
         brightnessᵥ,
         psf,
     )
-    set_Δloglikelihood!(llarray, detector)
+    set_frame_Δloglikelihood!(llarray, detector)
     tracksₚ.logacceptance .+= anneal!(llarray.frame, 𝑇)
     addΔlogπ₁!(tracksₚ, tracksₒ)
     update!(tracksₒ, tracksₚ, msdᵥ, llarray.frame, 1)

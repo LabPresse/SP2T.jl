@@ -30,9 +30,8 @@ function update!(
     displacement²::AbstractArray{T,3},
     𝑇::T,
 ) where {T}
-    if !isfixed(msd)
-        Δparams = (length(displacement²), sum(vec(displacement²))) ./ (2 * 𝑇)
-        msd.value = _rand(msd.prior, Δparams)
-    end
+    isfixed(msd) && return msd
+    Δparams = (length(displacement²), sum(vec(displacement²))) ./ (2 * 𝑇)
+    msd.value = _rand(msd.prior, Δparams)
     return msd
 end

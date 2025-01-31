@@ -86,11 +86,12 @@ mutable struct MeanSquaredDisplacement{T<:AbstractFloat,P}
     fixed::Bool
 end
 
-mutable struct Brightness{T,P}
+mutable struct Brightness{T<:AbstractFloat,P}
     value::T
     prior::P
-    proposalparam::T
+    proposal::Beta{T}
     fixed::Bool
+    counter::Vector{Int}
 end
 
 isfixed(brightness::Brightness) = brightness.fixed
@@ -158,3 +159,6 @@ end
 
 dimsmatch(A::AbstractArray, B::AbstractArray; dims::Union{Integer,AbstractUnitRange}) =
     size(A)[dims] == size(B)[dims]
+
+get_Δlogprior(xᵖ::T, xᵒ::T, distr::Gamma{T}) where {T<:AbstractFloat} =
+    (shape(distr) - 1) * log(xᵖ / xᵒ) - (xᵖ - xᵒ) / scale(distr)

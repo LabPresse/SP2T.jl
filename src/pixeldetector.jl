@@ -25,6 +25,14 @@ function sum_pixel_loglikelihood!(
     return llarray
 end
 
+function set_frame_Δloglikelihood!(
+    llarray::LogLikelihoodArray{T},
+    detector::PixelDetector{T},
+) where {T}
+    set_pixel_Δloglikelihood!(llarray, detector)
+    return sum_pixel_loglikelihood!(llarray, detector)
+end
+
 function get_loglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
@@ -34,12 +42,12 @@ function get_loglikelihood!(
     return sum(llarray.frame)
 end
 
-function set_Δloglikelihood!(
+function get_Δloglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
 ) where {T}
-    set_pixel_Δloglikelihood!(llarray, detector)
-    return sum_pixel_loglikelihood!(llarray, detector)
+    set_frame_Δloglikelihood!(llarray, detector)
+    return sum(llarray.frame)
 end
 
 function getpsfcomponents(
@@ -88,10 +96,10 @@ function set_poisson_mean!(
 ) where {T}
     reset!(llarray, detector, i)
     addincident!(llarray.means[i], tracksᵥ, brightnessᵥ, detector.pxbounds, psf)
-    return detector
+    return llarray
 end
 
-function set_poisson_mean!(
+function set_poisson_means!(
     llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     tracksᵥ₁::AbstractArray{T,3},
@@ -101,7 +109,22 @@ function set_poisson_mean!(
 ) where {T}
     set_poisson_mean!(llarray, detector, tracksᵥ₁, brightnessᵥ, psf, 1)
     set_poisson_mean!(llarray, detector, tracksᵥ₂, brightnessᵥ, psf, 2)
-    return detector
+    return llarray
+end
+
+function set_poisson_means!(
+    llarray::LogLikelihoodArray{T},
+    detector::PixelDetector{T},
+    tracksᵥ::AbstractArray{T,3},
+    brightnessᵥ₁::T,
+    brightnessᵥ₂::T,
+    psf::PointSpreadFunction{T},
+) where {T}
+    set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₁, psf, 1)
+    llarray.means[2] .=
+        (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁)
+    # set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₂, psf, 2)
+    return llarray
 end
 
 # function pxcounts!(

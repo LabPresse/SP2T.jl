@@ -30,9 +30,9 @@ msd = MeanSquaredDisplacement{FloatType}(
 )
 
 brightness = Brightness{FloatType}(
-    guess = 1e3 * metadata["period"],
-    prior = Gamma(1, 1),
-    proposalparam = 1,
+    guess = 2e3 * metadata["period"],
+    prior = Gamma(10, 6),
+    proposalparam = 10,
 )
 
 nframes = size(detector.readouts, 3)
@@ -57,6 +57,6 @@ chain = runMCMC(
     sizelimit = 1000,
 );
 
-runMCMC!(chain, tracks, msd, brightness, detector, psf, 100, true);
+runMCMC!(chain, tracks, msd, brightness, detector, psf, 1000, true);
 
 jldsave("./examples/EMCCD/chain_cpu.jld2"; chain)

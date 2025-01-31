@@ -30,7 +30,7 @@ msd = MeanSquaredDisplacement{FloatType}(
 brightness = Brightness{FloatType}(
     guess = 1e4 * metadata["period"],
     prior = Gamma(1, 1),
-    proposalparam = 1,
+    proposalparam = 10,
 )
 
 nframes = size(detector.readouts, 3)
