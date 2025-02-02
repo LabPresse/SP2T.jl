@@ -46,10 +46,6 @@ x = Tracks{FloatType}(
     perturbsize = CUDA.fill(√msd.value, 3),
 )
 
-# groundtruth = load("./examples/groundtruth.jld2")
-# copyto!(x.value, groundtruth["tracks"])
-# M.value = 1
-
 chain = runMCMC(
     tracks = x,
     ntracks = M,
@@ -65,5 +61,3 @@ chain = runMCMC(
 runMCMC!(chain, x, M, msd, h, CuArray(frames), detector, psf, 100, true);
 
 jldsave("./examples/chain_gpu.jld2"; chain)
-
-# visualize(data, groundtruth, chain, burn_in = 200)

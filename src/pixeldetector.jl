@@ -123,22 +123,8 @@ function set_poisson_means!(
     set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₁, psf, 1)
     llarray.means[2] .=
         (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁)
-    # set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₂, psf, 2)
     return llarray
 end
-
-# function pxcounts!(
-#     detector::PixelDetector{T},
-#     tracksᵥ::AbstractArray{T,3},
-#     brightnessᵥ₁::AbstractArray{T,3},
-#     brightnessᵥ₂::AbstractArray{T,3},
-#     psf::PointSpreadFunction{T},
-# ) where {T}
-#     #TODO optimize!
-#     pxcounts!(detector, tracksᵥ, brightnessᵥ₁, psf, 1)
-#     pxcounts!(detector, tracksᵥ, brightnessᵥ₂, psf, 2)
-#     return detector
-# end
 
 function getincident(
     tracksᵥ::AbstractArray{T,3},

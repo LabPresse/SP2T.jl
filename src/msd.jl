@@ -1,13 +1,3 @@
-# MeanSquaredDisplacement{T}(
-#     value::Real,
-#     prior::ContinuousUnivariateDistribution,
-#     fixed::Bool,
-# ) where {T<:AbstractFloat} = MeanSquaredDisplacement(
-#     convert(T, value),
-#     unionalltypeof(prior)(convert.(T, params(prior))...),
-#     fixed,
-# )
-
 MeanSquaredDisplacement{T}(;
     guess::Real,
     prior::ContinuousUnivariateDistribution,
@@ -17,8 +7,6 @@ MeanSquaredDisplacement{T}(;
     unionalltypeof(prior)(convert.(T, params(prior))...),
     fixed,
 )
-
-# MeanSquaredDisplacement{T}(guess, prior, fixed)
 
 logprior(msd::MeanSquaredDisplacement{T,P}) where {T,P<:InverseGamma{T}} =
     -(shape(msd.prior) + 1) * log(msd.value) - scale(msd.prior) / msd.value
