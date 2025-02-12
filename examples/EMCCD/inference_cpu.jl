@@ -12,9 +12,9 @@ detector = EMCCD{FloatType}(
     darkcounts = zeros(50, 50) .+ eps(),
     cutoffs = (0, Inf),
     readouts = load("./examples/EMCCD/frames.jld2", "frames"),
-    offset = 10,
-    gain = 1,
-    variance = 1,
+    offset = 100,
+    gain = 100,
+    variance = 2,
 )
 
 psf = CircularGaussian{FloatType}(
@@ -30,8 +30,8 @@ msd = MeanSquaredDisplacement{FloatType}(
 )
 
 brightness = Brightness{FloatType}(
-    guess = 2e3 * metadata["period"],
-    prior = Gamma(10, 6),
+    guess = 10 * metadata["period"],
+    prior = Gamma(1, 10),
     proposalparam = 10,
 )
 

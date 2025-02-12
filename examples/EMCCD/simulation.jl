@@ -29,9 +29,9 @@ detector = EMCCD{FloatType}(
     darkcounts = zeros(50, 50),
     cutoffs = (0, Inf),
     readouts = zeros(50, 50, 5),
-    offset = 10,
-    gain = 1,
-    variance = 1,
+    offset = 100,
+    gain = 100,
+    variance = 2,
 )
 
 msd = 2 * 0.1 * metadata["period"]
@@ -43,7 +43,7 @@ tracks = simulate!(
     msd,
 )
 
-brightness = 1000 * metadata["period"]
+brightness = 20 * metadata["period"]
 SP2T.simulate_readouts!(
     detector,
     SP2T.getincident(tracks, brightness, detector.darkcounts, detector.pxbounds, psf),
