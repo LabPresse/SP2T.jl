@@ -25,21 +25,15 @@ function EMCCD{T}(;
     gain::Real,
     variance::Real,
 ) where {T<:AbstractFloat}
-    period = convert(T, period)
-    pixel_size = convert(T, pixel_size)
-    darkcounts = elconvert(T, darkcounts)
+    dimsmatch(darkcounts, readouts, dims = 1:2) ||
+        throw(DimensionMismatch("size of darkcounts dose not match size of readouts"))
+    period, pixel_size, pxbounds, darkcounts, filter =
+        _init_pixel_detector_params(T, period, pixel_size, darkcounts, cutoffs)
     readouts = elconvert(T, readouts)
-    filter = similar(darkcounts)
-    filter .= cutoffs[1] .< darkcounts .< cutoffs[2]
-    width, height = size(darkcounts)
-    pxboundsx = similar(darkcounts, width + 1)
-    pxboundsx .= 0:pixel_size:width*pixel_size
-    pxboundsy = similar(darkcounts, height + 1)
-    pxboundsy .= 0:pixel_size:height*pixel_size
-    return EMCCD{T,typeof(pxboundsx),typeof(darkcounts),typeof(readouts)}(
+    return EMCCD{T,typeof(pxbounds[1]),typeof(darkcounts),typeof(readouts)}(
         period,
         pixel_size,
-        (pxboundsx, pxboundsy),
+        pxbounds,
         darkcounts,
         filter,
         readouts,

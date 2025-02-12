@@ -23,16 +23,12 @@ function SPAD{T}(;
 ) where {T<:AbstractFloat}
     dimsmatch(darkcounts, readouts, dims = 1:2) ||
         throw(DimensionMismatch("size of darkcounts dose not match size of readouts"))
-    period, pixel_size = convert.(T, (period, pixel_size))
-    darkcounts = elconvert(T, darkcounts)
-    filter = similar(darkcounts) .= cutoffs[1] .< darkcounts .< cutoffs[2]
-    width, height = size(darkcounts)
-    pxboundsx = similar(darkcounts, width + 1) .= 0:pixel_size:width*pixel_size
-    pxboundsy = similar(darkcounts, height + 1) .= 0:pixel_size:height*pixel_size
-    return SPAD{T,typeof(pxboundsx),typeof(darkcounts),typeof(readouts)}(
+    period, pixel_size, pxbounds, darkcounts, filter =
+        _init_pixel_detector_params(T, period, pixel_size, darkcounts, cutoffs)
+    return SPAD{T,typeof(pxbounds[1]),typeof(darkcounts),typeof(readouts)}(
         period,
         pixel_size,
-        (pxboundsx, pxboundsy),
+        pxbounds,
         darkcounts,
         filter,
         readouts,
@@ -56,16 +52,16 @@ set_spad_Δloglikelihood!(
 ) where {T} = @. Δ = k * (logexpm1(c2) - logexpm1(c1)) - n * (c2 - c1)
 
 function set_pixel_loglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
+    llarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
     set_spad_loglikelihood!(
-        loglikelihood.pixel,
+        llarray.pixel,
         detector.readouts,
-        loglikelihood.means[1],
+        llarray.means[1],
         detector.batchsize,
     )
-    return loglikelihood
+    return llarray
 end
 
 function set_pixel_Δloglikelihood!(

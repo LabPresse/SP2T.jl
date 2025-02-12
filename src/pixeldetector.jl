@@ -1,3 +1,26 @@
+"""
+    _init_pixel_detector_params(T::DataType, period::Real, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real})
+
+Initialize the parameters for a pixel detector such that they share the same data type `T`.
+"""
+function _init_pixel_detector_params(
+    T::DataType,
+    period::Real,
+    pixel_size::Real,
+    darkcounts::AbstractMatrix{<:Real},
+    cutoffs::Tuple{<:Real,<:Real},
+)
+    period, pixel_size = convert.(T, (period, pixel_size))
+    darkcounts = elconvert(T, darkcounts)
+    darkcounts[isinf.(darkcounts)] .= floatmax(eltype(darkcounts))
+    darkcounts[iszero.(darkcounts)] .= floatmin(eltype(darkcounts))
+    filter = similar(darkcounts) .= cutoffs[1] .< darkcounts .< cutoffs[2]
+    width, height = size(darkcounts)
+    pxboundsx = similar(darkcounts, width + 1) .= 0:pixel_size:width*pixel_size
+    pxboundsy = similar(darkcounts, height + 1) .= 0:pixel_size:height*pixel_size
+    return period, pixel_size, (pxboundsx, pxboundsy), darkcounts, filter
+end
+
 function Base.getproperty(detector::PixelDetector, s::Symbol)
     if s === :framecenter
         return mean(detector.pxbounds[1]), mean(detector.pxbounds[2])
