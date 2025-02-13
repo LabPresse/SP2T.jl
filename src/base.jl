@@ -2,6 +2,8 @@ abstract type Detector{T} end
 abstract type PixelDetector{T} <: Detector{T} end
 # abstract type StreamDetector{T} <: Detector{T} end
 
+abstract type AbstractEMCCD{T} <: PixelDetector{T} end
+
 abstract type PointSpreadFunction{T} end
 abstract type GaussianPSF{T} <: PointSpreadFunction{T} end
 

@@ -1,3 +1,8 @@
+function check_pixel_dimsmatch(darkcounts::AbstractArray, readouts::AbstractArray)
+    dimsmatch(darkcounts, readouts, dims = 1:2) ||
+        throw(DimensionMismatch("size of darkcounts dose not match size of readouts"))
+end
+
 """
     _init_pixel_detector_params(T::DataType, period::Real, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real})
 
@@ -5,12 +10,10 @@ Initialize the parameters for a pixel detector such that they share the same dat
 """
 function _init_pixel_detector_params(
     T::DataType,
-    period::Real,
     pixel_size::Real,
     darkcounts::AbstractMatrix{<:Real},
     cutoffs::Tuple{<:Real,<:Real},
 )
-    period, pixel_size = convert.(T, (period, pixel_size))
     darkcounts = elconvert(T, darkcounts)
     darkcounts[isinf.(darkcounts)] .= floatmax(eltype(darkcounts))
     darkcounts[iszero.(darkcounts)] .= floatmin(eltype(darkcounts))
@@ -18,7 +21,7 @@ function _init_pixel_detector_params(
     width, height = size(darkcounts)
     pxboundsx = similar(darkcounts, width + 1) .= 0:pixel_size:width*pixel_size
     pxboundsy = similar(darkcounts, height + 1) .= 0:pixel_size:height*pixel_size
-    return period, pixel_size, (pxboundsx, pxboundsy), darkcounts, filter
+    return (pxboundsx, pxboundsy), darkcounts, filter
 end
 
 function Base.getproperty(detector::PixelDetector, s::Symbol)

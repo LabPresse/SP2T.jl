@@ -21,10 +21,9 @@ function SPAD{T}(;
     readouts::AbstractArray{UInt16,3},
     batchsize::Integer = one(UInt16),
 ) where {T<:AbstractFloat}
-    dimsmatch(darkcounts, readouts, dims = 1:2) ||
-        throw(DimensionMismatch("size of darkcounts dose not match size of readouts"))
-    period, pixel_size, pxbounds, darkcounts, filter =
-        _init_pixel_detector_params(T, period, pixel_size, darkcounts, cutoffs)
+    check_pixel_dimsmatch(darkcounts, readouts)
+    pxbounds, darkcounts, filter =
+        _init_pixel_detector_params(T, pixel_size, darkcounts, cutoffs)
     return SPAD{T,typeof(pxbounds[1]),typeof(darkcounts),typeof(readouts)}(
         period,
         pixel_size,
