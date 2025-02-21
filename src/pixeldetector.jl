@@ -4,17 +4,17 @@ function check_pixel_dimsmatch(darkcounts::AbstractArray, readouts::AbstractArra
 end
 
 """
-    _init_pixel_detector_params(T::DataType, period::Real, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real})
+    _init_pixel_detector_params(TargetType::Type{T}, period::Real, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real}) where {T}
 
 Initialize the parameters for a pixel detector such that they share the same data type `T`.
 """
 function _init_pixel_detector_params(
-    T::DataType,
+    TargetType::Type{T},
     pixel_size::Real,
     darkcounts::AbstractMatrix{<:Real},
     cutoffs::Tuple{<:Real,<:Real},
-)
-    darkcounts = elconvert(T, darkcounts)
+) where {T}
+    darkcounts = elconvert(TargetType, darkcounts)
     darkcounts[isinf.(darkcounts)] .= floatmax(eltype(darkcounts))
     darkcounts[iszero.(darkcounts)] .= floatmin(eltype(darkcounts))
     filter = similar(darkcounts) .= cutoffs[1] .< darkcounts .< cutoffs[2]

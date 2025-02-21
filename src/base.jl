@@ -149,11 +149,11 @@ logaccept!(
     step::Integer = 1,
 ) = ans[start:step:end] .= (@view logratio[start:step:end]) .> 0
 
-function elconvert(T::DataType, A::AbstractArray)
-    if eltype(A) === T
+function elconvert(TargetType::Type{T}, A::AbstractArray) where {T}
+    if eltype(A) === TargetType
         return A
     else
-        B = similar(A, T)
+        B = similar(A, TargetType)
         copyto!(B, A)
         return B
     end
