@@ -2,14 +2,14 @@ struct EMCCD{
     T<:AbstractFloat,
     V<:AbstractVector{T},
     M<:AbstractMatrix{T},
-    A<:AbstractArray{T,3},
+    R<:AbstractArray{UInt16,3},
 } <: AbstractEMCCD{T}
     period::T
     pxsize::T
     pxbounds::NTuple{2,V}
     darkcounts::M
     filter::M
-    readouts::A
+    readouts::R
     offset::T
     gain::T
     variance::T
@@ -20,7 +20,7 @@ function EMCCD{T}(;
     pixel_size::Real,
     darkcounts::AbstractMatrix{<:Real},
     cutoffs::Tuple{<:Real,<:Real},
-    readouts::AbstractArray{<:Real,3},
+    readouts::AbstractArray{UInt16,3},
     offset::Real,
     gain::Real,
     variance::Real,
@@ -28,7 +28,6 @@ function EMCCD{T}(;
     check_pixel_dimsmatch(darkcounts, readouts)
     pxbounds, darkcounts, filter =
         _init_pixel_detector_params(T, pixel_size, darkcounts, cutoffs)
-    readouts = elconvert(T, readouts)
     return EMCCD{T,typeof(pxbounds[1]),typeof(darkcounts),typeof(readouts)}(
         period,
         pixel_size,
@@ -44,7 +43,7 @@ end
 
 set_emccd_loglikelihood!(
     l::AbstractArray{T,3},
-    x::AbstractArray{T,3},
+    x::AbstractArray{UInt16,3},
     c::AbstractArray{T,3},
     g::T,
     μ::T,
@@ -53,7 +52,7 @@ set_emccd_loglikelihood!(
 
 set_emccd_Δloglikelihood!(
     Δ::AbstractArray{T,3},
-    x::AbstractArray{T,3},
+    x::AbstractArray{UInt16,3},
     c1::AbstractArray{T,3},
     c2::AbstractArray{T,3},
     g::Union{T,AbstractMatrix{T}},
@@ -93,9 +92,10 @@ function set_pixel_Δloglikelihood!(
 end
 
 function simulate_readouts!(detector::EMCCD{T}, means::AbstractArray{T,3}) where {T}
-    randn!(detector.readouts)
-    detector.readouts .*= sqrt(detector.variance)
-    @. detector.readouts += detector.gain * means + detector.offset
+    floatreadouts = randn!(similar(detector.readouts, T))
+    floatreadouts .*= sqrt(detector.variance)
+    @. floatreadouts += detector.gain * means + detector.offset
+    detector.readouts .= round.(UInt16, floatreadouts)
     return detector
 end
 
@@ -103,14 +103,14 @@ struct EMCCDGamma{
     T<:AbstractFloat,
     V<:AbstractVector{T},
     M<:AbstractMatrix{T},
-    A<:AbstractArray{T,3},
+    R<:AbstractArray{UInt16,3},
 } <: PixelDetector{T}
     period::T
     pxsize::T
     pxbounds::NTuple{2,V}
     darkcounts::M
     filter::M
-    readouts::A
+    readouts::R
     gain::T
     noise_excess_factor::T
 end
@@ -120,14 +120,13 @@ function EMCCDGamma{T}(;
     pixel_size::Real,
     darkcounts::AbstractMatrix{<:Real},
     cutoffs::Tuple{<:Real,<:Real},
-    readouts::AbstractArray{<:Real,3},
+    readouts::AbstractArray{UInt16,3},
     gain::Real,
     noise_excess_factor::Real = 2,
 ) where {T<:AbstractFloat}
     check_pixel_dimsmatch(darkcounts, readouts)
     pxbounds, darkcounts, filter =
         _init_pixel_detector_params(T, pixel_size, darkcounts, cutoffs)
-    readouts = elconvert(T, readouts)
     return EMCCDGamma{T,typeof(pxbounds[1]),typeof(darkcounts),typeof(readouts)}(
         period,
         pixel_size,
@@ -142,14 +141,14 @@ end
 
 set_emccdγ_loglikelihood!(
     l::AbstractArray{T,3},
-    x::AbstractArray{T,3},
+    x::AbstractArray{UInt16,3},
     c::AbstractArray{T,3},
     f::T,
 ) where {T} = l .= (c ./ f .- 1) .* log.(x)
 
 set_emccdγ_Δloglikelihood!(
     Δ::AbstractArray{T,3},
-    x::AbstractArray{T,3},
+    x::AbstractArray{UInt16,3},
     c1::AbstractArray{T,3},
     c2::AbstractArray{T,3},
     f::T,
@@ -183,13 +182,13 @@ function set_pixel_Δloglikelihood!(
 end
 
 function simulate_readouts!(detector::EMCCDGamma{T}, means::AbstractArray{T,3}) where {T}
-    randn!(detector.readouts)
-    @. detector.readouts =
+    floatreadouts =
         rand.(
             Gamma.(
                 means ./ detector.noise_excess_factor,
                 detector.noise_excess_factor * detector.gain,
             )
         )
+    detector.readouts .= round.(UInt16, floatreadouts)
     return detector
 end
