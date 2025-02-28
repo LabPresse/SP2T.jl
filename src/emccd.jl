@@ -41,54 +41,33 @@ function EMCCD{T}(;
     )
 end
 
-set_emccd_loglikelihood!(
-    l::AbstractArray{T,3},
-    x::AbstractArray{UInt16,3},
-    c::AbstractArray{T,3},
-    g::T,
-    μ::T,
-    v::T,
-) where {T} = l .= (-log(v) / 2) .- (x .- g .* c .- μ) .^ 2 ./ (2 * v)
-
-set_emccd_Δloglikelihood!(
-    Δ::AbstractArray{T,3},
-    x::AbstractArray{UInt16,3},
-    c1::AbstractArray{T,3},
-    c2::AbstractArray{T,3},
-    g::Union{T,AbstractMatrix{T}},
-    μ::Union{T,AbstractMatrix{T}},
-    v::Union{T,AbstractMatrix{T}},
-) where {T} = @. Δ = ((x - g * c1 - μ)^2 - (x - g * c2 - μ)^2) / (2 * v)
-
 function set_pixel_loglikelihood!(
     loglikelihood::LogLikelihoodArray{T},
     detector::EMCCD{T},
 ) where {T}
-    set_emccd_loglikelihood!(
-        loglikelihood.pixel,
-        detector.readouts,
-        loglikelihood.means[1],
-        detector.gain,
-        detector.offset,
-        detector.variance,
-    )
+    loglikelihood.pixel .=
+        (-log(detector.variance) / 2) .-
+        (detector.readouts .- detector.gain .* loglikelihood.means[1] .- detector.offset) .^
+        2 ./ (2 * detector.variance)
     return loglikelihood
 end
 
 function set_pixel_Δloglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
+    Δloglikelihood::LogLikelihoodArray{T},
     detector::EMCCD{T},
 ) where {T}
-    set_emccd_Δloglikelihood!(
-        loglikelihood.pixel,
-        detector.readouts,
-        loglikelihood.means[1],
-        loglikelihood.means[2],
-        detector.gain,
-        detector.offset,
-        detector.variance,
-    )
-    return loglikelihood
+    @. Δloglikelihood.pixel =
+        (
+            (
+                detector.readouts - detector.gain * Δloglikelihood.means[1] -
+                detector.offset
+            )^2 -
+            (
+                detector.readouts - detector.gain * Δloglikelihood.means[2] -
+                detector.offset
+            )^2
+        ) / (2 * detector.variance)
+    return Δloglikelihood
 end
 
 function simulate_readouts!(detector::EMCCD{T}, means::AbstractArray{T,3}) where {T}
@@ -139,46 +118,28 @@ function EMCCDGamma{T}(;
     )
 end
 
-set_emccdγ_loglikelihood!(
-    l::AbstractArray{T,3},
-    x::AbstractArray{UInt16,3},
-    c::AbstractArray{T,3},
-    f::T,
-) where {T} = l .= (c ./ f .- 1) .* log.(x)
-
-set_emccdγ_Δloglikelihood!(
-    Δ::AbstractArray{T,3},
-    x::AbstractArray{UInt16,3},
-    c1::AbstractArray{T,3},
-    c2::AbstractArray{T,3},
-    f::T,
-) where {T} = @. Δ = (c2 .- c1) ./ f .* log.(x)
-
 function set_pixel_loglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
+    llarray::LogLikelihoodArray{T},
     detector::EMCCDGamma{T},
 ) where {T}
-    set_emccdγ_loglikelihood!(
-        loglikelihood.pixel,
-        detector.readouts,
-        loglikelihood.means[1],
-        detector.noise_excess_factor,
-    )
-    return loglikelihood
+    llarray.means[2] .= llarray.means[1] ./ detector.noise_excess_factor
+    llarray.pixel .=
+        (llarray.means[2] .- 1) .* log.(detector.readouts) .- loggamma.(llarray.means[2]) .-
+        llarray.means[2] .* log(detector.noise_excess_factor * detector.gain)
+    return llarray
 end
 
 function set_pixel_Δloglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
+    Δllarray::LogLikelihoodArray{T},
     detector::EMCCDGamma{T},
 ) where {T}
-    set_emccdγ_Δloglikelihood!(
-        loglikelihood.pixel,
-        detector.readouts,
-        loglikelihood.means[1],
-        loglikelihood.means[2],
-        detector.noise_excess_factor,
-    )
-    return loglikelihood
+    Δllarray.means[1] ./= detector.noise_excess_factor
+    Δllarray.means[2] ./= detector.noise_excess_factor
+    @. Δllarray.pixel =
+        (Δllarray.means[2] .- Δllarray.means[1]) .*
+        (log.(detector.readouts) .- log(detector.noise_excess_factor * detector.gain)) .-
+        loggamma.(Δllarray.means[2]) .+ loggamma.(Δllarray.means[1])
+    return Δllarray
 end
 
 function simulate_readouts!(detector::EMCCDGamma{T}, means::AbstractArray{T,3}) where {T}

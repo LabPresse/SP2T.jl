@@ -4,7 +4,7 @@ module SP2T
 
 using Statistics
 using Distributions
-using SpecialFunctions: erf
+using SpecialFunctions: erf, loggamma
 using LogExpFunctions: logexpm1
 using LinearAlgebra
 using Random

@@ -35,46 +35,24 @@ function SPAD{T}(;
     )
 end
 
-set_spad_loglikelihood!(
-    l::AbstractArray{T,3},
-    k::AbstractArray{UInt16,3},
-    c::AbstractArray{T,3},
-    n::UInt16,
-) where {T} = @. l = k * logexpm1(c) - n * c
-
-set_spad_Δloglikelihood!(
-    Δ::AbstractArray{T,3},
-    k::AbstractArray{UInt16,3},
-    c1::AbstractArray{T,3},
-    c2::AbstractArray{T,3},
-    n::UInt16,
-) where {T} = @. Δ = k * (logexpm1(c2) - logexpm1(c1)) - n * (c2 - c1)
-
 function set_pixel_loglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
-    set_spad_loglikelihood!(
-        llarray.pixel,
-        detector.readouts,
-        llarray.means[1],
-        detector.batchsize,
-    )
+    @. llarray.pixel =
+        detector.readouts * logexpm1(llarray.means[1]) -
+        detector.batchsize * llarray.means[1]
     return llarray
 end
 
 function set_pixel_Δloglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
+    Δllarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
-    set_spad_Δloglikelihood!(
-        loglikelihood.pixel,
-        detector.readouts,
-        loglikelihood.means[1],
-        loglikelihood.means[2],
-        detector.batchsize,
-    )
-    return loglikelihood
+    @. Δllarray.pixel =
+        detector.readouts * (logexpm1(Δllarray.means[2]) - logexpm1(Δllarray.means[1])) -
+        detector.batchsize * (Δllarray.means[2] - Δllarray.means[1])
+    return Δllarray
 end
 
 function simulate_readouts!(detector::SPAD{T}, means::AbstractArray{T,3}) where {T}
