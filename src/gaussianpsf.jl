@@ -71,8 +71,17 @@ end
 function _erf(
     x::AbstractArray{T},
     bnds::AbstractVector{T},
-    σ::Union{T,AbstractArray{T}},
+    σ::AbstractArray{T},
 ) where {T}
-    𝐗 = @. (bnds - $PermutedDimsArray(x, (2, 3, 1))) / (√convert(T, 2) * σ)
+    𝐗 = (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) .* σ)
+    return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+end
+
+function _erf(
+    x::AbstractArray{T},
+    bnds::AbstractVector{T},
+    σ::T,
+) where {T}
+    𝐗 = (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) * σ)
     return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
 end

@@ -104,6 +104,8 @@ function EMCCDGamma{T}(;
     noise_excess_factor::Real = 2,
 ) where {T<:AbstractFloat}
     check_pixel_dimsmatch(darkcounts, readouts)
+    any(iszero, readouts) &&
+        throw(ArgumentError("EMCCD Gamma does not support zero readouts"))
     pxbounds, darkcounts, filter =
         _init_pixel_detector_params(T, pixel_size, darkcounts, cutoffs)
     return EMCCDGamma{T,typeof(pxbounds[1]),typeof(darkcounts),typeof(readouts)}(
