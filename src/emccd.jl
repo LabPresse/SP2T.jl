@@ -42,32 +42,26 @@ function EMCCD{T}(;
 end
 
 function set_pixel_loglikelihood!(
-    loglikelihood::LogLikelihoodArray{T},
+    llarray::LogLikelihoodArray{T},
     detector::EMCCD{T},
 ) where {T}
-    loglikelihood.pixel .=
+    llarray.pixel .=
         (-log(detector.variance) / 2) .-
-        (detector.readouts .- detector.gain .* loglikelihood.means[1] .- detector.offset) .^
-        2 ./ (2 * detector.variance)
-    return loglikelihood
+        (detector.readouts .- detector.gain .* llarray.means[1] .- detector.offset) .^ 2 ./
+        (2 * detector.variance)
+    return llarray
 end
 
 function set_pixel_Δloglikelihood!(
-    Δloglikelihood::LogLikelihoodArray{T},
+    llarray::LogLikelihoodArray{T},
     detector::EMCCD{T},
 ) where {T}
-    @. Δloglikelihood.pixel =
+    @. llarray.pixel =
         (
-            (
-                detector.readouts - detector.gain * Δloglikelihood.means[1] -
-                detector.offset
-            )^2 -
-            (
-                detector.readouts - detector.gain * Δloglikelihood.means[2] -
-                detector.offset
-            )^2
+            (detector.readouts - detector.gain * llarray.means[1] - detector.offset)^2 -
+            (detector.readouts - detector.gain * llarray.means[2] - detector.offset)^2
         ) / (2 * detector.variance)
-    return Δloglikelihood
+    return llarray
 end
 
 function simulate_readouts!(detector::EMCCD{T}, means::AbstractArray{T,3}) where {T}

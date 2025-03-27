@@ -41,10 +41,21 @@ function set_loglikelihood!(
     psf::PointSpreadFunction{T},
 ) where {T}
     reset!(llarray, detector, 1)
-    @inbounds for m = 1:size(tracksᵥ, 3)
-        @views addincident!(
+    nframes, ~, nparticles = size(tracksᵥ)
+    psfcomponents = (
+        similar(tracksᵥ, size(detector, 1), 1, nframes),
+        similar(tracksᵥ, size(detector, 2), 1, nframes),
+    )
+    relativepos = (
+        similar(tracksᵥ, size(detector, 1) + 1, 1, nframes),
+        similar(tracksᵥ, size(detector, 2) + 1, 1, nframes),
+    )
+    @inbounds for m = 1:nparticles
+        addincident!(
             llarray.means[1],
-            tracksᵥ[:, :, m:m],
+            psfcomponents,
+            relativepos,
+            view(tracksᵥ, :, :, m:m),
             brightnessᵥ,
             detector.pxbounds,
             psf,

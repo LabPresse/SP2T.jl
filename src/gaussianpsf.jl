@@ -61,7 +61,7 @@ lateral_std!(
 ) where {T,N} = @. σ = PSF.σ₀ * √(oneunit(T) + (z / PSF.z₀)^2)
 
 function lateral_std(
-    z::AbstractArray{T},
+    z::AbstractArray{T,3},
     PSF::CircularGaussianLorentzian{T},
 ) where {T<:AbstractFloat}
     z′ = PermutedDimsArray(z, (2, 3, 1))
@@ -69,19 +69,35 @@ function lateral_std(
 end
 
 function _erf(
-    x::AbstractArray{T},
+    x::AbstractArray{T,3},
     bnds::AbstractVector{T},
-    σ::AbstractArray{T},
+    σ::Union{AbstractArray{T},T},
 ) where {T}
-    𝐗 = (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) .* σ)
-    return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+    psfcomponents = similar(x, length(bnds) - 1, 1, size(x, 1))
+    X = similar(x, length(bnds), 1, size(x, 1))
+    return _erf!(psfcomponents, X,x, bnds, σ)
 end
 
-function _erf(
-    x::AbstractArray{T},
+function _erf!(
+    psfx::AbstractArray{T,3},
+    𝐗::AbstractArray{T,3},
+    x::AbstractArray{T,3},
     bnds::AbstractVector{T},
     σ::T,
 ) where {T}
-    𝐗 = (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) * σ)
-    return @views erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+    𝐗 .= (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) * σ)
+    @views psfx .= erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+    return psfx
+end
+
+function _erf!(
+    psfx::AbstractArray{T,3},
+    𝐗::AbstractArray{T,3},
+    x::AbstractArray{T,3},
+    bnds::AbstractVector{T},
+    σ::AbstractArray{T},
+) where {T}
+    𝐗 .= (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) .* σ)
+    @views psfx .= erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+    return psfx
 end

@@ -33,14 +33,15 @@ function Base.getproperty(detector::PixelDetector, s::Symbol)
 end
 
 Base.size(detector::PixelDetector) = size(detector.darkcounts)
+Base.size(detector::PixelDetector, d::Integer) = size(detector.darkcounts, d)
 
 function reset!(
-    loglikelihood::LogLikelihoodArray{T},
+    llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     i::Integer,
 ) where {T}
-    loglikelihood.means[i] .= detector.darkcounts
-    return loglikelihood
+    llarray.means[i] .= detector.darkcounts
+    return llarray
 end
 
 function sum_pixel_loglikelihood!(
@@ -76,40 +77,57 @@ function get_Δloglikelihood!(
     return sum(llarray.frame)
 end
 
-function getpsfcomponents(
+integratepsf!(
+    psfcomponents::NTuple{2,<:AbstractArray{T,3}},
+    relativepos::NTuple{2,<:AbstractArray{T,3}},
     tracksᵥ::AbstractArray{T,3},
     bounds::NTuple{2,<:AbstractVector{T}},
     psf::CircularGaussian{T},
-) where {T<:AbstractFloat}
-    @views begin
-        psfx = _erf(tracksᵥ[:, 1:1, :], bounds[1], psf.σ)
-        psfy = _erf(tracksᵥ[:, 2:2, :], bounds[2], psf.σ)
-    end
-    return psfx, psfy
-end
+) where {T<:AbstractFloat} =
+    integratepsf!(psfcomponents, relativepos, tracksᵥ, bounds, psf.σ)
 
-function getpsfcomponents(
+function integratepsf!(
+    psfcomponents::NTuple{2,<:AbstractArray{T,3}},
+    relativepos::NTuple{2,<:AbstractArray{T,3}},
     tracksᵥ::AbstractArray{T,3},
     bounds::NTuple{2,<:AbstractVector{T}},
     psf::CircularGaussianLorentzian{T},
 ) where {T<:AbstractFloat}
+    @views σ = lateral_std(tracksᵥ[:, 3:3, :], psf)
+    return integratepsf!(psfcomponents, relativepos, tracksᵥ, bounds, σ)
+end
+
+function integratepsf!(
+    psfcomponents::NTuple{2,<:AbstractArray{T,3}},
+    relativepos::NTuple{2,<:AbstractArray{T,3}},
+    tracksᵥ::AbstractArray{T,3},
+    bounds::NTuple{2,<:AbstractVector{T}},
+    σ::Union{AbstractArray{T},T},
+) where {T<:AbstractFloat}
     @views begin
-        σ = lateral_std(tracksᵥ[:, 3:3, :], psf)
-        psfx = _erf(tracksᵥ[:, 1:1, :], bounds[1], σ)
-        psfy = _erf(tracksᵥ[:, 2:2, :], bounds[2], σ)
+        _erf!(psfcomponents[1], relativepos[1], tracksᵥ[:, 1:1, :], bounds[1], σ)
+        _erf!(psfcomponents[2], relativepos[2], tracksᵥ[:, 2:2, :], bounds[2], σ)
     end
-    return psfx, psfy
+    return psfcomponents
 end
 
 function addincident!(
     intensity::AbstractArray{T,3},
+    psfcomponents::NTuple{2,<:AbstractArray{T,3}},
+    relativepos::NTuple{2,<:AbstractArray{T,3}},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     bounds::NTuple{2,<:AbstractVector{T}},
     psf::GaussianPSF{T},
 ) where {T<:AbstractFloat}
-    psfx, psfy = getpsfcomponents(tracksᵥ, bounds, psf)
-    return batched_mul!(intensity, psfx, batched_transpose(psfy), brightnessᵥ / psf.A, 1)
+    integratepsf!(psfcomponents, relativepos, tracksᵥ, bounds, psf)
+    return batched_mul!(
+        intensity,
+        psfcomponents[1],
+        batched_transpose(psfcomponents[2]),
+        brightnessᵥ / psf.A,
+        1,
+    )
 end
 
 function set_poisson_mean!(
@@ -121,7 +139,24 @@ function set_poisson_mean!(
     i::Integer = 1,
 ) where {T}
     reset!(llarray, detector, i)
-    addincident!(llarray.means[i], tracksᵥ, brightnessᵥ, detector.pxbounds, psf)
+    nframes, ~, nemitters = size(tracksᵥ)
+    psfcomponents = (
+        similar(tracksᵥ, size(detector, 1), nemitters, nframes),
+        similar(tracksᵥ, size(detector, 2), nemitters, nframes),
+    )
+    relativepos = (
+        similar(tracksᵥ, size(detector, 1) + 1, nemitters, nframes),
+        similar(tracksᵥ, size(detector, 2) + 1, nemitters, nframes),
+    )
+    addincident!(
+        llarray.means[i],
+        psfcomponents,
+        relativepos,
+        tracksᵥ,
+        brightnessᵥ,
+        detector.pxbounds,
+        psf,
+    )
     return llarray
 end
 
@@ -159,6 +194,23 @@ function getincident(
     bounds::NTuple{2,<:AbstractVector{T}},
     psf::PointSpreadFunction{T},
 ) where {T}
-    incident = repeat(darkcounts, 1, 1, size(tracksᵥ, 1))
-    return addincident!(incident, tracksᵥ, brightnessᵥ, bounds, psf)
+    nframes, ~, nemitters = size(tracksᵥ, 1)
+    psfcomponents = (
+        similar(tracksᵥ, size(darkcounts, 1), nemitters, nframes),
+        similar(tracksᵥ, size(darkcounts, 2), nemitters, nframes),
+    )
+    relativepos = (
+        similar(tracksᵥ, length(bounds[1]), nemitters, nframes),
+        similar(tracksᵥ, length(bounds[2]), nemitters, nframes),
+    )
+    incident = repeat(darkcounts, 1, 1, nframes)
+    return addincident!(
+        incident,
+        psfcomponents,
+        relativepos,
+        tracksᵥ,
+        brightnessᵥ,
+        bounds,
+        psf,
+    )
 end
