@@ -194,7 +194,7 @@ function getincident(
     bounds::NTuple{2,<:AbstractVector{T}},
     psf::PointSpreadFunction{T},
 ) where {T}
-    nframes, ~, nemitters = size(tracksᵥ, 1)
+    nframes, ~, nemitters = size(tracksᵥ)
     psfcomponents = (
         similar(tracksᵥ, size(darkcounts, 1), nemitters, nframes),
         similar(tracksᵥ, size(darkcounts, 2), nemitters, nframes),
