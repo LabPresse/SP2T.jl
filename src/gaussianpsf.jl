@@ -75,7 +75,7 @@ function _erf(
 ) where {T}
     psfcomponents = similar(x, length(bnds) - 1, 1, size(x, 1))
     X = similar(x, length(bnds), 1, size(x, 1))
-    return _erf!(psfcomponents, X,x, bnds, σ)
+    return _erf!(psfcomponents, X, x, bnds, σ)
 end
 
 function _erf!(

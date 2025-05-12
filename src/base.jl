@@ -1,22 +1,73 @@
+"""
+    Detector{T}
+
+An abstract type representing a generic detector. This serves as a base type for defining specific detector implementations. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type Detector{T} end
+
+"""
+    PixelDetector{T} <: Detector{T}
+
+An abstract type representing a pixel-based detector. This serves as a 
+base type for defining specific pixel detector implementations. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type PixelDetector{T} <: Detector{T} end
+
 # abstract type StreamDetector{T} <: Detector{T} end
 
+"""
+    AbstractEMCCD{T} <: PixelDetector{T}
+
+An abstract type representing an EMCCD detector. This serves as a 
+base type for defining specific EMCCD implementations. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type AbstractEMCCD{T} <: PixelDetector{T} end
 
+"""
+    PointSpreadFunction{T}
+
+An abstract type representing a generic point spread function (PSF). This serves as a base type for defining specific PSF implementations. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type PointSpreadFunction{T} end
+
+"""
+    GaussianPSF{T} <: PointSpreadFunction{T}
+
+An abstract type representing a generic Gaussian PSF (Gaussain in each 𝑧-plane). This serves as a base type for defining specific Gaussian PSF implementations. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type GaussianPSF{T} <: PointSpreadFunction{T} end
 
-abstract type RandomVariable{T} end
+# abstract type RandomVariable{T} end
+# An abstract type for random variables. Not used right now. My current design: each RV <: RandomVariable should contain value and prior.
 
-abstract type SP2TDistribution{T} end
+# abstract type SP2TDistribution{T} end
 
+"""
+    AbstractAnnealing{T}
+
+An abstract type representing a generic annealing schedule. This serves as a base type for defining specific annealing implementations. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type AbstractAnnealing{T} end
 
+"""
+    AbstractTrackParts{T}
+
+An abstract type representing a generic track part. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type AbstractTrackParts{T} end
 
+"""
+    LogLikelihoodAux{T}
+
+An abstract type representing a generic log-likelihood auxiliary variable. The type parameter `T` can be used to specify the type of data.
+"""
 abstract type LogLikelihoodAux{T} end
 
+"""
+    struct LogLikelihoodArray{T<:AbstractFloat, A<:AbstractArray{T,3}, V<:AbstractVector{T}}
+
+A structure representing a log-likelihood array with specific type constraints. This structure is designed to encapsulate data and auxiliary information related to log-likelihood computations. The `pixel::A`, an array storing the per-pixel log-likelihoods. Its shape should match that of the detector readout, encoding likelihood information for each pixel across frames. `frame::V`, A vector containing the per-frame log-likelihoods. `means::NTuple{2,A}`, A tuple containing two arrays of per-pixel expected photon counts. The first array holds values computed from the current parameter set, while the second contains values based on proposed parameters.
+"""
 struct LogLikelihoodArray{T<:AbstractFloat,A<:AbstractArray{T,3},V<:AbstractVector{T}} <:
        LogLikelihoodAux{T}
     pixel::A
@@ -43,8 +94,7 @@ mutable struct NTracks{T<:AbstractFloat,V<:AbstractVector{T}}
     logposterior::V
 end
 
-struct TrackParts{T<:AbstractFloat,A<:AbstractArray{T},P<:SP2TDistribution{T}} <:
-       AbstractTrackParts{T}
+struct TrackParts{T<:AbstractFloat,A<:AbstractArray{T},P} <: AbstractTrackParts{T}
     value::A
     presence::A
     displacement²::A
