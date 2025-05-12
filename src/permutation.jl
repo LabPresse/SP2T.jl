@@ -6,8 +6,8 @@ permuteto!(
 ) where {T} = @views copyto!(dest[start:end, :, :], src[start:end, :, p])
 
 permuteto!(
-    dest::AbstractTrackParts{T},
-    src::AbstractTrackParts{T},
+    dest::AbstractTrackChunk{T},
+    src::AbstractTrackChunk{T},
     p::AbstractVector{<:Integer},
     start::Integer = 1,
 ) where {T} = permuteto!(dest.value, src.value, p, start)
@@ -31,13 +31,13 @@ end
 
 function _permute!(tracks::Tracks{T}, p::AbstractVector{<:Integer}) where {T}
     _permute!(tracks.onpart.value, p, tracks.proposals.value)
-    _permute!(tracks.onpart.presence, p, tracks.proposals.presence)
+    _permute!(tracks.onpart.active, p, tracks.proposals.active)
     return tracks
 end
 
 function onshuffle!(tracks::Tracks{T}) where {T}
-    p = randperm(tracks.ntracks.value)
-    isequal(p, 1:tracks.ntracks.value) || _permute!(tracks, p)
+    p = randperm(tracks.nemitters.value)
+    isequal(p, 1:tracks.nemitters.value) || _permute!(tracks, p)
     return tracks
 end
 
@@ -60,17 +60,17 @@ function propagateperm!(
 end
 
 function propagateperm!(
-    dest::AbstractTrackParts{T},
-    src::AbstractTrackParts{T},
+    dest::AbstractTrackChunk{T},
+    src::AbstractTrackChunk{T},
     p::AbstractVector{<:Integer},
     pos::AbstractVector{<:Integer},
 ) where {T}
     propagateperm!(dest.value, src.value, p, pos)
-    propagateperm!(dest.presence, src.presence, p, pos)
+    propagateperm!(dest.active, src.active, p, pos)
     return dest
 end
 
-function update!(tracksₒ::TrackParts{T}, tracksₚ::MHTrackParts{T}, msdᵥ::T) where {T}
+function update!(tracksₒ::TrackChunk{T}, tracksₚ::MHTrackChunk{T}, msdᵥ::T) where {T}
     initmh!(tracksₚ)
     p = randperm(size(tracksₒ.value, 3))
     permuteto!(tracksₚ, tracksₒ, p, 2)
@@ -79,7 +79,7 @@ function update!(tracksₒ::TrackParts{T}, tracksₚ::MHTrackParts{T}, msdᵥ::T
     sumΔdisplacement²!(tracksₚ, tracksₒ, msdᵥ)
     @views tracksₚ.logacceptance[2:end] .+= tracksₚ.ΣΔdisplacement²
     setacceptance!(tracksₚ, start = 2)
-    pos = findall(convert(Vector{Bool}, tracksₚ.acceptance))
+    pos = findall(convert(Vector{Bool}, tracksₚ.accepted))
     isempty(pos) || propagateperm!(tracksₒ, tracksₚ, p, pos)
     return tracksₒ
 end

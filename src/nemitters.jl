@@ -1,11 +1,11 @@
-function NTracks{T}(
+function NEmitters{T}(
     value::Integer,
     limit::Integer,
     logonprob::Real,
 ) where {T<:AbstractFloat}
     logprior = convert(T, logonprob)
     loglikelihood = Vector{T}(undef, limit + 1)
-    return NTracks{T,typeof(loglikelihood)}(
+    return NEmitters{T,typeof(loglikelihood)}(
         value,
         logprior,
         loglikelihood,
@@ -13,7 +13,7 @@ function NTracks{T}(
     )
 end
 
-function Base.getproperty(n::NTracks, s::Symbol)
+function Base.getproperty(n::NEmitters, s::Symbol)
     if s == :limit
         return length(getfield(n, :log𝒫)) - 1
     else
@@ -21,19 +21,17 @@ function Base.getproperty(n::NTracks, s::Symbol)
     end
 end
 
-Base.any(ntracks::NTracks) = ntracks.value > 0
+Base.any(n::NEmitters) = n.value > 0
 
-logprior(ntracks::NTracks) = ntracks.logprior * ntracks.value
+logprior(n::NEmitters) = n.logprior * n.value
 
-function set_logposterior!(ntracks::NTracks{T}, 𝑇::T) where {T}
-    ntracks.logposterior .=
-        (0:length(ntracks.loglikelihood)-1) .* ntracks.logprior .+
-        ntracks.loglikelihood ./ 𝑇
-    return ntracks
+function set_logposterior!(n::NEmitters{T}, 𝑇::T) where {T}
+    n.logposterior .= (0:length(n.loglikelihood)-1) .* n.logprior .+ n.loglikelihood ./ 𝑇
+    return n
 end
 
 function set_loglikelihood!(
-    ntracks::NTracks{T},
+    nemitters::NEmitters{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     llarray::LogLikelihoodArray{T},
@@ -60,13 +58,13 @@ function set_loglikelihood!(
             detector.pxbounds,
             psf,
         )
-        ntracks.loglikelihood[m+1] = get_loglikelihood!(llarray, detector)
+        nemitters.loglikelihood[m+1] = get_loglikelihood!(llarray, detector)
     end
-    return ntracks
+    return nemitters
 end
 
 function update!(
-    ntracks::NTracks{T},
+    nemitters::NEmitters{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     llarray::LogLikelihoodArray{T},
@@ -74,8 +72,8 @@ function update!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    set_loglikelihood!(ntracks, trackᵥ, brightnessᵥ, llarray, detector, psf)
-    set_logposterior!(ntracks, 𝑇)
-    ntracks.value = randc(ntracks.logposterior) - 1
-    return ntracks
+    set_loglikelihood!(nemitters, trackᵥ, brightnessᵥ, llarray, detector, psf)
+    set_logposterior!(nemitters, 𝑇)
+    nemitters.value = randc(nemitters.logposterior) - 1
+    return nemitters
 end

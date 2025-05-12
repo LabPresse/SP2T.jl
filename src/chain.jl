@@ -9,7 +9,7 @@ struct Sample{T<:AbstractFloat,A<:AbstractArray{T,3}}
 end
 
 Sample(
-    tracks::TrackParts{T},
+    tracks::TrackChunk{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
     iter::Integer = 0,
@@ -47,6 +47,8 @@ function Base.getproperty(c::Chain, s::Symbol)
         return [sample.brightness for sample in getfield(c, :samples)]
     elseif s === :nemitters
         return [size(sample.tracks, 3) for sample in getfield(c, :samples)]
+    elseif s === :lasttracks
+        return c.samples[end].tracks
     elseif s === :logposterior
         return [sample.log𝒫 for sample in getfield(c, :samples)]
     elseif s === :loglikelihood
@@ -121,7 +123,7 @@ get_logposterior(
     loglikelihood +
     logprior(tracks.onpart, msd.value) +
     logprior(msd) +
-    logprior(tracks.ntracks)
+    logprior(tracks.nemitters)
 
 function parametricMCMC!(
     tracks::Tracks{T},
@@ -156,8 +158,8 @@ function nonparametricMCMC!(
 
     seteffvalue!(tracks)
     update!(
-        tracks.ntracks,
-        tracks.effvalues[1],
+        tracks.nemitters,
+        tracks.effvalue[1],
         brightness.value,
         llarray,
         detector,
@@ -169,7 +171,7 @@ function nonparametricMCMC!(
     update!(brightness, tracks.onpart.effvalue, llarray, detector, psf, 𝑇)
 
     setdisplacement²!(tracks)
-    update!(msd, tracks.displacement²s[1], 𝑇)
+    update!(msd, tracks.displacement²[1], 𝑇)
     return tracks, msd
 end
 
@@ -186,7 +188,7 @@ function runMCMC!(
     prev_niters = chain.samples[end].iteration
     llarray = LogLikelihoodArray{T}(detector.readouts)
     reset!(llarray, detector, 1)
-    tracks.ntracks.loglikelihood[1] = get_loglikelihood!(llarray, detector)
+    tracks.nemitters.loglikelihood[1] = get_loglikelihood!(llarray, detector)
     nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
     @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
