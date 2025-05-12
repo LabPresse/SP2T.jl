@@ -16,21 +16,20 @@ get_track_parts(
     displacement²::AbstractArray{T,3},
     effvalue::AbstractArray{T,3},
     ntracks::Integer,
-    onprior,
-    offprior,
-) where {T} = @views TrackParts(
+    prior::P,
+) where {T,P} = @views TrackParts(
     value[:, :, 1:ntracks],
     presence[:, :, 1:ntracks],
     displacement²[:, :, 1:ntracks],
     effvalue[:, :, 1:ntracks],
-    onprior,
+    prior,
 ),
 TrackParts(
     value[:, :, ntracks+1:end],
     presence[:, :, ntracks+1:end],
     displacement²[:, :, ntracks+1:end],
     effvalue[:, :, ntracks+1:end],
-    offprior,
+    prior,
 )
 
 setacceptance!(tracks::MHTrackParts; start::Integer, step::Integer) =
@@ -87,15 +86,7 @@ function Tracks{T}(;
         (displacement², displacement²2),
         (effvalue, effvalue2),
         ntracks,
-        get_track_parts(
-            value,
-            fullpresence,
-            displacement²,
-            effvalue,
-            nguesses,
-            prior,
-            prior,
-        )...,
+        get_track_parts(value, fullpresence, displacement², effvalue, nguesses, prior)...,
         proposals,
     )
 end
