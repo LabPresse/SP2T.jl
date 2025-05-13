@@ -1,12 +1,12 @@
-Base.length(tracks::AbstractTrackParts) = size(tracks.value, 1)
+Base.length(tracks::AbstractTrackChunk) = size(tracks.value, 1)
 
-function setdisplacement²!(tracks::AbstractTrackParts{T}) where {T}
+function setdisplacement²!(tracks::AbstractTrackChunk{T}) where {T}
     diff²!(tracks.displacement², tracks.value)
     return tracks
 end
 
-function seteffvalue!(tracks::AbstractTrackParts{T}) where {T}
-    @. tracks.effvalue = tracks.value / tracks.presence
+function seteffvalue!(tracks::AbstractTrackChunk{T}) where {T}
+    @. tracks.effvalue = tracks.value / tracks.active
     return tracks
 end
 
@@ -15,27 +15,27 @@ get_track_parts(
     presence::AbstractArray{T,3},
     displacement²::AbstractArray{T,3},
     effvalue::AbstractArray{T,3},
-    ntracks::Integer,
+    nemitters::Integer,
     prior::P,
-) where {T,P} = @views TrackParts(
-    value[:, :, 1:ntracks],
-    presence[:, :, 1:ntracks],
-    displacement²[:, :, 1:ntracks],
-    effvalue[:, :, 1:ntracks],
+) where {T,P} = @views TrackChunk(
+    value[:, :, 1:nemitters],
+    presence[:, :, 1:nemitters],
+    displacement²[:, :, 1:nemitters],
+    effvalue[:, :, 1:nemitters],
     prior,
 ),
-TrackParts(
-    value[:, :, ntracks+1:end],
-    presence[:, :, ntracks+1:end],
-    displacement²[:, :, ntracks+1:end],
-    effvalue[:, :, ntracks+1:end],
+TrackChunk(
+    value[:, :, nemitters+1:end],
+    presence[:, :, nemitters+1:end],
+    displacement²[:, :, nemitters+1:end],
+    effvalue[:, :, nemitters+1:end],
     prior,
 )
 
-setacceptance!(tracks::MHTrackParts; start::Integer, step::Integer) =
-    logaccept!(tracks.acceptance, tracks.logacceptance, start = start, step = step)
+setacceptance!(tracks::MHTrackChunk; start::Integer, step::Integer) =
+    logaccept!(tracks.accepted, tracks.logacceptance, start = start, step = step)
 
-function logprior(tracks::TrackParts{T}, msdᵥ::T) where {T}
+function logprior(tracks::TrackChunk{T}, msdᵥ::T) where {T}
     diff²!(tracks.displacement², tracks.value)
     return -(
         log(msdᵥ) * length(tracks.displacement²) + sum(vec(tracks.displacement²)) / msdᵥ
@@ -68,8 +68,8 @@ function Tracks{T}(;
     displacement² = similar(value, nframes - 1, ndims, max_ntracks)
     displacement²2 = similar(displacement²)
     effvalue, effvalue2 = similar(value), similar(value)
-    ntracks = NTracks{T}(nguesses, max_ntracks, logonprob)
-    @views proposals = MHTrackParts(
+    nemitters = NEmitters{T}(nguesses, max_ntracks, logonprob)
+    @views proposals = MHTrackChunk(
         value2[:, :, 1:nguesses],
         fullpresence2[:, :, 1:nguesses],
         displacement²2[:, :, 1:nguesses],
@@ -85,47 +85,46 @@ function Tracks{T}(;
         (fullpresence, fullpresence2),
         (displacement², displacement²2),
         (effvalue, effvalue2),
-        ntracks,
+        nemitters,
         get_track_parts(value, fullpresence, displacement², effvalue, nguesses, prior)...,
         proposals,
     )
 end
 
-Base.any(tracks::Tracks) = any(tracks.ntracks)
+Base.any(tracks::Tracks) = any(tracks.nemitters)
 
 function setdisplacement²!(tracks::Tracks, i::Integer = 1)
-    diff²!(tracks.displacement²s[i], tracks.values[i])
+    diff²!(tracks.displacement²[i], tracks.value[i])
     return tracks
 end
 
 function seteffvalue!(tracks::Tracks, i::Integer = 1)
-    @. tracks.effvalues[i] = tracks.values[i] / tracks.presences[i]
+    @. tracks.effvalue[i] = tracks.value[i] / tracks.active[i]
     return tracks
 end
 
 function reassign_track_parts!(tracks::Tracks{T}) where {T}
     tracks.onpart, tracks.offpart = get_track_parts(
-        tracks.values[1],
-        tracks.presences[1],
-        tracks.displacement²s[1],
-        tracks.effvalues[1],
-        tracks.ntracks.value,
+        tracks.value[1],
+        tracks.active[1],
+        tracks.displacement²[1],
+        tracks.effvalue[1],
+        tracks.nemitters.value,
         tracks.onpart.prior,
-        tracks.offpart.prior,
     )
     return tracks
 end
 
 function reassign_proposals!(tracks::Tracks{T}) where {T}
-    tracks.proposals = @views MHTrackParts(
-        tracks.values[2][:, :, 1:tracks.ntracks.value],
-        tracks.presences[2][:, :, 1:tracks.ntracks.value],
-        tracks.displacement²s[2][:, :, 1:tracks.ntracks.value],
-        tracks.effvalues[2][:, :, 1:tracks.ntracks.value],
+    tracks.proposals = @views MHTrackChunk(
+        tracks.value[2][:, :, 1:tracks.nemitters.value],
+        tracks.active[2][:, :, 1:tracks.nemitters.value],
+        tracks.displacement²[2][:, :, 1:tracks.nemitters.value],
+        tracks.effvalue[2][:, :, 1:tracks.nemitters.value],
         tracks.proposals.ΣΔdisplacement²,
-        tracks.proposals.perturbsize,
+        tracks.proposals.scaling,
         tracks.proposals.logacceptance,
-        tracks.proposals.acceptance,
+        tracks.proposals.accepted,
         tracks.proposals.counter,
     )
     return tracks
@@ -159,7 +158,7 @@ function simulate!(
     x .+= μ
 end
 
-function simulate!(tracks::TrackParts{T}, msdᵥ::T) where {T}
+function simulate!(tracks::TrackChunk{T}, msdᵥ::T) where {T}
     simulate!(tracks.value, params(tracks.prior)..., msdᵥ)
     return tracks
 end
@@ -171,9 +170,9 @@ function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where 
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
 
-function initmh!(tracks::MHTrackParts)
+function initmh!(tracks::MHTrackChunk)
     neglogrand!(tracks.logacceptance)
-    fill!(tracks.acceptance, false)
+    fill!(tracks.accepted, false)
     return tracks
 end
 
@@ -186,8 +185,8 @@ function propose!(
     y .= x .+ transpose(σ) .* y
 end
 
-function propose!(proposals::MHTrackParts{T}, tracks::TrackParts{T}) where {T}
-    propose!(proposals.value, tracks.value, proposals.perturbsize)
+function propose!(proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
+    propose!(proposals.value, tracks.value, proposals.scaling)
     return proposals
 end
 
@@ -211,7 +210,7 @@ function addΔlogπ₁!(
     return ln𝓇
 end
 
-function addΔlogπ₁!(tracksₚ::MHTrackParts{T,A}, tracksₒ::TrackParts{T,A}) where {T,A}
+function addΔlogπ₁!(tracksₚ::MHTrackChunk{T,A}, tracksₒ::TrackChunk{T,A}) where {T,A}
     addΔlogπ₁!(tracksₚ.logacceptance, tracksₒ.value, tracksₚ.value, tracksₒ.prior)
     return tracksₚ
 end
@@ -228,9 +227,9 @@ function staggered_diff²!(
     return Δx²
 end
 
-function countacceptance!(tracks::MHTrackParts)
+function countacceptance!(tracks::MHTrackChunk)
     @views tracks.counter[:, 2] .+=
-        count(>(0), tracks.acceptance), length(tracks.acceptance)
+        count(>(0), tracks.accepted), length(tracks.accepted)
     return tracks
 end
 
@@ -255,8 +254,8 @@ function Δlogπ!(
 end
 
 function sumΔdisplacement²!(
-    tracksₚ::MHTrackParts{T},
-    tracksₒ::TrackParts{T},
+    tracksₚ::MHTrackChunk{T},
+    tracksₒ::TrackChunk{T},
     msdᵥ::T,
 ) where {T}
     tracksₚ.displacement² .-= tracksₒ.displacement²
@@ -267,8 +266,8 @@ end
 
 function Δlogπ!(
     Δlogπ::AbstractVector{T},
-    tracksₒ::TrackParts{T},
-    tracksₚ::MHTrackParts{T},
+    tracksₒ::TrackChunk{T},
+    tracksₚ::MHTrackChunk{T},
     msdᵥ::T,
     i::Integer,
 ) where {T}
@@ -284,8 +283,8 @@ function Δlogπ!(
 end
 
 function update!(
-    tracksₒ::TrackParts{T},
-    tracksₚ::MHTrackParts{T},
+    tracksₒ::TrackChunk{T},
+    tracksₚ::MHTrackChunk{T},
     msdᵥ::T,
     Δlogℒ::AbstractVector{T},
     i::Integer,
@@ -293,7 +292,7 @@ function update!(
     Δlogπ!(Δlogℒ, tracksₒ, tracksₚ, msdᵥ, i)
     @views tracksₚ.logacceptance[i:2:end] .+= Δlogℒ[i:2:end]
     setacceptance!(tracksₚ, start = i, step = 2)
-    boolcopyto!(tracksₒ.value, tracksₚ.value, tracksₚ.acceptance)
+    boolcopyto!(tracksₒ.value, tracksₚ.value, tracksₚ.accepted)
 end
 
 function update_onpart!(
