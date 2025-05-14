@@ -37,7 +37,7 @@ include("spad.jl")
 include("emccd.jl")
 
 include("msd.jl")
-include("nemitters.jl")
+include("emittercount.jl")
 include("brightness.jl")
 include("tracks.jl")
 

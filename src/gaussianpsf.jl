@@ -1,3 +1,10 @@
+"""
+    GaussianPSF{T} <: PointSpreadFunction{T}
+
+An abstract type representing a generic Gaussian PSF (Gaussain in each 𝑧-plane). This serves as a base type for defining specific Gaussian PSF implementations. The type parameter `T` can be used to specify the type of data.
+"""
+abstract type GaussianPSF{T} <: PointSpreadFunction{T} end
+
 struct CircularGaussian{T} <: GaussianPSF{T}
     A::T # maximum intensity possible in one pixel
     σ::T # [length] std of PSF along xy (image plane)

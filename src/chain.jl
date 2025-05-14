@@ -34,7 +34,7 @@ function Base.getproperty(sample::Sample, s::Symbol)
     end
 end
 
-mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:AbstractAnnealing{T}}
+mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:Annealing{T}}
     samples::VofS
     sizelimit::Int
     annealing::A
@@ -205,7 +205,7 @@ function runMCMC(;
     psf::PointSpreadFunction{T},
     niters::Integer = 1000,
     sizelimit::Integer = 1000,
-    annealing::Union{AbstractAnnealing{T},Nothing} = nothing,
+    annealing::Union{Annealing{T},Nothing} = nothing,
     parametric::Bool = false,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))

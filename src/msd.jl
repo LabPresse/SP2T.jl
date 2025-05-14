@@ -1,3 +1,14 @@
+"""
+    MeanSquaredDisplacement{T<:AbstractFloat, P} <: RandomVariable{T}
+
+A mutable struct representing the mean squared displacement random variable. `value::T` is the value, `prior::P` should be a probability distribution, `fixed::Bool` determines whether its `value` gets updated.
+"""
+mutable struct MeanSquaredDisplacement{T<:AbstractFloat,P} <: RandomVariable{T}
+    value::T
+    prior::P
+    fixed::Bool
+end
+
 MeanSquaredDisplacement{T}(;
     guess::Real,
     prior::ContinuousUnivariateDistribution,

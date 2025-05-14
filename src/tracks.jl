@@ -1,3 +1,63 @@
+"""
+    AbstractTrackChunk{T}
+
+An abstract type representing a generic track part. The type parameter `T` can be used to specify the type of data.
+"""
+abstract type AbstractTrackChunk{T} end
+
+"""
+    TrackChunk{T<:AbstractFloat, A<:AbstractArray{T}, P}
+
+A struct that represents a track chunk. 'value::A' stores the particle locations in this chunk, `active::A` shares the same shape as `value` and denotes whether a particle is present (bright). `displacement²::A` is an auxiliary variable which stores squared displacements. `effvalue::A` is also an auxiliary variable which is often set to `value ./ active`.
+"""
+struct TrackChunk{T<:AbstractFloat,A<:AbstractArray{T},P} <: AbstractTrackChunk{T}
+    value::A
+    active::A
+    displacement²::A
+    effvalue::A
+    prior::P
+end
+
+"""
+    MHTrackChunk{T<:AbstractFloat, A<:AbstractArray{T}, V<:AbstractVector{T}}
+
+A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the sames fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of proposals and the number of acceptances.
+"""
+struct MHTrackChunk{T<:AbstractFloat,A<:AbstractArray{T},V<:AbstractVector{T}} <:
+       AbstractTrackChunk{T}
+    value::A
+    active::A
+    displacement²::A
+    effvalue::A
+    ΣΔdisplacement²::V
+    scaling::V
+    logacceptance::V
+    accepted::V
+    counter::Matrix{Int}
+end
+
+"""
+    Tracks{T<:AbstractFloat, A<:AbstractArray{T,3}, NT<:NEmitters{T}, TR<:TrackChunk{T}, MH<:MHTrackChunk{T}}
+
+A mutable struct that encapsulates the number of emitting particles, track chunks, and full values.
+"""
+mutable struct Tracks{
+    T<:AbstractFloat,
+    A<:AbstractArray{T,3},
+    NT<:EmitterCount{T},
+    TR<:TrackChunk{T},
+    MH<:MHTrackChunk{T},
+}
+    value::NTuple{2,A}
+    active::NTuple{2,A}
+    displacement²::NTuple{2,A}
+    effvalue::NTuple{2,A}
+    nemitters::NT
+    onpart::TR
+    offpart::TR
+    proposals::MH
+end
+
 Base.length(tracks::AbstractTrackChunk) = size(tracks.value, 1)
 
 function setdisplacement²!(tracks::AbstractTrackChunk{T}) where {T}
@@ -68,7 +128,7 @@ function Tracks{T}(;
     displacement² = similar(value, nframes - 1, ndims, max_ntracks)
     displacement²2 = similar(displacement²)
     effvalue, effvalue2 = similar(value), similar(value)
-    nemitters = NEmitters{T}(nguesses, max_ntracks, logonprob)
+    nemitters = EmitterCount{T}(nguesses, max_ntracks, logonprob)
     @views proposals = MHTrackChunk(
         value2[:, :, 1:nguesses],
         fullpresence2[:, :, 1:nguesses],

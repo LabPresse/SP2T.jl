@@ -1,3 +1,16 @@
+"""
+    Brightness{T<:AbstractFloat, P} <: RandomVariable{T}
+
+A mutable struct representing the brightness random variable. `value::T` is the value, `prior::P` should be a probability distribution, `fixed::Bool` determines whether its `value` gets updated. `proposal::Beta{T}` is a Beta proposal distribution for the mltiplicative random walk (see Pressé, Data Modeling for the Sciences, 2023, p195). `counter::Vector{Int}` is a vector recording the number of proposals and the number of acceptances.
+"""
+mutable struct Brightness{T<:AbstractFloat,P} <: RandomVariable{T}
+    value::T
+    prior::P
+    fixed::Bool
+    proposal::Beta{T}
+    counter::Vector{Int}
+end
+
 Brightness{T}(;
     guess::Real,
     prior::ContinuousUnivariateDistribution,
@@ -6,8 +19,8 @@ Brightness{T}(;
 ) where {T<:AbstractFloat} = Brightness(
     convert(T, guess),
     unionalltypeof(prior)(convert.(T, params(prior))...),
-    Beta(convert(T, proposalparam), oneunit(T)),
     fixed,
+    Beta(convert(T, proposalparam), oneunit(T)),
     zeros(Int, 2),
 )
 

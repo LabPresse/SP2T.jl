@@ -1,37 +1,54 @@
-function NEmitters{T}(
-    value::Integer,
-    limit::Integer,
-    logonprob::Real,
-) where {T<:AbstractFloat}
-    logprior = convert(T, logonprob)
-    loglikelihood = Vector{T}(undef, limit + 1)
-    return NEmitters{T,typeof(loglikelihood)}(
-        value,
-        logprior,
-        loglikelihood,
-        similar(loglikelihood),
-    )
+"""
+    EmitterCount{T<:AbstractFloat, V<:AbstractVector{T}} <: RandomVariable{T}
+
+A mutable struct that represents the random variable of the number of tracks (the number of emitting particles). The length of `V` should match the weak limit (the total number of particle candidates).
+"""
+mutable struct EmitterCount{T<:AbstractFloat,V<:AbstractVector{T}} <: RandomVariable{T}
+    value::Int
+    prior::T
+    fixed::Bool
+    likelihood::V
+    posterior::V
 end
 
-function Base.getproperty(n::NEmitters, s::Symbol)
+EmitterCount{T}(
+    guess::Integer,
+    limit::Integer,
+    logonprob::Real,
+    fixed::Bool = false,
+) where {T<:AbstractFloat} = EmitterCount(
+    guess,
+    convert(T, logonprob),
+    fixed,
+    Vector{T}(undef, limit + 1),
+    Vector{T}(undef, limit + 1),
+)
+
+function Base.getproperty(n::EmitterCount, s::Symbol)
     if s == :limit
         return length(getfield(n, :log𝒫)) - 1
+    elseif s == :logprior
+        return n.prior
+    elseif s == :loglikelihood
+        return n.likelihood
+    elseif s == :logposterior
+        return n.posterior
     else
         return getfield(n, s)
     end
 end
 
-Base.any(n::NEmitters) = n.value > 0
+Base.any(n::EmitterCount) = n.value > 0
 
-logprior(n::NEmitters) = n.logprior * n.value
+logprior(n::EmitterCount) = n.logprior * n.value
 
-function set_logposterior!(n::NEmitters{T}, 𝑇::T) where {T}
+function set_logposterior!(n::EmitterCount{T}, 𝑇::T) where {T}
     n.logposterior .= (0:length(n.loglikelihood)-1) .* n.logprior .+ n.loglikelihood ./ 𝑇
     return n
 end
 
 function set_loglikelihood!(
-    nemitters::NEmitters{T},
+    nemitters::EmitterCount{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     llarray::LogLikelihoodArray{T},
@@ -64,7 +81,7 @@ function set_loglikelihood!(
 end
 
 function update!(
-    nemitters::NEmitters{T},
+    nemitters::EmitterCount{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     llarray::LogLikelihoodArray{T},

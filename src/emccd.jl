@@ -1,3 +1,11 @@
+"""
+    AbstractEMCCD{T} <: PixelDetector{T}
+
+An abstract type representing an EMCCD detector. This serves as a 
+base type for defining specific EMCCD implementations. The type parameter `T` can be used to specify the type of data.
+"""
+abstract type AbstractEMCCD{T} <: PixelDetector{T} end
+
 struct EMCCD{
     T<:AbstractFloat,
     V<:AbstractVector{T},
