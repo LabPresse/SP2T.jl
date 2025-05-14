@@ -12,7 +12,6 @@ metadata = Dict{String,Any}(
     "wavelength" => 0.665,
     "period" => 3.3e-2,
     "pixel size" => 0.133,
-    "batchsize" => 1,
     "description" => "example run",
 )
 
