@@ -45,7 +45,7 @@ function Base.getproperty(c::Chain, s::Symbol)
         return [sample.diffusivity for sample in getfield(c, :samples)]
     elseif s === :brightnesses
         return [sample.brightness for sample in getfield(c, :samples)]
-    elseif s === :nemitters
+    elseif s === :emittercounts
         return [size(sample.tracks, 3) for sample in getfield(c, :samples)]
     elseif s === :lasttracks
         return c.samples[end].tracks
