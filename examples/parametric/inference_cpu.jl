@@ -23,7 +23,7 @@ psf = CircularGaussian{FloatType}(
 
 msd = MeanSquaredDisplacement{FloatType}(
     guess = 2 * 1 * metadata["period"],
-    prior = InverseGamma(2, 1e-5),
+    priorparams = (2, 1e-5),
 )
 
 brightness = Brightness{FloatType}(

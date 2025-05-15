@@ -24,7 +24,7 @@ psf = CircularGaussian{FloatType}(
 
 msd = MeanSquaredDisplacement{FloatType}(
     guess = 2 * 1 * metadata["period"],
-    prior = InverseGamma(2, 1e-5),
+    priorparams = (2, 1e-5),
 )
 
 brightness = Brightness{FloatType}(
@@ -51,7 +51,7 @@ chain = runMCMC(
     brightness = brightness,
     detector = detector,
     psf = psf,
-    niters = 998,
+    niters = 9998,
     sizelimit = 1000,
 );
 

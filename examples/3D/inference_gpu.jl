@@ -26,7 +26,7 @@ psf = CircularGaussianLorentzian{FloatType}(
 
 msd = MeanSquaredDisplacement{FloatType}(
     value = 2 * 1 * metadata["period"],
-    prior = InverseGamma(2, 1e-5),
+    priorparams = (2, 1e-5),
 )
 
 h = Brightness{FloatType}(
