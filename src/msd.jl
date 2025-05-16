@@ -1,11 +1,12 @@
 """
-    MeanSquaredDisplacement{T<:AbstractFloat, P} <: RandomVariable{T}
+    MeanSquaredDisplacement{T<:AbstractFloat, P<:InverseGamma{T}} <: RandomVariable{T}
 
-A mutable struct representing the mean squared displacement random variable. `value::T` is the value, `prior::InverseGamma{T}` is an inverse gamma distrtibution, `fixed::Bool` determines whether its `value` gets updated.
+A mutable struct representing the mean squared displacement random variable. `value::T` is the value, `prior::P` is an inverse gamma distrtibution, `fixed::Bool` determines whether its `value` gets updated.
 """
-mutable struct MeanSquaredDisplacement{T<:AbstractFloat} <: RandomVariable{T}
+mutable struct MeanSquaredDisplacement{T<:AbstractFloat,P<:InverseGamma{T}} <:
+               RandomVariable{T}
     value::T
-    prior::InverseGamma{T}
+    prior::P
     fixed::Bool
 end
 
