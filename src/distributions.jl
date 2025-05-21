@@ -19,4 +19,5 @@ end
 
 Distributions.params(n::DNormal) = n.μ, n.σ
 
-_logπ(ℕ::DNormal{T}, x::AbstractArray{T}) where {T} = sum(vec(@. -(x - ℕ.μ) / (2 * ℕ.σ^2)))
+logprior(ℕ::DNormal{T}, x::AbstractArray{T}) where {T} =
+    sum(vec(@. -(x - ℕ.μ) / (2 * ℕ.σ^2)))

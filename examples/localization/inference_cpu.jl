@@ -34,8 +34,8 @@ for i in axes(frames, 3)
 
     brightness = Brightness{FloatType}(
         guess = 20 * metadata["period"],
-        prior = Gamma(1, 10),
-        proposalparam = 10,
+        priorparams = (1, 10),
+        proposalparams = (10, 1),
         fixed = true,
     )
 

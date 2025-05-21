@@ -25,7 +25,7 @@ abstract type PointSpreadFunction{T} end
 """
     RandomVariable{T}
 
-An abstract type representing a generic random variable. It is now currently used and is kept mostly for prototyping. Based on the initial design, a random variable should have at least three fields, `value::T`, `prior::P`, and `fixed::Bool`.
+An abstract type representing a generic random variable. It is used mostly for prototyping. Based on the initial design, a random variable should have at least three fields, `value::T`, `prior::P`, and `fixed::Bool`.
 """
 abstract type RandomVariable{T} end
 
@@ -95,19 +95,12 @@ function _randn!(x::AbstractArray{T,3}, σ::T, σ₀::AbstractVecOrMat{T}) where
 end
 
 """
-    diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}, prev::AbstractArray{T,3}) where {T}
+    diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}, y::AbstractArray{T,3}) where {T}
 
-Compute the squared differences between successive slices along the first dimension of two 3D arrays, `prev` and `x`, and store the results in the provided 3D array `Δx²`.
-
-# Arguments
-- `Δx²::AbstractArray{T,3}`: A pre-allocated 3D array to store the computed squared differences. The size of `Δx²` must be `(size(y, 1) - 1, size(y, 2), size(y, 3))`.
-- `x::AbstractArray{T,3}`: A 3D array representing the "current" set of values.
-- `prev::AbstractArray{T,3}`: A 3D array representing the "previous" set of values. Must have the same dimensions as `x`.
-
+Compute the squared differences between successive slices along the first dimension of two 3D arrays, `y` and `x`, and store the results in the provided 3D array `Δx²`.
 """
-
-diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}, prev::AbstractArray{T,3}) where {T} =
-    @views Δx² .= (x[2:end, :, :] .- prev[1:end-1, :, :]) .^ 2
+diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}, y::AbstractArray{T,3}) where {T} =
+    @views Δx² .= (x[2:end, :, :] .- y[1:end-1, :, :]) .^ 2
 
 diff²!(Δx²::AbstractArray{T,3}, x::AbstractArray{T,3}) where {T} = diff²!(Δx², x, x)
 
@@ -131,5 +124,23 @@ end
 dimsmatch(A::AbstractArray, B::AbstractArray; dims::Union{Integer,AbstractUnitRange}) =
     size(A)[dims] == size(B)[dims]
 
-get_Δlogprior(xᵖ::T, xᵒ::T, distr::Gamma{T}) where {T<:AbstractFloat} =
-    (shape(distr) - 1) * log(xᵖ / xᵒ) - (xᵖ - xᵒ) / scale(distr)
+Δlogpdf(P::Gamma{T}, xᵖ::T, xᵒ::T) where {T<:AbstractFloat} =
+    (shape(P) - 1) * log(xᵖ / xᵒ) - (xᵖ - xᵒ) / scale(P)
+
+"""
+    mrw_propose(P, xᵒ::T)
+
+Return a proposed value generated a multiplicative random walk. `P` is used to sample the multiplicative factor and `xᵒ` is the previous value. This function also  returns the contribution to the overall acceptance ratio (in the log-space) of the proposal.
+"""
+function mrw_propose(P::Beta{T}, xᵒ::T) where {T<:AbstractFloat}
+    xᵖ = rand(Bool) ? xᵒ * rand(P) : xᵒ / rand(P)
+    return xᵖ, log(xᵖ) - log(xᵒ)
+end
+function mrw_propose(P::Union{BetaPrime{T},Gamma{T}}, xᵒ::T) where {T<:AbstractFloat}
+    ϵ = rand(P)
+    xᵖ = ϵ * xᵒ
+    return xᵖ, log(xᵒ) + logpdf(P, 1 / ϵ) - log(xᵖ) - logpdf(P, ϵ) #* Needs test
+end
+
+# get_Δlogprior(xᵖ::T, xᵒ::T, distr::Gamma{T}) where {T<:AbstractFloat} =
+#     (shape(distr) - 1) * log(xᵖ / xᵒ) - (xᵖ - xᵒ) / scale(distr)

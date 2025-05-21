@@ -31,8 +31,8 @@ msd = MeanSquaredDisplacement{FloatType}(
 
 h = Brightness{FloatType}(
     value = 4e4 * metadata["period"],
-    prior = Gamma(1, 1),
-    proposalparam = 10,
+    priorparams = (1, 1),
+    proposalparams = (10, 1),
 )
 
 M = NTracks{FloatType}(value = 0, limit = 10, logonprob = -10)

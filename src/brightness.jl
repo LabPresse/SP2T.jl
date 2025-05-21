@@ -1,7 +1,7 @@
 """
-    Brightness{T<:AbstractFloat, P} <: RandomVariable{T}
+    Brightness{T<:AbstractFloat, P<:Gamma{T}} <: RandomVariable{T}
 
-A mutable struct representing the brightness random variable. `value::T` is the value, `prior::P` should be a probability distribution, `fixed::Bool` determines whether its `value` gets updated. `proposal::Beta{T}` is a Beta proposal distribution for the mltiplicative random walk (see Pressé, Data Modeling for the Sciences, 2023, p195). `counter::Vector{Int}` is a vector recording the number of proposals and the number of acceptances.
+A mutable struct representing the brightness random variable. `value::T` is the value, `prior::P` is a gamma distribution, `fixed::Bool` determines whether its `value` gets updated. `proposal::Beta{T}` is a beta proposal distribution for the mltiplicative random walk (see Pressé, Data Modeling for the Sciences, 2023, p195). `counter::Vector{Int}` is a vector recording the number of proposals and the number of acceptances.
 """
 mutable struct Brightness{T<:AbstractFloat,P} <: RandomVariable{T}
     value::T
@@ -11,30 +11,39 @@ mutable struct Brightness{T<:AbstractFloat,P} <: RandomVariable{T}
     counter::Vector{Int}
 end
 
+"""
+    Brightness{T}(; guess::Real, priorparams::Tuple{<:Real,<:Real}, fixed::Bool, proposalparam::Real, fixed::Bool)
+
+The constructor for `Brightness`. By default, `priorparams = (1, 1)`, `fixed = false`, and `proposalparams = (10, 1)`.
+"""
 Brightness{T}(;
     guess::Real,
-    prior::ContinuousUnivariateDistribution,
-    proposalparam::Real,
+    priorparams::Tuple{<:Real,<:Real} = (1, 1),
     fixed::Bool = false,
+    proposalparams::Tuple{<:Real,<:Real} = (1, 10),
 ) where {T<:AbstractFloat} = Brightness(
     convert(T, guess),
-    unionalltypeof(prior)(convert.(T, params(prior))...),
+    Gamma(convert.(T, priorparams)...),
     fixed,
-    Beta(convert(T, proposalparam), oneunit(T)),
+    Beta(convert.(T, proposalparams)...),
     zeros(Int, 2),
 )
 
-logprior(brightness::Brightness{T,P}) where {T,P<:Gamma{T}} =
-    (shape(brightness.prior) - 1) * log(brightness.value) -
-    brightness.value / scale(brightness.prior)
+"""
+    logprior(b::Brightness{T,P}; normalization::Bool)
 
-logprior_norm(brightness::Brightness{T,P}) where {T,P} =
-    logpdf(brightness.prior, brightness.value)
+Calculate the log density for `b`'s prior given its current value. `normalization = false` by default. 
+"""
+logprior(b::Brightness{T,P}; normalization::Bool = false) where {T,P<:Gamma{T}} =
+    normalization ? logpdf(b.prior, b.value) :
+    (shape(b.prior) - 1) * log(b.value) - b.value / scale(b.prior)
 
-function propose(brightness::Brightness{T}) where {T<:AbstractFloat}
-    ϵ = rand(brightness.proposal)
-    return rand(Bool) ? brightness.value * ϵ : brightness.value / ϵ
-end
+"""
+    Δlogprior(b::Brightness{T}, xᵖ::T)
+
+Calculate `logprior(b, xᵖ) - logprior(b, b.value)`.
+"""
+Δlogprior(b::Brightness{T}, xᵖ::T) where {T<:AbstractFloat} = Δlogpdf(b.prior, xᵖ, b.value)
 
 function update!(
     brightness::Brightness{T},
@@ -45,14 +54,14 @@ function update!(
     𝑇::T,
 ) where {T}
     isfixed(brightness) && return brightness
-    proposed_value = propose(brightness)
-    set_poisson_means!(llarray, detector, tracksᵥ, brightness.value, proposed_value, psf)
-    get_Δloglikelihood!(llarray, detector)
-    logacceptance =
-        get_Δloglikelihood!(llarray, detector) / 𝑇 +
-        get_Δlogprior(proposed_value, brightness.value, brightness.prior)
-    accepted = logacceptance > log(rand())
+    valueᵖ, logacceptance = mrw_propose(brightness.proposal, brightness.value)
+    set_poisson_means!(llarray, detector, tracksᵥ, brightness.value, valueᵖ, psf)
+    # get_Δloglikelihood!(llarray, detector)
+    logacceptance +=
+        get_Δloglikelihood!(llarray, detector) / 𝑇 + Δlogprior(brightness, valueᵖ) -
+        log(rand())
+    accepted = logacceptance > 0
     brightness.counter .+= (accepted, 1)
-    accepted && (brightness.value = proposed_value)
+    accepted && (brightness.value = valueᵖ)
     return brightness
 end
