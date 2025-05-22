@@ -5,6 +5,13 @@ An abstract type representing a generic track part. The type parameter `T` can b
 """
 abstract type AbstractTrackChunk{T} end
 
+Base.length(t::AbstractTrackChunk) = size(t.value, 1)
+
+function setdisplacement²!(t::AbstractTrackChunk{T}) where {T}
+    diff²!(t.displacement², t.value)
+    return t
+end
+
 """
     TrackChunk{T<:AbstractFloat, A<:AbstractArray{T}, P}
 
@@ -36,10 +43,38 @@ struct MHTrackChunk{T<:AbstractFloat,A<:AbstractArray{T},V<:AbstractVector{T}} <
     counter::Matrix{Int}
 end
 
+function MHTrackChunk(value, active, displacement², effvalue, scaling)
+    nframes = size(value, 1)
+    return MHTrackChunk(
+        value,
+        active,
+        displacement²,
+        effvalue,
+        similar(value, nframes - 1),
+        scaling,
+        fill!(similar(value, nframes), -Inf),
+        fill!(similar(value, nframes), 0.0),
+        zeros(Int, 2, 2),
+    )
+end
+
+setacceptance!(t::MHTrackChunk; start::Integer, step::Integer) =
+    logaccept!(t.accepted, t.logacceptance, start = start, step = step)
+
+"""
+    seteffvalue!(tracks::AbstractTrackChunk{T})
+
+Set the effective value of the track chunk. The effective value is calculated as `value / active`. Note that `effvalue == value` when `active` is 1, and `effvalue == Inf` (a particle is infinitely far away so cannot contribute any photons) when `active` is 0. Currently, `active` should ONLY be used in parametric runs.
+"""
+function seteffvalue!(tracks::AbstractTrackChunk{T}) where {T}
+    @. tracks.effvalue = tracks.value / tracks.active
+    return tracks
+end
+
 """
     Tracks{T<:AbstractFloat, A<:AbstractArray{T,3}, NT<:NEmitters{T}, TR<:TrackChunk{T}, MH<:MHTrackChunk{T}}
 
-A mutable struct that encapsulates the number of emitting particles, track chunks, and full values.
+A mutable struct that encapsulates the number of emitting particles, track chunks, and full values. Note that the `value` of a `TrackChunk` should be a pointer to the `value` of `Tracks`, and the same for `active`, `displacement²`, and `effvalue`. The `onchunk` and `offchunk` fields are used to store the track chunks for the on and off parts of the tracks, respectively. The `proposals` field is used to store the proposals for the Metropolis-Hastings algorithm.
 """
 mutable struct Tracks{
     T<:AbstractFloat,
@@ -53,24 +88,17 @@ mutable struct Tracks{
     displacement²::NTuple{2,A}
     effvalue::NTuple{2,A}
     nemitters::NT
-    onpart::TR
-    offpart::TR
+    onchunk::TR
+    offchunk::TR
     proposals::MH
 end
 
-Base.length(tracks::AbstractTrackChunk) = size(tracks.value, 1)
+"""
+    trackchunks(value::AbstractArray{T,3}, presence::AbstractArray{T,3}, displacement²::AbstractArray{T,3}, effvalue::AbstractArray{T,3}, nemitters::Integer, prior::P)
 
-function setdisplacement²!(tracks::AbstractTrackChunk{T}) where {T}
-    diff²!(tracks.displacement², tracks.value)
-    return tracks
-end
-
-function seteffvalue!(tracks::AbstractTrackChunk{T}) where {T}
-    @. tracks.effvalue = tracks.value / tracks.active
-    return tracks
-end
-
-get_track_parts(
+Construct two `TrackChunk` objects from the provided arrays. The first `TrackChunk` contains the first `nemitters` pages of the input arrays for the on (emitting) particles, while the second `TrackChunk` contains the remaining pages.
+"""
+trackchunks(
     value::AbstractArray{T,3},
     presence::AbstractArray{T,3},
     displacement²::AbstractArray{T,3},
@@ -92,61 +120,55 @@ TrackChunk(
     prior,
 )
 
-setacceptance!(tracks::MHTrackChunk; start::Integer, step::Integer) =
-    logaccept!(tracks.accepted, tracks.logacceptance, start = start, step = step)
-
-function logprior(tracks::TrackChunk{T}, msdᵥ::T) where {T}
-    diff²!(tracks.displacement², tracks.value)
-    return -(
-        log(msdᵥ) * length(tracks.displacement²) + sum(vec(tracks.displacement²)) / msdᵥ
-    ) / 2 - _logπ(tracks.prior, view(tracks.value, 1, :, :))
+function logprior(t::AbstractTrackChunk{T}, msdᵥ::T) where {T}
+    setdisplacement²!(t)
+    # diff²!(t.displacement², t.value)
+    return -(log(msdᵥ) * length(t.displacement²) + sum(vec(t.displacement²)) / msdᵥ) / 2 -
+           logprior(t.prior, view(t.value, 1, :, :))
 end
 
 function Tracks{T}(;
     guess::AbstractArray{<:Real,3},
-    prior,
+    prior::P,
     max_ntracks::Integer,
-    perturbsize::AbstractVector{<:Real},
+    scaling::AbstractVector{<:Real},
     logonprob::Real,
-    presence::Union{Nothing,AbstractArray{<:Real,3}} = nothing,
-) where {T}
+    active::Union{Nothing,AbstractArray{<:Real,3}} = nothing,
+) where {T,P}
     guess = elconvert(T, guess)
     nframes, ndims, nguesses = size(guess)
     value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
-    value2 = similar(value)
+    values = (value, similar(value))
 
-    fullpresence = fill!(similar(value, nframes, 1, max_ntracks), true)
-    if !isnothing(presence)
-        dimsmatch(guess, presence, dims = 1) || throw(
+    active = if !isnothing(active)
+        dimsmatch(guess, active, dims = 1) || throw(
             DimensionMismatch(
                 "size of guess dose not match size of presence in the first dimension",
             ),
         )
-        copyto!(fullpresence, presence)
+        _resize3(active, max_ntracks)
+    else
+        fill!(similar(value, nframes, ndims, max_ntracks), true)
     end
-    fullpresence2 = fill!(similar(fullpresence), true)
-    displacement² = similar(value, nframes - 1, ndims, max_ntracks)
-    displacement²2 = similar(displacement²)
-    effvalue, effvalue2 = similar(value), similar(value)
-    nemitters = EmitterCount{T}(nguesses, max_ntracks, logonprob)
+    actives = (active, fill!(similar(active), true))
+    Δx² = similar(value, nframes - 1, ndims, max_ntracks)
+    Δx²s = (Δx², similar(Δx²))
+    effs = (similar(value), similar(value))
+    count = EmitterCount{T}(nguesses, max_ntracks, logonprob)
     @views proposals = MHTrackChunk(
-        value2[:, :, 1:nguesses],
-        fullpresence2[:, :, 1:nguesses],
-        displacement²2[:, :, 1:nguesses],
-        effvalue2[:, :, 1:nguesses],
-        similar(value, nframes - 1),
-        perturbsize,
-        similar(value, nframes),
-        similar(value, nframes),
-        zeros(Int, 2, 2),
+        values[2][:, :, 1:nguesses],
+        actives[2][:, :, 1:nguesses],
+        Δx²s[2][:, :, 1:nguesses],
+        effs[2][:, :, 1:nguesses],
+        scaling,
     )
     return Tracks(
-        (value, value2),
-        (fullpresence, fullpresence2),
-        (displacement², displacement²2),
-        (effvalue, effvalue2),
-        nemitters,
-        get_track_parts(value, fullpresence, displacement², effvalue, nguesses, prior)...,
+        values,
+        actives,
+        Δx²s,
+        effs,
+        count,
+        trackchunks(value, actives[1], Δx², effs[1], nguesses, prior)...,
         proposals,
     )
 end
@@ -164,13 +186,13 @@ function seteffvalue!(tracks::Tracks, i::Integer = 1)
 end
 
 function reassign_track_parts!(tracks::Tracks{T}) where {T}
-    tracks.onpart, tracks.offpart = get_track_parts(
+    tracks.onchunk, tracks.offchunk = trackchunks(
         tracks.value[1],
         tracks.active[1],
         tracks.displacement²[1],
         tracks.effvalue[1],
         tracks.nemitters.value,
-        tracks.onpart.prior,
+        tracks.onchunk.prior,
     )
     return tracks
 end
@@ -196,36 +218,45 @@ function reassign!(tracks::Tracks)
     return tracks
 end
 
-function simulate!(
-    x::AbstractArray{T,3},
-    μ::AbstractVector{T},
-    σ::AbstractVector{T},
-    msd::T,
-) where {T}
-    _randn!(x, √msd, σ)
+function simulate!(x::AbstractArray{T,3}, msd::T) where {T}
+    @views _randn!(x[2:end, :, :], √msd)
     cumsum!(x, x, dims = 1)
-    x .+= reshape(μ, 1, size(x, 2), :)
 end
 
-function simulate!(
-    x::AbstractArray{T,3},
-    μ::AbstractArray{T,3},
-    σ::AbstractVector{T},
-    msd::T,
-) where {T}
-    _randn!(x, √msd, σ)
-    cumsum!(x, x, dims = 1)
-    x .+= μ
+function simulate!(x::AbstractArray{T,3}, msd::T, prior) where {T}
+    @views rand!(x[1, :, :], prior)
+    simulate!(x, msd)
 end
+
+# function simulate!(
+#     x::AbstractArray{T,3},
+#     μ::AbstractVector{T},
+#     σ::AbstractVector{T},
+#     msd::T,
+# ) where {T}
+#     x[1, :, :] .+= reshape(μ, 1, size(x, 2), :)
+#     simulate!(x, msd)
+# end
+
+# function simulate!(
+#     x::AbstractArray{T,3},
+#     μ::AbstractArray{T,3},
+#     σ::AbstractVector{T},
+#     msd::T,
+# ) where {T}
+#     x[1, :, :] .= μ
+#     simulate!(x, msd)
+# end
 
 function simulate!(tracks::TrackChunk{T}, msdᵥ::T) where {T}
-    simulate!(tracks.value, params(tracks.prior)..., msdᵥ)
+    simulate!(tracks.value, msdᵥ, tracks.prior)
     return tracks
 end
 
 function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T}
-    σ = fill!(similar(x, size(x, 2)), 0)
-    simulate!(x, -diff(xend, dims = 1), σ, msd)
+    # σ = fill!(similar(x, size(x, 2)), 0)
+    @views copyto!(x[1, :, :], -diff(xend, dims = 1)[1, :, :])
+    simulate!(x, msd)
     N = size(x, 1) - 1
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
@@ -288,8 +319,7 @@ function staggered_diff²!(
 end
 
 function countacceptance!(tracks::MHTrackChunk)
-    @views tracks.counter[:, 2] .+=
-        count(>(0), tracks.accepted), length(tracks.accepted)
+    @views tracks.counter[:, 2] .+= count(>(0), tracks.accepted), length(tracks.accepted)
     return tracks
 end
 
@@ -355,7 +385,7 @@ function update!(
     boolcopyto!(tracksₒ.value, tracksₚ.value, tracksₚ.accepted)
 end
 
-function update_onpart!(
+function update_onchunk!(
     tracks::Tracks{T},
     msdᵥ::T,
     brightnessᵥ::T,
@@ -364,7 +394,7 @@ function update_onpart!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    tracksₒ = tracks.onpart
+    tracksₒ = tracks.onchunk
     tracksₚ = tracks.proposals
     initmh!(tracksₚ)
     propose!(tracksₚ, tracksₒ)
