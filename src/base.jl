@@ -87,6 +87,9 @@ function _rand(prior::P, Δparams::NTuple{2,T}) where {T,P}
     return rand(P(postparams...))
 end
 
+_randn!(x::AbstractVecOrMat{T}, μ::AbstractVector{T}, σ::AbstractVector{T}) where {T} =
+    x .= muladd.(randn!(x), σ, μ)
+
 _randn!(x::AbstractArray{T}, σ::Union{T,AbstractMatrix{T}}) where {T} = randn!(x) .*= σ
 
 function _randn!(x::AbstractArray{T,3}, σ::T, σ₀::AbstractVecOrMat{T}) where {T}
@@ -142,5 +145,15 @@ function mrw_propose(P::Union{BetaPrime{T},Gamma{T}}, xᵒ::T) where {T<:Abstrac
     return xᵖ, log(xᵒ) + logpdf(P, 1 / ϵ) - log(xᵖ) - logpdf(P, ϵ) #* Needs test
 end
 
+function _resize3(
+    x::AbstractArray{T,3},
+    newsz::Integer;
+    fill = Union{Nothing,T} = nothing,
+) where {T}
+    y = similar(x, size(x, 1), size(x, 2), newsz)
+    copyto!(y, x)
+    !isnothing(fill) && fill!(view(y, :, :, size(x, 3)+1:newsz), fill)
+    return y
+end
 # get_Δlogprior(xᵖ::T, xᵒ::T, distr::Gamma{T}) where {T<:AbstractFloat} =
 #     (shape(distr) - 1) * log(xᵖ / xᵒ) - (xᵖ - xᵒ) / scale(distr)

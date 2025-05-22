@@ -17,7 +17,9 @@ function Base.getproperty(d::DNormal, s::Symbol)
     end
 end
 
-Distributions.params(n::DNormal) = n.μ, n.σ
+Distributions.params(P::DNormal) = P.μ, P.σ
 
 logprior(ℕ::DNormal{T}, x::AbstractArray{T}) where {T} =
     sum(vec(@. -(x - ℕ.μ) / (2 * ℕ.σ^2)))
+
+Random.rand!(x::AbstractVecOrMat{T}, P::DNormal{T}) where {T} = _randn!(x, P.μ, P.σ)

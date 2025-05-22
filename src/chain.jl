@@ -93,7 +93,7 @@ function extend!(
         logposterior = get_logposterior(loglikelihood, tracks, msd)
         push!(
             chain.samples,
-            Sample(tracks.onpart, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
+            Sample(tracks.onchunk, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
         )
         isfull(chain) && shrink!(chain)
     end
@@ -110,8 +110,8 @@ function get_loglikelihood!(
     detector::Detector{T},
     psf::PointSpreadFunction{T},
 ) where {T}
-    seteffvalue!(tracks.onpart)
-    set_poisson_mean!(llarray, detector, tracks.onpart.effvalue, brightness.value, psf)
+    seteffvalue!(tracks.onchunk)
+    set_poisson_mean!(llarray, detector, tracks.onchunk.effvalue, brightness.value, psf)
     return get_loglikelihood!(llarray, detector)
 end
 
@@ -121,7 +121,7 @@ get_logposterior(
     msd::MeanSquaredDisplacement{T},
 ) where {T} =
     loglikelihood +
-    logprior(tracks.onpart, msd.value) +
+    logprior(tracks.onchunk, msd.value) +
     logprior(msd) +
     logprior(tracks.nemitters)
 
@@ -134,10 +134,10 @@ function parametricMCMC!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    update_onpart!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
-    update!(brightness, tracks.onpart.effvalue, llarray, detector, psf, 𝑇)
-    setdisplacement²!(tracks.onpart)
-    update!(msd, tracks.onpart.displacement², 𝑇)
+    update_onchunk!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
+    update!(brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
+    setdisplacement²!(tracks.onchunk)
+    update!(msd, tracks.onchunk.displacement², 𝑇)
     return tracks, msd
 end
 
@@ -150,9 +150,9 @@ function nonparametricMCMC!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    simulate!(tracks.offpart, msd.value)
+    simulate!(tracks.offchunk, msd.value)
     if any(tracks)
-        update_onpart!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
+        update_onchunk!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
         onshuffle!(tracks)
     end
 
@@ -168,7 +168,7 @@ function nonparametricMCMC!(
     )
     reassign!(tracks)
 
-    update!(brightness, tracks.onpart.effvalue, llarray, detector, psf, 𝑇)
+    update!(brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
 
     setdisplacement²!(tracks)
     update!(msd, tracks.displacement²[1], 𝑇)
@@ -209,7 +209,7 @@ function runMCMC(;
     parametric::Bool = false,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
-    chain = Chain([Sample(tracks.onpart, msd, brightness)], sizelimit, annealing)
+    chain = Chain([Sample(tracks.onchunk, msd, brightness)], sizelimit, annealing)
     runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric)
     return chain
 end

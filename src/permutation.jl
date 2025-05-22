@@ -30,8 +30,8 @@ function _permute!(
 end
 
 function _permute!(tracks::Tracks{T}, p::AbstractVector{<:Integer}) where {T}
-    _permute!(tracks.onpart.value, p, tracks.proposals.value)
-    _permute!(tracks.onpart.active, p, tracks.proposals.active)
+    _permute!(tracks.onchunk.value, p, tracks.proposals.value)
+    _permute!(tracks.onchunk.active, p, tracks.proposals.active)
     return tracks
 end
 
