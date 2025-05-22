@@ -21,7 +21,7 @@ MeanSquaredDisplacement{T}(;
     fixed::Bool = false,
 ) where {T<:AbstractFloat} = MeanSquaredDisplacement(
     convert(T, guess),
-    InverseGamma(convert.(Float32, priorparams)...),
+    InverseGamma(convert.(T, priorparams)...),
     fixed,
 )
 
