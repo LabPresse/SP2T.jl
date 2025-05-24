@@ -48,7 +48,7 @@ function set_logposterior!(n::EmitterCount{T}, 𝑇::T) where {T}
 end
 
 function set_loglikelihood!(
-    nemitters::EmitterCount{T},
+    count::EmitterCount{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     llarray::LogLikelihoodArray{T},
@@ -75,13 +75,13 @@ function set_loglikelihood!(
             detector.pxbounds,
             psf,
         )
-        nemitters.loglikelihood[m+1] = get_loglikelihood!(llarray, detector)
+        count.loglikelihood[m+1] = get_loglikelihood!(llarray, detector)
     end
-    return nemitters
+    return count
 end
 
 function update!(
-    nemitters::EmitterCount{T},
+    count::EmitterCount{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     llarray::LogLikelihoodArray{T},
@@ -89,8 +89,8 @@ function update!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    set_loglikelihood!(nemitters, trackᵥ, brightnessᵥ, llarray, detector, psf)
-    set_logposterior!(nemitters, 𝑇)
-    nemitters.value = randc(nemitters.logposterior) - 1
-    return nemitters
+    set_loglikelihood!(count, trackᵥ, brightnessᵥ, llarray, detector, psf)
+    set_logposterior!(count, 𝑇)
+    count.value = randc(count.logposterior) - 1
+    return count
 end
