@@ -236,6 +236,15 @@ function runMCMC(;
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
     chain = Chain([Sample(tracks.onchunk, msd, brightness)], sizelimit, annealing)
-    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric)
+    runMCMC!(
+        chain = chain,
+        tracks = tracks,
+        msd = msd,
+        brightness = brightness,
+        detector = detector,
+        psf = psf,
+        niters = niters,
+        parametric = parametric,
+    )
     return chain
 end
