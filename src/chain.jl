@@ -41,7 +41,7 @@ mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:Annealing{T}}
 end
 
 function Base.getproperty(c::Chain, s::Symbol)
-    if s === :msd
+    if s === :msds
         return [sample.diffusivity for sample in getfield(c, :samples)]
     elseif s === :brightnesses
         return [sample.brightness for sample in getfield(c, :samples)]
@@ -99,9 +99,6 @@ function extend!(
     end
     return chain
 end
-
-# saveperiod(chain::Chain) =
-#     length(chain.samples) == 1 ? 1 : chain.samples[2].iteration - chain.samples[1].iteration
 
 function get_loglikelihood!(
     llarray::LogLikelihoodArray{T},
@@ -175,7 +172,22 @@ function nonparametricMCMC!(
     return tracks, msd
 end
 
-function runMCMC!(
+"""
+    runMCMC!(; kwargs...)
+
+Continue running a MCMC sampling with the specified keyword arguments. Requires the following keyword arguments:
+- `chain`: A `Chain` object representing the MCMC chain.
+- `tracks`: A `Tracks` object representing the tracks of all particle candidates.
+- `msd`: A `MeanSquaredDisplacement` object representing the mean squared displacement of the particles.
+- `brightness`: A `Brightness` object representing the brightness of the particles.
+- `detector`: A `Detector` object representing the detector used to capture the particles.
+- `psf`: A `PointSpreadFunction` object representing the point spread function of the system.
+- `niters`: The number of iterations for the MCMC simulation (default: 1000).
+- `sizelimit`: The maximum size of the chain (default: 1000).
+- `annealing`: An `Annealing` object representing the annealing schedule (default: `ConstantAnnealing{T}(1)`).
+- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`).
+"""
+function runMCMC!(;
     chain::Chain{T},
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
@@ -197,6 +209,20 @@ function runMCMC!(
     end
 end
 
+"""
+    runMCMC(; kwargs...)
+
+Run a MCMC sampling with the specified keyword arguments. Requires the following keyword arguments:
+- `tracks`: A `Tracks` object representing the tracks of all particle candidates.
+- `msd`: A `MeanSquaredDisplacement` object representing the mean squared displacement of the particles.
+- `brightness`: A `Brightness` object representing the brightness of the particles.
+- `detector`: A `Detector` object representing the detector used to capture the particles.
+- `psf`: A `PointSpreadFunction` object representing the point spread function of the system.
+- `niters`: The number of iterations for the MCMC simulation (default: 1000).
+- `sizelimit`: The maximum size of the chain (default: 1000).
+- `annealing`: An `Annealing` object representing the annealing schedule (default: `ConstantAnnealing{T}(1)`).
+- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`).
+"""
 function runMCMC(;
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
