@@ -1,6 +1,5 @@
 using SP2T
 using JLD2
-using Distributions
 
 metadata = load("./examples/2D/metadata.jld2", "metadata")
 
@@ -40,7 +39,7 @@ tracks = Tracks{FloatType}(
         convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1],
     ),
     max_ntracks = 10,
-    perturbsize = fill(√msd.value, 2),
+    scaling = √msd.value,
     logonprob = -10,
 )
 
@@ -54,6 +53,15 @@ chain = runMCMC(
     sizelimit = 1000,
 );
 
-runMCMC!(chain, tracks, msd, brightness, detector, psf, 100, true);
+runMCMC!(
+    chain = chain,
+    tracks = tracks,
+    msd = msd,
+    brightness = brightness,
+    detector = detector,
+    psf = psf,
+    niters = 100,
+    parametric = true,
+);
 
 jldsave("./examples/2D/chain_cpu.jld2"; chain)

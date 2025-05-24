@@ -33,12 +33,9 @@ detector = SPAD{FloatType}(
 
 msd = 2 * 10 * metadata["period"]
 ntracks = 2
-tracks = simulate!(
-    Array{FloatType}(undef, 2550, 2, ntracks),
-    metadata["pixel size"] ./ 2 .* collect(size(detector)),
-    [0.0, 0.0],
-    msd,
-)
+tracks = Array{FloatType}(undef, 2550, 2, ntracks)
+@views rand!(tracks[1, :, :]) .*= metadata["pixel size"] .* collect(size(detector)) ./ 2
+simulate!(tracks, msd)
 
 brightness = 1e4 * metadata["period"]
 SP2T.simulate_readouts!(
