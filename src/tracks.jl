@@ -30,14 +30,18 @@ end
 
 A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the sames fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of proposals and the number of acceptances.
 """
-struct MHTrackChunk{T<:AbstractFloat,A<:AbstractArray{T},V<:AbstractVector{T}} <:
-       AbstractTrackChunk{T}
+struct MHTrackChunk{
+    T<:AbstractFloat,
+    A<:AbstractArray{T,3},
+    A2<:AbstractArray{T,3},
+    V<:AbstractVector{T},
+} <: AbstractTrackChunk{T}
     value::A
     active::A
     displacement²::A
     effvalue::A
     ΣΔdisplacement²::V
-    scaling::V
+    scaling::A2
     logacceptance::V
     accepted::V
     counter::Matrix{Int}
@@ -56,6 +60,12 @@ function MHTrackChunk(value, active, displacement², effvalue, scaling)
         fill!(similar(value, nframes), 0.0),
         zeros(Int, 2, 2),
     )
+end
+
+function initmh!(t::MHTrackChunk)
+    neglogrand!(t.logacceptance)
+    fill!(t.accepted, false)
+    return t
 end
 
 setacceptance!(t::MHTrackChunk; start::Integer, step::Integer) =
@@ -94,11 +104,11 @@ mutable struct Tracks{
 end
 
 """
-    trackchunks(value::AbstractArray{T,3}, presence::AbstractArray{T,3}, displacement²::AbstractArray{T,3}, effvalue::AbstractArray{T,3}, nemitters::Integer, prior::P)
+    chunks(value::AbstractArray{T,3}, presence::AbstractArray{T,3}, displacement²::AbstractArray{T,3}, effvalue::AbstractArray{T,3}, nemitters::Integer, prior::P)
 
 Construct two `TrackChunk` objects from the provided arrays. The first `TrackChunk` contains the first `nemitters` pages of the input arrays for the on (emitting) particles, while the second `TrackChunk` contains the remaining pages.
 """
-trackchunks(
+chunks(
     value::AbstractArray{T,3},
     presence::AbstractArray{T,3},
     displacement²::AbstractArray{T,3},
@@ -122,7 +132,6 @@ TrackChunk(
 
 function logprior(t::AbstractTrackChunk{T}, msdᵥ::T) where {T}
     setdisplacement²!(t)
-    # diff²!(t.displacement², t.value)
     return -(log(msdᵥ) * length(t.displacement²) + sum(vec(t.displacement²)) / msdᵥ) / 2 -
            logprior(t.prior, view(t.value, 1, :, :))
 end
@@ -131,7 +140,7 @@ function Tracks{T}(;
     guess::AbstractArray{<:Real,3},
     prior::P,
     max_ntracks::Integer,
-    scaling::AbstractVector{<:Real},
+    scaling::Union{<:Real,AbstractArray{<:Real,3}},
     logonprob::Real,
     active::Union{Nothing,AbstractArray{<:Real,3}} = nothing,
 ) where {T,P}
@@ -139,6 +148,8 @@ function Tracks{T}(;
     nframes, ndims, nguesses = size(guess)
     value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
     values = (value, similar(value))
+
+    scaling isa Real && (scaling = fill!(similar(value), scaling))
 
     active = if !isnothing(active)
         dimsmatch(guess, active, dims = 1) || throw(
@@ -168,7 +179,7 @@ function Tracks{T}(;
         Δx²s,
         effs,
         count,
-        trackchunks(value, actives[1], Δx², effs[1], nguesses, prior)...,
+        chunks(value, actives[1], Δx², effs[1], nguesses, prior)...,
         proposals,
     )
 end
@@ -185,68 +196,53 @@ function seteffvalue!(tracks::Tracks, i::Integer = 1)
     return tracks
 end
 
-function reassign_track_parts!(tracks::Tracks{T}) where {T}
-    tracks.onchunk, tracks.offchunk = trackchunks(
-        tracks.value[1],
-        tracks.active[1],
-        tracks.displacement²[1],
-        tracks.effvalue[1],
-        tracks.nemitters.value,
-        tracks.onchunk.prior,
+"""
+    reassign!(t::Tracks{T})
+
+Reassigns the `TrackChunk`s in `t` according the current number of emitting particles.
+"""
+function reassign!(t::Tracks)
+    t.onchunk, t.offchunk = chunks(
+        t.value[1],
+        t.active[1],
+        t.displacement²[1],
+        t.effvalue[1],
+        t.nemitters.value,
+        t.onchunk.prior,
     )
-    return tracks
-end
-
-function reassign_proposals!(tracks::Tracks{T}) where {T}
-    tracks.proposals = @views MHTrackChunk(
-        tracks.value[2][:, :, 1:tracks.nemitters.value],
-        tracks.active[2][:, :, 1:tracks.nemitters.value],
-        tracks.displacement²[2][:, :, 1:tracks.nemitters.value],
-        tracks.effvalue[2][:, :, 1:tracks.nemitters.value],
-        tracks.proposals.ΣΔdisplacement²,
-        tracks.proposals.scaling,
-        tracks.proposals.logacceptance,
-        tracks.proposals.accepted,
-        tracks.proposals.counter,
+    t.proposals = @views MHTrackChunk(
+        t.value[2][:, :, 1:t.nemitters.value],
+        t.active[2][:, :, 1:t.nemitters.value],
+        t.displacement²[2][:, :, 1:t.nemitters.value],
+        t.effvalue[2][:, :, 1:t.nemitters.value],
+        t.proposals.ΣΔdisplacement²,
+        t.proposals.scaling,
+        t.proposals.logacceptance,
+        t.proposals.accepted,
+        t.proposals.counter,
     )
-    return tracks
+    return t
 end
 
-function reassign!(tracks::Tracks)
-    reassign_track_parts!(tracks)
-    reassign_proposals!(tracks)
-    return tracks
-end
+"""
+    simulate!(x::AbstractArray{T,3}, msd::T)
 
+Simulates particle tracks in `x` given the `msd`. `x` should already contains the initial particle positions.
+"""
 function simulate!(x::AbstractArray{T,3}, msd::T) where {T}
     @views _randn!(x[2:end, :, :], √msd)
     cumsum!(x, x, dims = 1)
 end
 
+"""
+    simulate!(x::AbstractArray{T,3}, msd::T, prior)
+
+Simulates particle tracks in `x` given the `msd` and the `prior` for the initial positions.
+"""
 function simulate!(x::AbstractArray{T,3}, msd::T, prior) where {T}
     @views rand!(x[1, :, :], prior)
     simulate!(x, msd)
 end
-
-# function simulate!(
-#     x::AbstractArray{T,3},
-#     μ::AbstractVector{T},
-#     σ::AbstractVector{T},
-#     msd::T,
-# ) where {T}
-#     x[1, :, :] .+= reshape(μ, 1, size(x, 2), :)
-#     simulate!(x, msd)
-# end
-
-# function simulate!(
-#     x::AbstractArray{T,3},
-#     μ::AbstractArray{T,3},
-#     σ::AbstractVector{T},
-#     msd::T,
-# ) where {T}
-#     x[1, :, :] .= μ
-#     simulate!(x, msd)
-# end
 
 function simulate!(tracks::TrackChunk{T}, msdᵥ::T) where {T}
     simulate!(tracks.value, msdᵥ, tracks.prior)
@@ -254,56 +250,44 @@ function simulate!(tracks::TrackChunk{T}, msdᵥ::T) where {T}
 end
 
 function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T}
-    # σ = fill!(similar(x, size(x, 2)), 0)
     @views copyto!(x[1, :, :], -diff(xend, dims = 1)[1, :, :])
     simulate!(x, msd)
     N = size(x, 1) - 1
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
 
-function initmh!(tracks::MHTrackChunk)
-    neglogrand!(tracks.logacceptance)
-    fill!(tracks.accepted, false)
-    return tracks
-end
-
-function propose!(
-    y::AbstractArray{T,3},
-    x::AbstractArray{T,3},
-    σ::AbstractVector{T},
-) where {T}
-    randn!(y)
-    y .= x .+ transpose(σ) .* y
-end
-
 function propose!(proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
-    propose!(proposals.value, tracks.value, proposals.scaling)
+    arw_propose!(
+        proposals.value,
+        tracks.value,
+        view(proposals.scaling, :, :, 1:size(tracks.value, 3)),
+    )
     return proposals
 end
 
-Δlogπ₁(
+Δlogprior₁(
     x₁::AbstractMatrix{T},
     y₁::AbstractMatrix{T},
     μ::AbstractVector{T},
     σ::AbstractVector{T},
 ) where {T} = sum(vec(@. ((x₁ - μ)^2 - (y₁ - μ)^2) / (2 * σ^2)))
 
-Δlogπ₁(x::AbstractArray{T,3}, y::AbstractArray{T,3}, prior::DNormal) where {T} =
-    @views Δlogπ₁(x[1, :, :], y[1, :, :], prior.μ, prior.σ)
+Δlogprior₁(x::AbstractArray{T,3}, y::AbstractArray{T,3}, prior::DNormal{T}) where {T} =
+    @views Δlogprior₁(x[1, :, :], y[1, :, :], prior.μ, prior.σ)
 
-function addΔlogπ₁!(
-    ln𝓇::AbstractVector{T},
+function addΔlogprior₁!(
+    logacceptance::AbstractVector{T},
     x::AbstractArray{T,3},
     y::AbstractArray{T,3},
-    prior::DNormal,
+    prior,
 ) where {T}
-    ln𝓇[1] += Δlogπ₁(x, y, prior)
-    return ln𝓇
+    logacceptance[1] += Δlogprior₁(x, y, prior)
+    return logacceptance
 end
 
-function addΔlogπ₁!(tracksₚ::MHTrackChunk{T,A}, tracksₒ::TrackChunk{T,A}) where {T,A}
-    addΔlogπ₁!(tracksₚ.logacceptance, tracksₒ.value, tracksₚ.value, tracksₒ.prior)
-    return tracksₚ
+function addΔlogprior₁!(tracksᵖ::MHTrackChunk{T,A}, tracksᵒ::TrackChunk{T,A}) where {T,A}
+    addΔlogprior₁!(tracksᵖ.logacceptance, tracksᵒ.value, tracksᵖ.value, tracksᵒ.prior)
+    return tracksᵖ
 end
 
 function staggered_diff²!(
@@ -318,71 +302,62 @@ function staggered_diff²!(
     return Δx²
 end
 
-function countacceptance!(tracks::MHTrackChunk)
-    @views tracks.counter[:, 2] .+= count(>(0), tracks.accepted), length(tracks.accepted)
-    return tracks
+function countacceptance!(t::MHTrackChunk)
+    @views t.counter[:, 2] .+= count(>(0), t.accepted), length(t)
+    return t
 end
 
-function boolcopyto!(
-    dest::AbstractArray{T,3},
-    src::AbstractArray{T,3},
-    i::AbstractVector{T},
-) where {T}
-    @. dest .+= i .* (src .- dest)
-    return dest
-end
-
-function Δlogπ!(
-    logr::AbstractVector{T},
+function Δlogmotion!(
+    Δ::AbstractVector{T},
     idx1::StepRange,
     idx2::StepRange,
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
-    @views copyto!(logr[idx1], ΣΔΔx²[idx1])
-    @views logr[idx2.+1] .+= ΣΔΔx²[idx2]
-    return logr
+    @views copyto!(Δ[idx1], ΣΔΔx²[idx1])
+    @views Δ[idx2.+1] .+= ΣΔΔx²[idx2]
+    return Δ
 end
 
 function sumΔdisplacement²!(
-    tracksₚ::MHTrackChunk{T},
-    tracksₒ::TrackChunk{T},
+    tracksᵒ::MHTrackChunk{T},
+    tracksᵖ::TrackChunk{T},
     msdᵥ::T,
 ) where {T}
-    tracksₚ.displacement² .-= tracksₒ.displacement²
-    sum!(tracksₚ.ΣΔdisplacement², tracksₚ.displacement²)
-    tracksₚ.ΣΔdisplacement² ./= -2 * msdᵥ
-    return tracksₚ
+    tracksᵒ.displacement² .-= tracksᵖ.displacement²
+    sum!(tracksᵒ.ΣΔdisplacement², tracksᵒ.displacement²)
+    tracksᵒ.ΣΔdisplacement² ./= -2 * msdᵥ
+    return tracksᵒ
 end
 
-function Δlogπ!(
-    Δlogπ::AbstractVector{T},
-    tracksₒ::TrackChunk{T},
-    tracksₚ::MHTrackChunk{T},
+function Δlogmotion!(
+    Δ::AbstractVector{T},
+    tracksᵒ::TrackChunk{T},
+    tracksᵖ::MHTrackChunk{T},
     msdᵥ::T,
     i::Integer,
 ) where {T}
-    setdisplacement²!(tracksₒ)
+    setdisplacement²!(tracksᵒ)
     if i == 1
-        staggered_diff²!(tracksₚ.displacement², even = tracksₒ.value, odd = tracksₚ.value)
+        staggered_diff²!(tracksᵖ.displacement², even = tracksᵒ.value, odd = tracksᵖ.value)
     else
-        staggered_diff²!(tracksₚ.displacement², even = tracksₚ.value, odd = tracksₒ.value)
+        staggered_diff²!(tracksᵖ.displacement², even = tracksᵖ.value, odd = tracksᵒ.value)
     end
-    sumΔdisplacement²!(tracksₚ, tracksₒ, msdᵥ)
-    nsteps = length(tracksₚ.ΣΔdisplacement²)
-    Δlogπ!(Δlogπ, i:2:nsteps, mod1(i + 1, 2):2:nsteps, tracksₚ.ΣΔdisplacement²)
+    sumΔdisplacement²!(tracksᵖ, tracksᵒ, msdᵥ)
+    nsteps = length(tracksᵖ) - 1
+    Δlogmotion!(Δ, i:2:nsteps, mod1(i + 1, 2):2:nsteps, tracksᵖ.ΣΔdisplacement²)
 end
 
 function update!(
-    tracksₒ::TrackChunk{T},
-    tracksₚ::MHTrackChunk{T},
+    tracksᵒ::TrackChunk{T},
+    tracksᵖ::MHTrackChunk{T},
     msdᵥ::T,
-    Δlogℒ::AbstractVector{T},
+    Δloglikelihood::AbstractVector{T},
     i::Integer,
 ) where {T}
-    Δlogπ!(Δlogℒ, tracksₒ, tracksₚ, msdᵥ, i)
-    @views tracksₚ.logacceptance[i:2:end] .+= Δlogℒ[i:2:end]
-    setacceptance!(tracksₚ, start = i, step = 2)
-    boolcopyto!(tracksₒ.value, tracksₚ.value, tracksₚ.accepted)
+    Δlogmotion!(Δloglikelihood, tracksᵒ, tracksᵖ, msdᵥ, i) # add motion model contribution to Δloglikelihood
+    @views tracksᵖ.logacceptance[i:2:end] .+= Δloglikelihood[i:2:end] # add Δlogposterior to log acceptance ratio
+    setacceptance!(tracksᵖ, start = i, step = 2) # set acceptance flag for given frame indices
+    boolcopyto!(tracksᵒ.value, tracksᵖ.value, tracksᵖ.accepted) # copy accepted values to the chunk
 end
 
 function update_onchunk!(
@@ -394,25 +369,24 @@ function update_onchunk!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    tracksₒ = tracks.onchunk
-    tracksₚ = tracks.proposals
-    initmh!(tracksₚ)
-    propose!(tracksₚ, tracksₒ)
-    seteffvalue!(tracksₒ)
-    seteffvalue!(tracksₚ)
+    tracksᵒ, tracksᵖ = tracks.onchunk, tracks.proposals # rename for clarity
+    initmh!(tracksᵖ)
+    propose!(tracksᵖ, tracksᵒ)
+    seteffvalue!(tracksᵒ)
+    seteffvalue!(tracksᵖ)
     set_poisson_means!(
         llarray,
         detector,
-        tracksₒ.effvalue,
-        tracksₚ.effvalue,
+        tracksᵒ.effvalue,
+        tracksᵖ.effvalue,
         brightnessᵥ,
         psf,
     )
     set_frame_Δloglikelihood!(llarray, detector)
-    tracksₚ.logacceptance .+= anneal!(llarray.frame, 𝑇)
-    addΔlogπ₁!(tracksₚ, tracksₒ)
-    update!(tracksₒ, tracksₚ, msdᵥ, llarray.frame, 1)
-    update!(tracksₒ, tracksₚ, msdᵥ, llarray.frame, 2)
-    countacceptance!(tracksₚ)
-    return tracksₒ
+    tracksᵖ.logacceptance .+= anneal!(llarray.frame, 𝑇)
+    addΔlogprior₁!(tracksᵖ, tracksᵒ)
+    update!(tracksᵒ, tracksᵖ, msdᵥ, llarray.frame, 1) # update particle positions at odd frame indices
+    update!(tracksᵒ, tracksᵖ, msdᵥ, llarray.frame, 2) # update particle positions at even frame indices
+    countacceptance!(tracksᵖ)
+    return tracksᵒ
 end
