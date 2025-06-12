@@ -41,7 +41,7 @@ tracks = Tracks{FloatType}(
         CuArray{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10]),
     ),
     max_ntracks = 10,
-    perturbsize = CUDA.fill(√msd.value, 2),
+    scaling = √msd.value,
     logonprob = -10,
 )
 

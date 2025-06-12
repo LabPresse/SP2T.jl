@@ -1,6 +1,5 @@
 using SP2T
 using JLD2
-using Distributions
 
 metadata = load("./examples/EMCCD/metadata.jld2", "metadata")
 
@@ -40,10 +39,10 @@ tracks = Tracks{FloatType}(
     guess = zeros(nframes, 2, 1),
     prior = DNormal{FloatType}(
         collect(detector.framecenter),
-        convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1],
+        convert(FloatType, metadata["pixel size"]) * 20 .* [1, 1],
     ),
     max_ntracks = 10,
-    perturbsize = fill(√msd.value, 2),
+    scaling = √msd.value,
     logonprob = -10,
 )
 

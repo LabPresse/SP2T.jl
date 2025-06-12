@@ -34,7 +34,7 @@ detector = SPAD{FloatType}(
 msd = 2 * 10 * metadata["period"]
 ntracks = 2
 tracks = Array{FloatType}(undef, 2550, 2, ntracks)
-@views rand!(tracks[1, :, :]) .*= metadata["pixel size"] .* collect(size(detector)) ./ 2
+@views rand!(tracks[1, :, :]) .*= metadata["pixel size"] .* collect(size(detector))
 simulate!(tracks, msd)
 
 brightness = 1e4 * metadata["period"]

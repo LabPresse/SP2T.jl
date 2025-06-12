@@ -2,7 +2,7 @@ using SP2T
 using Random
 using JLD2
 
-Random.seed!(9)
+Random.seed!(1)
 FloatType = Float64
 
 metadata = Dict{String,Any}(
@@ -35,12 +35,9 @@ detector = EMCCD{FloatType}(
 
 msd = 2 * 0.1 * metadata["period"]
 ntracks = 2
-tracks = simulate!(
-    Array{FloatType}(undef, 5, 2, ntracks),
-    metadata["pixel size"] ./ 2 .* collect(size(detector)),
-    [0.3, 0.3],
-    msd,
-)
+tracks = Array{FloatType}(undef, 5, 2, ntracks)
+@views rand!(tracks[1, :, :]) .*= metadata["pixel size"] .* collect(size(detector))
+simulate!(tracks, msd)
 
 brightness = 20 * metadata["period"]
 SP2T.simulate_readouts!(

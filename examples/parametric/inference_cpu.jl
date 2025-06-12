@@ -1,6 +1,5 @@
 using SP2T
 using JLD2
-using Distributions
 
 metadata = load("./examples/parametric/metadata.jld2", "metadata")
 
@@ -41,7 +40,7 @@ tracks = Tracks{FloatType}(
         convert(FloatType, metadata["pixel size"]) * 10 .* [1, 1],
     ),
     max_ntracks = 10,
-    perturbsize = fill(√msd.value, 2),
+    scaling = √msd.value,
     logonprob = -10,
 )
 

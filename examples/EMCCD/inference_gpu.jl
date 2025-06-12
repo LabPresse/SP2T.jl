@@ -1,6 +1,5 @@
 using SP2T
 using JLD2
-using Distributions
 using CUDA
 
 metadata = load("./examples/EMCCD/metadata.jld2", "metadata")
@@ -44,7 +43,7 @@ tracks = Tracks{FloatType}(
         CuArray{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10]),
     ),
     max_ntracks = 10,
-    perturbsize = CUDA.fill(√msd.value, 2),
+    scaling = CUDA.fill(√msd.value, 2),
     logonprob = -10,
 )
 
