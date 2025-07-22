@@ -49,13 +49,12 @@ function Base.getproperty(c::Chain, s::Symbol)
         return [size(sample.tracks, 3) for sample in getfield(c, :samples)]
     elseif s === :lasttracks
         return c.samples[end].tracks
-    elseif s === :logposterior
+    elseif s === :logposteriors
         return [sample.log𝒫 for sample in getfield(c, :samples)]
-    elseif s === :loglikelihood
+    elseif s === :loglikelihoods
         return [sample.logℒ for sample in getfield(c, :samples)]
-    elseif s === :stride
-        return length(getfield(c, :samples)) == 1 ? 1 :
-               getfield(c, :samples)[2].iteration - getfield(c, :samples)[1].iteration
+    elseif s === :iterations
+        return [sample.iteration for sample in getfield(c, :samples)]
     else
         return getfield(c, s)
     end
@@ -64,6 +63,12 @@ end
 Base.length(c::Chain) = length(c.samples)
 
 isfull(chain::Chain) = length(chain.samples) == chain.sizelimit
+
+savestride(chain::Chain) =
+    length(chain) == 1 ? 1 :
+    chain.samples[2].iteration - chain.samples[1].iteration + isfull(chain)
+
+tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 
 findmap(chain::Chain; burn_in::Real = 0) = @views findmax(chain.logposterior[burn_in+1:end])
 
@@ -88,15 +93,12 @@ function extend!(
     iter::Integer,
     𝑇::T,
 ) where {T}
-    if iter % chain.stride == 0
-        loglikelihood = get_loglikelihood!(llarray, tracks, brightness, detector, psf)
-        logposterior = get_logposterior(loglikelihood, tracks, msd)
-        push!(
-            chain.samples,
-            Sample(tracks.onchunk, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
-        )
-        isfull(chain) && shrink!(chain)
-    end
+    loglikelihood = get_loglikelihood!(llarray, tracks, brightness, detector, psf)
+    logposterior = get_logposterior(loglikelihood, tracks, msd)
+    push!(
+        chain.samples,
+        Sample(tracks.onchunk, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
+    )
     return chain
 end
 
@@ -205,7 +207,10 @@ function runMCMC!(;
     @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
         nextsample!(tracks, msd, brightness, llarray, detector, psf, 𝑇)
-        extend!(chain, tracks, msd, brightness, llarray, detector, psf, iter, 𝑇)
+        if tosave(chain, iter)
+            isfull(chain) && shrink!(chain)
+            extend!(chain, tracks, msd, brightness, llarray, detector, psf, iter, 𝑇)
+        end
     end
 end
 
