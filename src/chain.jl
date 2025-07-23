@@ -60,13 +60,13 @@ function Base.getproperty(c::Chain, s::Symbol)
     end
 end
 
-Base.length(c::Chain) = length(c.samples)
+Base.length(chain::Chain) = length(chain.samples)
 
-isfull(chain::Chain) = length(chain.samples) == chain.sizelimit
+isfull(chain::Chain) = length(chain) == chain.sizelimit
 
 savestride(chain::Chain) =
     length(chain) == 1 ? 1 :
-    chain.samples[2].iteration - chain.samples[1].iteration + isfull(chain)
+    (chain.samples[2].iteration - chain.samples[1].iteration) * 2^isfull(chain)
 
 tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 
