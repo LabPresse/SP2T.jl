@@ -49,10 +49,6 @@ function Base.getproperty(c::Chain, s::Symbol)
         return [size(sample.tracks, 3) for sample in getfield(c, :samples)]
     elseif s === :lasttracks
         return c.samples[end].tracks
-    elseif s === :logposteriors
-        return [sample.log𝒫 for sample in getfield(c, :samples)]
-    elseif s === :loglikelihoods
-        return [sample.logℒ for sample in getfield(c, :samples)]
     elseif s === :iterations
         return [sample.iteration for sample in getfield(c, :samples)]
     else
@@ -70,10 +66,15 @@ savestride(chain::Chain) =
 
 tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 
-findmap(chain::Chain; burn_in::Real = 0) = @views findmax(chain.logposterior[burn_in+1:end])
+loglikelihoods(chain::Chain; burn_in::Real = 0) =
+    @views [s.logℒ for s in chain.samples[burn_in+1:end]]
 
-findmle(chain::Chain; burn_in::Real = 0) =
-    @views findmax(chain.loglikelihood[burn_in+1:end])
+logposteriors(chain::Chain; burn_in::Real = 0) =
+    @views [s.log𝒫 for s in chain.samples[burn_in+1:end]]
+
+findmap(chain::Chain; burn_in::Real = 0) = findmax(logposteriors(chain; burn_in = burn_in))
+
+findmle(chain::Chain; burn_in::Real = 0) = findmax(loglikelihoods(chain; burn_in = burn_in))
 
 function shrink!(chain::Chain)
     deleteat!(chain.samples, 2:2:lastindex(chain.samples))

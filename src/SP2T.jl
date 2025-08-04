@@ -26,7 +26,8 @@ export Tracks,
     SPAD,
     EMCCD
 
-export simulate!, bridge!, runMCMC!, runMCMC
+export simulate!,
+    bridge!, runMCMC!, runMCMC, findmap, findmle, loglikelihoods, logposteriors
 
 include("base.jl")
 include("distributions.jl")
