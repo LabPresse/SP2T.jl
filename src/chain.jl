@@ -40,6 +40,18 @@ mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:Annealing{T}}
     annealing::A
 end
 
+Base.propertynames(::Chain) = (
+    fieldnames(Chain),
+    :msds,
+    :brightnesses,
+    :emittercounts,
+    :lasttracks,
+    :iterations,
+    :loglikelihoods,
+    :logposteriors,
+    :savestride,
+)
+
 function Base.getproperty(c::Chain, s::Symbol)
     if s === :msds
         return [sample.diffusivity for sample in getfield(c, :samples)]
@@ -51,6 +63,12 @@ function Base.getproperty(c::Chain, s::Symbol)
         return c.samples[end].tracks
     elseif s === :iterations
         return [sample.iteration for sample in getfield(c, :samples)]
+    elseif s === :loglikelihoods
+        return [sample.logℒ for sample in getfield(c, :samples)]
+    elseif s === :logposteriors
+        return [sample.log𝒫 for sample in getfield(c, :samples)]
+    elseif s === :savestride
+        return savestride(c)
     else
         return getfield(c, s)
     end
@@ -66,15 +84,15 @@ savestride(chain::Chain) =
 
 tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 
-loglikelihoods(chain::Chain; burn_in::Real = 0) =
-    @views [s.logℒ for s in chain.samples[burn_in+1:end]]
+function findmap(chain::Chain; burn_in::Real = 0)
+    ~, i = findmax(chain.logposteriors[burn_in+1:end])
+    return chain.samples[i+burn_in], i + burn_in
+end
 
-logposteriors(chain::Chain; burn_in::Real = 0) =
-    @views [s.log𝒫 for s in chain.samples[burn_in+1:end]]
-
-findmap(chain::Chain; burn_in::Real = 0) = findmax(logposteriors(chain; burn_in = burn_in))
-
-findmle(chain::Chain; burn_in::Real = 0) = findmax(loglikelihoods(chain; burn_in = burn_in))
+function findmle(chain::Chain; burn_in::Real = 0)
+    ~, i = findmax(chain.loglikelihoods[burn_in+1:end])
+    return chain.samples[i+burn_in], i + burn_in
+end
 
 function shrink!(chain::Chain)
     deleteat!(chain.samples, 2:2:lastindex(chain.samples))
