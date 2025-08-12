@@ -94,6 +94,15 @@ function findmle(chain::Chain; burn_in::Real = 0)
     return chain.samples[i+burn_in], i + burn_in
 end
 
+jumpdistances(tracks::AbstractArray{<:Real}) = sqrt.(sum(diff(tracks, dims=1) .^ 2, dims=2))
+function jumpdistances(chain::Chain{T}; burn_in::Integer=0) where {T}
+    d = Vector{T}()
+    for i in burn_in+1:length(chain)
+        append!(d, vec(jumpdistances(chain.samples[i].tracks)))
+    end
+    d
+end
+
 function shrink!(chain::Chain)
     deleteat!(chain.samples, 2:2:lastindex(chain.samples))
     return chain
