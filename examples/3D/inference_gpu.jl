@@ -43,7 +43,7 @@ x = Tracks{FloatType}(
         CuArray([detector.framecenter..., 0]),
         CuArray{FloatType}([metadata["pixel size"] * 10, metadata["pixel size"] * 10, 0.5]),
     ),
-    scaling = CUDA.fill(√msd.value, 3),
+    scaling = √msd.value,
 )
 
 chain = runMCMC(

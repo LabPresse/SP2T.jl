@@ -16,10 +16,10 @@ function CircularGaussian{T}(;
     numerical_aperture::Real,
     refractive_index::Real,
     emission_wavelength::Real,
-    pixels_size::Real,
+    pixel_size::Real,
 ) where {T<:AbstractFloat}
     σ, ~ = getσ₀z₀(numerical_aperture, refractive_index, emission_wavelength)
-    return CircularGaussian{T}(σ, pixels_size)
+    return CircularGaussian{T}(σ, pixel_size)
 end
 
 struct CircularGaussianLorentzian{T} <: GaussianPSF{T}
@@ -37,10 +37,10 @@ function CircularGaussianLorentzian{T}(;
     numerical_aperture::Real,
     refractive_index::Real,
     emission_wavelength::Real,
-    pixels_size::Real,
+    pixel_size::Real,
 ) where {T<:AbstractFloat}
     σ₀, z₀ = getσ₀z₀(numerical_aperture, refractive_index, emission_wavelength)
-    return CircularGaussianLorentzian{T}(σ₀, z₀, pixels_size)
+    return CircularGaussianLorentzian{T}(σ₀, z₀, pixel_size)
 end
 
 function getσ₀z₀(na::Real, nᵣ::Real, λ::Real)
@@ -107,4 +107,15 @@ function _erf!(
     𝐗 .= (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) .* σ)
     @views psfx .= erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
     return psfx
+end
+
+function _integrate(psf::CircularGaussian{T}, pxsize::Real) where {T<:Real}
+    halfwidth = ceil(Int, 10 * psf.σ / pxsize - 0.5)
+    fulllength = halfwidth * 2 + 1
+    bounds = (-halfwidth-0.5:halfwidth+0.5) .* pxsize
+    x = zeros(promote_type(T, typeof(pxsize)), 1, 2, 1)
+    testframe = zeros(promote_type(T, typeof(pxsize)), fulllength, fulllength, 1)
+    U = _erf(x[:, 1:1, 1:1], bounds, psf.σ)
+    batched_mul!(testframe, U, batched_transpose(U))
+    return testframe
 end

@@ -17,7 +17,7 @@ psf = CircularGaussian{FloatType}(
     numerical_aperture = metadata["numerical aperture"],
     refractive_index = metadata["refractive index"],
     emission_wavelength = metadata["wavelength"],
-    pixels_size = metadata["pixel size"],
+    pixel_size = metadata["pixel size"],
 )
 
 msd = MeanSquaredDisplacement{FloatType}(
