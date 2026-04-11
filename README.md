@@ -82,5 +82,6 @@ If this code is useful for your research, please cite the relevant preprint(s):
 
 - **SP²T** — for the 1-bit formulation: https://doi.org/10.1101/2025.01.10.632389  
 - **QTrack** — for the generalized finite-bit formulation: https://doi.org/10.1101/2025.05.30.657103
+  - The data and code for generating the figures in this paper can be found here: https://github.com/LabPresse/qtrack-paper-figures
 
 
