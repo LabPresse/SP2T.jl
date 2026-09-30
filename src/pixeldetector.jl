@@ -48,6 +48,7 @@ function sum_pixel_loglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
 ) where {T}
+    @. llarray.pixel = ifelse(iszero(detector.filter), zero(T), llarray.pixel)
     framesum!(llarray.frame, llarray.pixel, detector.filter)
     return llarray
 end
@@ -182,8 +183,13 @@ function set_poisson_means!(
     psf::PointSpreadFunction{T},
 ) where {T}
     set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₁, psf, 1)
-    llarray.means[2] .=
-        (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁)
+    if iszero(brightnessᵥ₁)
+        set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₂, psf, 2)
+    else
+        llarray.means[2] .=
+            (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁) .+
+            detector.darkcounts
+    end
     return llarray
 end
 

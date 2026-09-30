@@ -1,6 +1,11 @@
 using SP2T
 using Test
 
+include("sampler_regressions.jl")
+include("score_regressions.jl")
+include("detector_regressions.jl")
+include("activity_regressions.jl")
+
 println("Running PSF-related tests...")
 
 @test SP2T.gaussianpeak(0.09890858623710756, 0.133) ≈ 0.2486333227348026

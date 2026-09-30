@@ -35,13 +35,33 @@ function SPAD{T}(;
     )
 end
 
+# Keep the hit probability accurate near zero and at saturation.
+_spad_log_hit(mean::T) where {T} =
+    mean <= log(T(2)) ? log(-expm1(-mean)) : log1p(-exp(-mean))
+
+function _spad_loglikelihood(readout, batchsize, mean::T) where {T}
+    hits = iszero(readout) ? zero(T) : readout * _spad_log_hit(mean)
+    misses = readout == batchsize ? zero(T) : (batchsize - readout) * mean
+    return hits - misses
+end
+
+function _spad_Δloglikelihood(readout, batchsize, oldmean::T, newmean::T) where {T}
+    hits = iszero(readout) ? zero(T) :
+           readout * (_spad_log_hit(newmean) - _spad_log_hit(oldmean))
+    misses = readout == batchsize ? zero(T) :
+             (batchsize - readout) * (newmean - oldmean)
+    return hits - misses
+end
+
 function set_pixel_loglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
-    @. llarray.pixel =
-        detector.readouts * logexpm1(llarray.means[1]) -
-        detector.batchsize * llarray.means[1]
+    @. llarray.pixel = _spad_loglikelihood(
+        detector.readouts,
+        detector.batchsize,
+        llarray.means[1],
+    )
     return llarray
 end
 
@@ -49,9 +69,12 @@ function set_pixel_Δloglikelihood!(
     Δllarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
-    @. Δllarray.pixel =
-        detector.readouts * (logexpm1(Δllarray.means[2]) - logexpm1(Δllarray.means[1])) -
-        detector.batchsize * (Δllarray.means[2] - Δllarray.means[1])
+    @. Δllarray.pixel = _spad_Δloglikelihood(
+        detector.readouts,
+        detector.batchsize,
+        Δllarray.means[1],
+        Δllarray.means[2],
+    )
     return Δllarray
 end
 
