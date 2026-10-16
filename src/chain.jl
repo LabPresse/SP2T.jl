@@ -84,15 +84,38 @@ savestride(chain::Chain) =
 
 tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 
-function findmap(chain::Chain; burn_in::Real = 0)
-    ~, i = findmax(chain.logposteriors[burn_in+1:end])
-    return chain.samples[i+burn_in], i + burn_in
+function _findbest(chain::Chain, scorefield::Symbol, burn_in::Real)
+    isinteger(burn_in) && 0 <= burn_in < length(chain) || throw(
+        ArgumentError("burn_in must be a nonnegative whole number smaller than the number of samples"),
+    )
+    best_index = 0
+    best_score = -Inf
+    for i in Int(burn_in)+1:length(chain)
+        score = getproperty(chain.samples[i], scorefield)
+        if isfinite(score) && (best_index == 0 || score > best_score)
+            best_index, best_score = i, score
+        end
+    end
+    best_index > 0 || throw(ArgumentError("no finite $(scorefield) scores remain after burn-in"))
+    return chain.samples[best_index], best_index
 end
 
-function findmle(chain::Chain; burn_in::Real = 0)
-    ~, i = findmax(chain.loglikelihoods[burn_in+1:end])
-    return chain.samples[i+burn_in], i + burn_in
-end
+"""
+    findmap(chain::Chain; burn_in::Real = 0)
+
+Return the sample and index with the largest finite posterior score. `burn_in`
+skips stored samples. Scores are densities in the input coordinate units, not
+marginal probabilities of emitter counts.
+"""
+findmap(chain::Chain; burn_in::Real = 0) = _findbest(chain, :log𝒫, burn_in)
+
+"""
+    findmle(chain::Chain; burn_in::Real = 0)
+
+Return the sample and index with the largest finite likelihood score. `burn_in`
+skips stored samples.
+"""
+findmle(chain::Chain; burn_in::Real = 0) = _findbest(chain, :logℒ, burn_in)
 
 jumpdistances(tracks::AbstractArray{<:Real}) = sqrt.(sum(diff(tracks, dims=1) .^ 2, dims=2))
 function jumpdistances(chain::Chain{T}; burn_in::Integer=0) where {T}
@@ -122,7 +145,7 @@ function extend!(
     𝑇::T,
 ) where {T}
     loglikelihood = get_loglikelihood!(llarray, tracks, brightness, detector, psf)
-    logposterior = get_logposterior(loglikelihood, tracks, msd)
+    logposterior = get_logposterior(loglikelihood, tracks, msd, brightness)
     push!(
         chain.samples,
         Sample(tracks.onchunk, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
@@ -146,10 +169,12 @@ get_logposterior(
     loglikelihood::T,
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
 ) where {T} =
     loglikelihood +
     logprior(tracks.onchunk, msd.value) +
     logprior(msd) +
+    logprior(brightness) +
     logprior(tracks.nemitters)
 
 function parametricMCMC!(
@@ -268,7 +293,14 @@ function runMCMC(;
     parametric::Bool = false,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
-    chain = Chain([Sample(tracks.onchunk, msd, brightness)], sizelimit, annealing)
+    llarray = LogLikelihoodArray{T}(detector.readouts)
+    loglikelihood = get_loglikelihood!(llarray, tracks, brightness, detector, psf)
+    logposterior = get_logposterior(loglikelihood, tracks, msd, brightness)
+    initial = Sample(
+        tracks.onchunk, msd, brightness, 0, temperature(annealing, 0),
+        logposterior, loglikelihood,
+    )
+    chain = Chain([initial], sizelimit, annealing)
     runMCMC!(
         chain = chain,
         tracks = tracks,

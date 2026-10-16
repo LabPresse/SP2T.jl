@@ -74,11 +74,20 @@ setacceptance!(t::MHTrackChunk; start::Integer, step::Integer) =
 """
     seteffvalue!(tracks::AbstractTrackChunk{T})
 
-Set the effective value of the track chunk. The effective value is calculated as `value / active`. Note that `effvalue == value` when `active` is 1, and `effvalue == Inf` (a particle is infinitely far away so cannot contribute any photons) when `active` is 0. Currently, `active` should ONLY be used in parametric runs.
+Set the effective positions used by the detector. Inactive emitters have infinite lateral coordinates and zero axial coordinates, so they contribute no photons. Currently, `active` should ONLY be used in parametric runs.
 """
 function seteffvalue!(tracks::AbstractTrackChunk{T}) where {T}
-    @. tracks.effvalue = tracks.value / tracks.active
+    seteffvalue!(tracks.effvalue, tracks.value, tracks.active)
     return tracks
+end
+
+function seteffvalue!(effective::AbstractArray{T,3}, value::AbstractArray{T,3}, active::AbstractArray{T,3}) where {T}
+    @. effective = ifelse(iszero(active), T(Inf), value)
+    # Keep the 3D PSF width finite when an emitter is inactive.
+    if size(value, 2) >= 3
+        @views @. effective[:, 3:end, :] = ifelse(iszero(active[:, 3:end, :]), zero(T), value[:, 3:end, :])
+    end
+    return effective
 end
 
 """
@@ -132,8 +141,10 @@ TrackChunk(
 
 function logprior(t::AbstractTrackChunk{T}, msdᵥ::T) where {T}
     setdisplacement²!(t)
-    return -(log(msdᵥ) * length(t.displacement²) + sum(vec(t.displacement²)) / msdᵥ) / 2 -
-           logprior(t.prior, view(t.value, 1, :, :))
+    # Keep Gaussian normalizers because the number of emitters can change.
+    return -((log(msdᵥ) + log(T(2π))) * length(t.displacement²) +
+             sum(vec(t.displacement²)) / msdᵥ) / 2 +
+           logprior(t.prior, view(t.value, 1, :, :); normalization = true)
 end
 
 function Tracks{T}(;
@@ -151,17 +162,17 @@ function Tracks{T}(;
 
     scaling isa Real && (scaling = fill!(similar(value), scaling))
 
-    active = if !isnothing(active)
-        dimsmatch(guess, active, dims = 1) || throw(
-            DimensionMismatch(
-                "size of guess dose not match size of presence in the first dimension",
-            ),
-        )
-        _resize3(active, max_ntracks)
-    else
-        fill!(similar(value, nframes, ndims, max_ntracks), true)
+    activity = fill!(similar(value), one(T))
+    if !isnothing(active)
+        size(active, 1) == nframes && size(active, 2) in (1, ndims) &&
+            size(active, 3) == nguesses || throw(DimensionMismatch("activity must match the guessed frames and emitters"))
+        all(x -> iszero(x) || isone(x), active) || throw(ArgumentError("activity must be binary"))
+        @views activity[:, :, 1:nguesses] .= active
+        @views all(activity[:, :, 1:nguesses] .== activity[:, 1:1, 1:nguesses]) ||
+            throw(ArgumentError("activity must agree across coordinates"))
     end
-    actives = (active, fill!(similar(active), true))
+    active = activity
+    actives = (active, copy(active))
     Δx² = similar(value, nframes - 1, ndims, max_ntracks)
     Δx²s = (Δx², similar(Δx²))
     effs = (similar(value), similar(value))
@@ -192,7 +203,7 @@ function setdisplacement²!(tracks::Tracks, i::Integer = 1)
 end
 
 function seteffvalue!(tracks::Tracks, i::Integer = 1)
-    @. tracks.effvalue[i] = tracks.value[i] / tracks.active[i]
+    seteffvalue!(tracks.effvalue[i], tracks.value[i], tracks.active[i])
     return tracks
 end
 
@@ -257,6 +268,7 @@ function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where 
 end
 
 function propose!(proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
+    copyto!(proposals.active, tracks.active)
     arw_propose!(
         proposals.value,
         tracks.value,
@@ -313,6 +325,8 @@ function Δlogmotion!(
     idx2::StepRange,
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
+    # The last frame has no outgoing edge to overwrite a reused likelihood buffer.
+    fill!(Δ, zero(T))
     @views copyto!(Δ[idx1], ΣΔΔx²[idx1])
     @views Δ[idx2.+1] .+= ΣΔΔx²[idx2]
     return Δ
@@ -388,5 +402,6 @@ function update_onchunk!(
     update!(tracksᵒ, tracksᵖ, msdᵥ, llarray.frame, 1) # update particle positions at odd frame indices
     update!(tracksᵒ, tracksᵖ, msdᵥ, llarray.frame, 2) # update particle positions at even frame indices
     countacceptance!(tracksᵖ)
+    seteffvalue!(tracksᵒ)
     return tracksᵒ
 end

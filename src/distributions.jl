@@ -19,7 +19,12 @@ end
 
 Distributions.params(P::DNormal) = P.μ, P.σ
 
-logprior(ℕ::DNormal{T}, x::AbstractArray{T}) where {T} =
-    sum(vec(@. -(x - ℕ.μ)^2 / (2 * ℕ.σ^2)))
+function logprior(ℕ::DNormal{T}, x::AbstractArray{T}; normalization::Bool = false) where {T}
+    quadratic = sum(vec(@. -(x - ℕ.μ)^2 / (2 * ℕ.σ^2)))
+    normalization || return quadratic
+    ndims = length(ℕ.μ)
+    npoints = length(x) ÷ ndims
+    return quadratic - npoints * (sum(log, ℕ.σ) + ndims * log(T(2π)) / 2)
+end
 
 Random.rand!(x::AbstractVecOrMat{T}, P::DNormal{T}) where {T} = _randn!(x, P.μ, P.σ)

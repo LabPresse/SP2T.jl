@@ -37,7 +37,8 @@ logprior(msd::MeanSquaredDisplacement; normalization::Bool = false) =
 """
     update!(msd::MeanSquaredDisplacement{T}, displacement²::AbstractArray{T,3}, 𝑇::T)
 
-Directly sample `msd`'s new value from its posterior given the `displacement²` array and the temperature `𝑇`.
+Directly sample `msd`'s new value from its posterior given the `displacement²` array.
+Only the detector likelihood is tempered, so this conditional does not depend on `𝑇`.
 """
 function update!(
     msd::MeanSquaredDisplacement{T},
@@ -45,7 +46,7 @@ function update!(
     𝑇::T,
 ) where {T}
     isfixed(msd) && return msd
-    Δparams = (length(displacement²), sum(vec(displacement²))) ./ (2 * 𝑇) #* sum(vec(displacement²))) as summing vec is currently faster using CUDA.jl
+    Δparams = (length(displacement²), sum(vec(displacement²))) ./ (2 * one(T))
     msd.value = _rand(msd.prior, Δparams)
     return msd
 end
