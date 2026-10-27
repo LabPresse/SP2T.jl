@@ -26,7 +26,7 @@ EmitterCount{T}(
 
 function Base.getproperty(n::EmitterCount, s::Symbol)
     if s == :limit
-        return length(getfield(n, :log𝒫)) - 1
+        return length(getfield(n, :likelihood)) - 1
     elseif s == :logprior
         return n.prior
     elseif s == :loglikelihood

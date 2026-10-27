@@ -34,7 +34,7 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
 | `src/annealing.jl` | `ConstantAnnealing`, `PolynomialAnnealing`, `temperature` |
 | `src/chain.jl` | `Sample`, `Chain` (halved when full), `findmap`, `findmle`, `jumpdistances`, `runMCMC`, `runMCMC!`, parametric and nonparametric sweeps |
 | `ext/` | `SP2TCUDAExt`: `CuArray` methods of internal functions that would otherwise index scalars |
-| `test/runtests.jl` | The test suite (PSF only, see Testing) |
+| `test/runtests.jl` | The test suite (see Testing) |
 | `examples/<case>/` | `simulation.jl` writes `frames`, `groundtruth` and `metadata` `.jld2`; `inference_cpu.jl` and `inference_gpu.jl` fit them. `examples/darkcounts.jld2` is shared. Run from the package root; they need JLD2, Distributions and CUDA, which are not package dependencies |
 | `backup/`, `extra/`, `data/`, `benchmarks/`, `test/scrach*.jl`, `note.md` | Scratch, gitignored |
 
@@ -65,7 +65,7 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
 
 ## Testing
 
-- `Pkg.test()` runs and passes. `test/runtests.jl` checks only the PSF: `SP2T.gaussianpeak`, `CircularGaussian`'s `A` and `σ`, and `SP2T.getσ₀z₀`, against fixed reference values. Detectors, likelihoods, samplers and `runMCMC` have no tests.
+- `Pkg.test()` runs and passes. `test/runtests.jl` checks the PSF (`SP2T.gaussianpeak`, `CircularGaussian`'s `A` and `σ`, and `SP2T.getσ₀z₀`) against fixed reference values, and the derived properties of `EmitterCount` (`limit` equals the weak limit) and `Chain` (every name in `propertynames` is a `Symbol` that `getproperty` accepts). Detectors, likelihoods, samplers and `runMCMC` have no tests.
 - Test dependencies: Test only. The tests use fixed inputs, no RNG and no data files.
 - Tests run on CPU arrays; CI has no GPU, so `ext/` is untested.
 - New sampler or fit tests: use a `StableRNG` seed (not yet a test dependency; ask first) or fixed data, and assert against a known ground truth with a tolerance derived from the noise, not tuned to current output.

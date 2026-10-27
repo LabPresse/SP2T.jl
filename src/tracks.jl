@@ -82,7 +82,7 @@ function seteffvalue!(tracks::AbstractTrackChunk{T}) where {T}
 end
 
 """
-    Tracks{T<:AbstractFloat, A<:AbstractArray{T,3}, NT<:NEmitters{T}, TR<:TrackChunk{T}, MH<:MHTrackChunk{T}}
+    Tracks{T<:AbstractFloat, A<:AbstractArray{T,3}, NT<:EmitterCount{T}, TR<:TrackChunk{T}, MH<:MHTrackChunk{T}}
 
 A mutable struct that encapsulates the number of emitting particles, track chunks, and full values. Note that the `value` of a `TrackChunk` should be a pointer to the `value` of `Tracks`, and the same for `active`, `displacement²`, and `effvalue`. The `onchunk` and `offchunk` fields are used to store the track chunks for the on and off parts of the tracks, respectively. The `proposals` field is used to store the proposals for the Metropolis-Hastings algorithm.
 """

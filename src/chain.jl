@@ -41,7 +41,7 @@ mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:Annealing{T}}
 end
 
 Base.propertynames(::Chain) = (
-    fieldnames(Chain),
+    fieldnames(Chain)...,
     :msds,
     :brightnesses,
     :emittercounts,
@@ -212,10 +212,9 @@ Continue running a MCMC sampling with the specified keyword arguments. Requires 
 - `brightness`: A `Brightness` object representing the brightness of the particles.
 - `detector`: A `Detector` object representing the detector used to capture the particles.
 - `psf`: A `PointSpreadFunction` object representing the point spread function of the system.
-- `niters`: The number of iterations for the MCMC simulation (default: 1000).
-- `sizelimit`: The maximum size of the chain (default: 1000).
-- `annealing`: An `Annealing` object representing the annealing schedule (default: `ConstantAnnealing{T}(1)`).
-- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`).
+- `niters`: The number of additional iterations for the MCMC simulation.
+- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC.
+The chain's size limit and annealing schedule are those stored in `chain`.
 """
 function runMCMC!(;
     chain::Chain{T},
@@ -241,6 +240,31 @@ function runMCMC!(;
         end
     end
 end
+
+"""
+    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric)
+
+Positional form of `runMCMC!(; kwargs...)`, with the arguments in the same order.
+"""
+runMCMC!(
+    chain::Chain{T},
+    tracks::Tracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    detector::Detector{T},
+    psf::PointSpreadFunction{T},
+    niters::Integer,
+    parametric::Bool,
+) where {T} = runMCMC!(
+    chain = chain,
+    tracks = tracks,
+    msd = msd,
+    brightness = brightness,
+    detector = detector,
+    psf = psf,
+    niters = niters,
+    parametric = parametric,
+)
 
 """
     runMCMC(; kwargs...)
