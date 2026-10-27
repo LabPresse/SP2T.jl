@@ -53,16 +53,15 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
 - The export list in `src/SP2T.jl` is the public API; tests reach internals as `SP2T.name`.
 - Style follows `.JuliaFormatter.toml` (4 spaces, 92 columns, trailing commas). Docstrings open with an indented signature line. Don't reformat code you are not changing.
 
-## Working with me (all packages)
+## Working with me
 
 - Make the requested change and nothing more; propose extras instead.
 - I edit files between requests. Re-read before editing; treat on-disk changes as intentional unless clearly broken, and then say so.
 - Don't commit or push unless asked. Many files are untracked or modified; leave git state alone.
-- Scripts, CSVs, MP4s, `scratch.jl`, `results/` and notes at a package's root are my scratch. Don't edit them, run them as tests, or "fix" them.
+- Scripts, CSVs, MP4s, `scratch.jl`, `results/` and notes at the repository root are my scratch. Don't edit them, run them as tests, or "fix" them.
 - Write in American English (normalization, center, parametrize, math), in docs, derivations, code comments and messages.
 - Ask before adding dependencies.
 - Tests: fixed RNG (`StableRNG` in Julia); derive expected values from theory or a reference implementation, never from current output. A failing test may be a wrong expectation.
-- A change that spans packages is a separate edit in each repo. Run each affected package's tests and report the results per repo, failures included.
 
 ## Testing
 
