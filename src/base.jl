@@ -162,14 +162,14 @@ arw_propose!(
 ) where {T<:AbstractFloat} = xᵖ .= muladd.(randn!(xᵖ), scaling, xᵒ)
 
 """
-    _resize3(x::AbstractArray{T,3}, newsz::Integer; fill = Union{Nothing,T} = nothing)
+    _resize3(x::AbstractArray{T,3}, newsz::Integer; fill::Union{Nothing,T} = nothing)
 
 Internal function to resize a 3D array in the 3rd dimension.
 """
 function _resize3(
     x::AbstractArray{T,3},
     newsz::Integer;
-    fill = Union{Nothing,T} = nothing,
+    fill::Union{Nothing,T} = nothing,
 ) where {T}
     y = similar(x, size(x, 1), size(x, 2), newsz)
     copyto!(y, x)

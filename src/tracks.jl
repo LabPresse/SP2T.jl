@@ -28,7 +28,7 @@ end
 """
     MHTrackChunk{T<:AbstractFloat, A<:AbstractArray{T}, V<:AbstractVector{T}}
 
-A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the sames fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of proposals and the number of acceptances.
+A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the sames fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of acceptances (row 1) and proposals (row 2), for the identity-swap move (column 1) and position updates (column 2).
 """
 struct MHTrackChunk{
     T<:AbstractFloat,
@@ -132,8 +132,9 @@ TrackChunk(
 
 function logprior(t::AbstractTrackChunk{T}, msdᵥ::T) where {T}
     setdisplacement²!(t)
-    return -(log(msdᵥ) * length(t.displacement²) + sum(vec(t.displacement²)) / msdᵥ) / 2 -
-           logprior(t.prior, view(t.value, 1, :, :))
+    return -(
+        log(2 * T(π) * msdᵥ) * length(t.displacement²) + sum(vec(t.displacement²)) / msdᵥ
+    ) / 2 + logprior(t.prior, view(t.value, 1, :, :))
 end
 
 function Tracks{T}(;
@@ -152,16 +153,17 @@ function Tracks{T}(;
     scaling isa Real && (scaling = fill!(similar(value), scaling))
 
     active = if !isnothing(active)
-        dimsmatch(guess, active, dims = 1) || throw(
+        dimsmatch(guess, active, dims = 1) && size(active, 2) in (1, ndims) || throw(
             DimensionMismatch(
-                "size of guess dose not match size of presence in the first dimension",
+                "active must have as many frames as guess and 1 or $ndims columns",
             ),
         )
-        _resize3(active, max_ntracks)
+        _resize3(elconvert(T, active), max_ntracks, fill = one(T))
     else
         fill!(similar(value, nframes, ndims, max_ntracks), true)
     end
-    actives = (active, fill!(similar(active), true))
+    # Proposals share the current mask; the separate buffer leaves room for proposing masks.
+    actives = (active, copy(active))
     Δx² = similar(value, nframes - 1, ndims, max_ntracks)
     Δx²s = (Δx², similar(Δx²))
     effs = (similar(value), similar(value))
@@ -313,7 +315,8 @@ function Δlogmotion!(
     idx2::StepRange,
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
-    @views copyto!(Δ[idx1], ΣΔΔx²[idx1])
+    @views fill!(Δ[first(idx1):step(idx1):end], zero(T))
+    @views Δ[idx1] .+= ΣΔΔx²[idx1]
     @views Δ[idx2.+1] .+= ΣΔΔx²[idx2]
     return Δ
 end

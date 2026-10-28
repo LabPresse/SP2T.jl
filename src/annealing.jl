@@ -19,7 +19,7 @@ end
 """
     PolynomialAnnealing{T} <: Annealing{T}
 
-A struct that represents a polynomial annealing schedule. Its fields include the initial temperature `𝑇₀`, the iteration number `I` when the temperature becomes and stays at one, and the `order` of the polynomial.
+A struct that represents a polynomial annealing schedule. Its fields include the initial temperature `𝑇₀`, the iteration number `I` when the temperature becomes and stays at one, and the `order` of the polynomial. Before iteration `I`, the temperature is `1 + (𝑇₀ - 1) * (1 - i / I)^order`.
 """
 struct PolynomialAnnealing{T} <: Annealing{T}
     𝑇₀::T
@@ -36,7 +36,7 @@ Return the temperature given the annealing schedule `a` and iteration number `i`
 """
 temperature(a::ConstantAnnealing, i::Real) = a.𝑇
 temperature(a::PolynomialAnnealing{T}, i::Real) where {T} =
-    i >= a.I ? one(T) : a.𝑇₀ * (i / a.I - oneunit(T))^a.order
+    i >= a.I ? one(T) : one(T) + (a.𝑇₀ - one(T)) * (one(T) - i / a.I)^a.order
 
 anneal(ll::T, 𝑇::T) where {T} = ll / 𝑇
 anneal!(ll::AbstractArray{T}, 𝑇::T) where {T} = ll ./= 𝑇

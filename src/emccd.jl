@@ -76,7 +76,7 @@ function simulate_readouts!(detector::EMCCD{T}, means::AbstractArray{T,3}) where
     floatreadouts = randn!(similar(detector.readouts, T))
     floatreadouts .*= sqrt(detector.variance)
     @. floatreadouts += detector.gain * means + detector.offset
-    detector.readouts .= round.(UInt16, floatreadouts)
+    detector.readouts .= round.(UInt16, clamp.(floatreadouts, 0, typemax(UInt16)))
     return detector
 end
 
@@ -154,6 +154,6 @@ function simulate_readouts!(detector::EMCCDGamma{T}, means::AbstractArray{T,3}) 
                 detector.noise_excess_factor * detector.gain,
             )
         )
-    detector.readouts .= round.(UInt16, floatreadouts)
+    detector.readouts .= round.(UInt16, clamp.(floatreadouts, 0, typemax(UInt16)))
     return detector
 end

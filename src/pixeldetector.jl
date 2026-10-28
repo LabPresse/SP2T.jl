@@ -14,7 +14,7 @@ function _init_pixel_detector_params(
     darkcounts::AbstractMatrix{<:Real},
     cutoffs::Tuple{<:Real,<:Real},
 ) where {T}
-    darkcounts = elconvert(TargetType, darkcounts)
+    darkcounts = copyto!(similar(darkcounts, TargetType), darkcounts)
     darkcounts[isinf.(darkcounts)] .= floatmax(eltype(darkcounts))
     darkcounts[iszero.(darkcounts)] .= floatmin(eltype(darkcounts))
     filter = similar(darkcounts) .= cutoffs[1] .< darkcounts .< cutoffs[2]

@@ -162,6 +162,8 @@ function parametricMCMC!(
     𝑇::T,
 ) where {T}
     update_onchunk!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
+    update!(tracks.onchunk, tracks.proposals, msd.value) # swap identities partway through
+    seteffvalue!(tracks.onchunk)
     update!(brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
     setdisplacement²!(tracks.onchunk)
     update!(msd, tracks.onchunk.displacement², 𝑇)
@@ -180,6 +182,7 @@ function nonparametricMCMC!(
     simulate!(tracks.offchunk, msd.value)
     if any(tracks)
         update_onchunk!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
+        update!(tracks.onchunk, tracks.proposals, msd.value) # swap identities partway through
         onshuffle!(tracks)
     end
 
@@ -213,7 +216,7 @@ Continue running a MCMC sampling with the specified keyword arguments. Requires 
 - `detector`: A `Detector` object representing the detector used to capture the particles.
 - `psf`: A `PointSpreadFunction` object representing the point spread function of the system.
 - `niters`: The number of additional iterations for the MCMC simulation.
-- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC.
+- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC. A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 The chain's size limit and annealing schedule are those stored in `chain`.
 """
 function runMCMC!(;
@@ -230,7 +233,8 @@ function runMCMC!(;
     llarray = LogLikelihoodArray{T}(detector.readouts)
     reset!(llarray, detector, 1)
     tracks.nemitters.loglikelihood[1] = get_loglikelihood!(llarray, detector)
-    nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
+    nextsample! =
+        parametric || isfixed(tracks.nemitters) ? parametricMCMC! : nonparametricMCMC!
     @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
         nextsample!(tracks, msd, brightness, llarray, detector, psf, 𝑇)
@@ -278,7 +282,7 @@ Run a MCMC sampling with the specified keyword arguments. Requires the following
 - `niters`: The number of iterations for the MCMC simulation (default: 1000).
 - `sizelimit`: The maximum size of the chain (default: 1000).
 - `annealing`: An `Annealing` object representing the annealing schedule (default: `ConstantAnnealing{T}(1)`).
-- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`).
+- `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`). A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 """
 function runMCMC(;
     tracks::Tracks{T},

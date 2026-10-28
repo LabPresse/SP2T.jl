@@ -10,23 +10,8 @@ permuteto!(
     start::Integer = 1,
 ) where {T} = @views copyto!(dest[start:end, :, :], src[start:end, :, perm])
 
-permuteto!(
-    dest::AbstractTrackChunk{T},
-    src::AbstractTrackChunk{T},
-    perm::AbstractVector{<:Integer},
-    start::Integer = 1,
-) where {T} = permuteto!(dest.value, src.value, perm, start)
-
-permuteto!(
-    dest::AbstractArray{T,3},
-    src::AbstractArray{T,3},
-    perm::AbstractVector{<:Integer},
-    start::Integer,
-    step::Integer,
-) where {T} = @views copyto!(dest[start:step:end, :, :], src[start:step:end, :, perm])
-
 """
-    _permute!( x::AbstractArray{T,3}, perm::AbstractVector{<:Integer}, y::AbstractArray{T,3})
+    _permute!(x::AbstractArray{T,3}, perm::AbstractVector{<:Integer}, y::AbstractArray{T,3})
 
 Permute the 3rd dimension (particle index) of `x` according to the order specified in `p`. `y` is used as a temporary array to store the permuted result.
 """
@@ -57,53 +42,63 @@ function onshuffle!(t::Tracks)
 end
 
 """
-    propagateperm!(x::AbstractArray{T,3}, y::AbstractArray{T,3}, perm::AbstractVector{<:Integer}, ind::AbstractVector{<:Integer})
+    relabelindices(x::AbstractArray{T,3}, perm::AbstractVector{<:Integer}, accepted::AbstractVector{Bool})
 
-Apply the permutation `perm` to the 3rd dimension of `x` at each frame index specified in `ind`, and propagate the permutation to the last frame. Note that `y[i, :, :]` already contains the permuted values for `x[i, :, :]`. 
+Return the linear indices that relabel the particles (3rd dimension) of `x` frame by frame: frame `k` is relabeled by `perm` applied once for every accepted boundary up to and including `k`. The indices are built on the CPU and returned on the device of `x`.
 """
-function propagateperm!(
+function relabelindices(
     x::AbstractArray{T,3},
-    y::AbstractArray{T,3},
     perm::AbstractVector{<:Integer},
-    ind::AbstractVector{<:Integer},
+    accepted::AbstractVector{Bool},
 ) where {T}
-    if length(ind) == 1
-        i = only(ind)
-        copyto!(x[i:end, :, :], y[i:end, :, :])
-    else
-        @views for i in ind
-            copyto!(x[i:end, :, :], y[i:end, :, :])
-            permuteto!(y, x, perm, i + 1)
+    nframes, ndims, nparticles = size(x)
+    σ = collect(1:nparticles)
+    i = Array{Int}(undef, nframes, ndims, nparticles)
+    for k = 1:nframes
+        accepted[k] && (σ = σ[perm])
+        for m = 1:nparticles, d = 1:ndims
+            i[k, d, m] = k + nframes * (d - 1 + ndims * (σ[m] - 1))
         end
     end
+    return copyto!(similar(x, Int, size(i)), i)
+end
+
+"""
+    relabel!(x::AbstractArray{T,3}, i::AbstractArray{<:Integer,3}, scratch::AbstractArray{T,3})
+
+Overwrite `x` with `x[i]` in one gather. `scratch` is a temporary array the size of `x`.
+"""
+function relabel!(
+    x::AbstractArray{T,3},
+    i::AbstractArray{<:Integer,3},
+    scratch::AbstractArray{T,3},
+) where {T}
+    copyto!(scratch, x)
+    x .= scratch[i]
     return x
 end
 
-function propagateperm!(
-    dest::AbstractTrackChunk{T},
-    src::AbstractTrackChunk{T},
-    perm::AbstractVector{<:Integer},
-    pos::AbstractVector{<:Integer},
-) where {T}
-    propagateperm!(dest.value, src.value, perm, pos)
-    propagateperm!(dest.active, src.active, perm, pos)
-    return dest
-end
+"""
+    update!(tracksᵒ::TrackChunk{T}, tracksᵖ::MHTrackChunk{T}, msdᵥ::T)
 
+Swap particle identities partway through the tracks. Propose a random relabeling `perm` of the particles and, independently for each boundary between frames `k - 1` and `k`, accept relabeling frames `k` onward by `perm` according to the change in the motion log-prior across that boundary. Positions in each frame are unchanged, so the likelihood and the first-frame prior are too. Accepted relabelings compose: frames after `c` accepted boundaries are relabeled by `perm` applied `c` times, which leaves the steps across every other boundary unchanged. `active` is relabeled with the positions.
+"""
 function update!(tracksᵒ::TrackChunk{T}, tracksᵖ::MHTrackChunk{T}, msdᵥ::T) where {T}
+    nparticles = size(tracksᵒ.value, 3)
+    perm = randperm(nparticles)
+    isequal(perm, 1:nparticles) && return tracksᵒ
     initmh!(tracksᵖ)
-    # propose a random permuataion for the emitting particles
-    perm = randperm(size(tracksᵒ.value, 3))
-    # apply the permutation to proposals
-    permuteto!(tracksᵖ, tracksᵒ, perm, 2)
-    # calculate acceptance ratio
+    permuteto!(tracksᵖ.value, tracksᵒ.value, perm, 2)
     setdisplacement²!(tracksᵒ)
     diff²!(tracksᵖ.displacement², tracksᵖ.value, tracksᵒ.value)
     sumΔdisplacement²!(tracksᵖ, tracksᵒ, msdᵥ)
     @views tracksᵖ.logacceptance[2:end] .+= tracksᵖ.ΣΔdisplacement²
-    setacceptance!(tracksᵖ, start = 2)
-    # apply the permutation to the accepted frame indices
-    pos = findall(convert(Vector{Bool}, tracksᵖ.accepted))
-    isempty(pos) || propagateperm!(tracksᵒ, tracksᵖ, perm, pos)
+    setacceptance!(tracksᵖ, start = 2, step = 1)
+    accepted = convert(Vector{Bool}, tracksᵖ.accepted)
+    @views tracksᵖ.counter[:, 1] .+= count(accepted), length(accepted) - 1
+    any(accepted) || return tracksᵒ
+    relabel!(tracksᵒ.value, relabelindices(tracksᵒ.value, perm, accepted), tracksᵖ.value)
+    relabel!(tracksᵒ.active, relabelindices(tracksᵒ.active, perm, accepted), tracksᵖ.active)
+    copyto!(tracksᵖ.active, tracksᵒ.active) # proposals share the current mask
     return tracksᵒ
 end

@@ -89,6 +89,7 @@ function update!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
+    isfixed(count) && return count
     set_loglikelihood!(count, trackᵥ, brightnessᵥ, llarray, detector, psf)
     set_logposterior!(count, 𝑇)
     count.value = randc(count.logposterior) - 1
