@@ -85,7 +85,7 @@ struct EMCCDGamma{
     V<:AbstractVector{T},
     M<:AbstractMatrix{T},
     R<:AbstractArray{UInt16,3},
-} <: PixelDetector{T}
+} <: AbstractEMCCD{T}
     period::T
     pxsize::T
     pxbounds::NTuple{2,V}

@@ -1,7 +1,5 @@
 module SP2T
 
-#* This code is optizmized for GPU.
-
 using Statistics
 using Distributions
 using SpecialFunctions: erf, loggamma

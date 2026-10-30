@@ -1,7 +1,7 @@
 """
     MeanSquaredDisplacement{T<:AbstractFloat, P<:InverseGamma{T}} <: RandomVariable{T}
 
-A mutable struct representing the mean squared displacement random variable. `value::T` is the value, `prior::P` is an inverse gamma distrtibution, `fixed::Bool` determines whether its `value` gets updated.
+A mutable struct representing the mean squared displacement random variable. `value::T` is the value, `prior::P` is an inverse gamma distribution, `fixed::Bool` determines whether its `value` gets updated.
 """
 mutable struct MeanSquaredDisplacement{T<:AbstractFloat,P<:InverseGamma{T}} <:
                RandomVariable{T}
@@ -13,7 +13,7 @@ end
 """
     MeanSquaredDisplacement{T}(; guess::Real, priorparams::Tuple{<:Real,<:Real}, fixed::Bool)
 
-The constructor for `MeanSquaredDisplacement`. By default, `priorparams = (2, 1e-5)' and `fixed = false`.
+The constructor for `MeanSquaredDisplacement`. By default, `priorparams = (2, 1e-5)` and `fixed = false`.
 """
 MeanSquaredDisplacement{T}(;
     guess::Real,

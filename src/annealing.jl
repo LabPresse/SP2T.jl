@@ -5,8 +5,6 @@ An abstract type representing a generic annealing schedule. This serves as a bas
 """
 abstract type Annealing{T} end
 
-ftypof(::Annealing{T}) where {T} = T
-
 """
     ConstantAnnealing{T} <: Annealing{T}
 
@@ -38,5 +36,4 @@ temperature(a::ConstantAnnealing, i::Real) = a.𝑇
 temperature(a::PolynomialAnnealing{T}, i::Real) where {T} =
     i >= a.I ? one(T) : one(T) + (a.𝑇₀ - one(T)) * (one(T) - i / a.I)^a.order
 
-anneal(ll::T, 𝑇::T) where {T} = ll / 𝑇
 anneal!(ll::AbstractArray{T}, 𝑇::T) where {T} = ll ./= 𝑇

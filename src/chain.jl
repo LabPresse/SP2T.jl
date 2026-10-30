@@ -84,12 +84,12 @@ savestride(chain::Chain) =
 
 tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 
-function findmap(chain::Chain; burn_in::Real = 0)
+function findmap(chain::Chain; burn_in::Integer = 0)
     ~, i = findmax(chain.logposteriors[burn_in+1:end])
     return chain.samples[i+burn_in], i + burn_in
 end
 
-function findmle(chain::Chain; burn_in::Real = 0)
+function findmle(chain::Chain; burn_in::Integer = 0)
     ~, i = findmax(chain.loglikelihoods[burn_in+1:end])
     return chain.samples[i+burn_in], i + burn_in
 end
@@ -235,7 +235,7 @@ function runMCMC!(;
     tracks.nemitters.loglikelihood[1] = get_loglikelihood!(llarray, detector)
     nextsample! =
         parametric || isfixed(tracks.nemitters) ? parametricMCMC! : nonparametricMCMC!
-    @showprogress 1 "Computing..." for iter in prev_niters .+ (1:niters)
+    @showprogress dt = 1 desc = "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
         nextsample!(tracks, msd, brightness, llarray, detector, psf, 𝑇)
         if tosave(chain, iter)

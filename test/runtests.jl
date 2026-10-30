@@ -283,3 +283,16 @@ end
     )
     @test tracks.onchunk.effvalue == tracks.onchunk.value ./ tracks.onchunk.active
 end
+
+println("Running bridge tests...")
+
+# With zero MSD a Brownian bridge is the straight line between its ends; with any MSD it
+# starts and ends exactly there.
+@testset let xend = reshape([0.0 1.0; 2.0 -1.0; 3.0 5.0; 4.0 4.0], 2, 2, 2), nframes = 11
+    straight = [xend[1, d, m] + (k - 1) / (nframes - 1) * (xend[2, d, m] - xend[1, d, m])
+        for k = 1:nframes, d = 1:2, m = 1:2]
+    @test bridge!(zeros(nframes, 2, 2), 0.0, xend) ≈ straight
+    x = bridge!(zeros(nframes, 2, 2), 0.1, xend)
+    @test x[1, :, :] ≈ xend[1, :, :]
+    @test x[end, :, :] ≈ xend[2, :, :]
+end

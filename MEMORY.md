@@ -2,38 +2,6 @@
 
 Open issues from the code review of 2026-10-27. Each was confirmed on CPU unless it is under "Needs a GPU" (the Mac has no CUDA, CI has no GPU). Delete an entry once it is settled.
 
-## Legacy code and comments
-
-### L1. Unused code
-
-- `unionalltypeof` (`src/base.jl`)
-- 3-argument `_randn!(x, σ, σ₀)` (`src/base.jl`)
-- `mrw_propose` for `BetaPrime`/`Gamma`, marked "Needs test"; `Brightness.proposal` is always a `Beta`
-- `ftypof`, scalar `anneal(ll, 𝑇)` (`src/annealing.jl`)
-- `_integrate` (`src/gaussianpsf.jl`); worth keeping for a PSF test
-- `bridge!`: exported, undocumented, used nowhere
-
-### L2. Comments
-
-- Commented-out `StreamDetector` (`src/base.jl`)
-- Commented-out `# get_Δloglikelihood!` (`src/brightness.jl`)
-- "used mostly for prototyping" in the `RandomVariable` docstring
-- `#* This code is optizmized for GPU.` (`src/SP2T.jl`)
-
-### L3. Wrong or outdated docstrings and messages
-
-- `Brightness`: says the proposal default is `(10, 1)` (code: `(1, 10)`), lists `fixed` twice, says `P<:Gamma{T}` (unconstrained in the code)
-- `_init_pixel_detector_params`: documents a `period` argument that does not exist
-- `MeanSquaredDisplacement` constructor: stray `'` instead of a backtick
-- Typos: "dose not", "categoriacal", "implememnt", "distrtibution", "mltiplicative", "Gaussain", "sames"
-
-### L4. Other
-
-- `@showprogress 1 "Computing..."` is deprecated ProgressMeter syntax and prints a warning; use `@showprogress dt = 1 desc = "Computing..."`.
-- `AbstractEMCCD` has one subtype; `EMCCDGamma` subtypes `PixelDetector` directly.
-- `findmap` and `findmle` take `burn_in::Real`; should be `Integer`.
-- `ext/SP2TCUDAExt.jl` loads `Random` without using it.
-
 ## Tests to add
 
 All on CPU, with expected values from theory or Distributions.jl:

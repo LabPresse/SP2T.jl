@@ -1,10 +1,10 @@
 function check_pixel_dimsmatch(darkcounts::AbstractArray, readouts::AbstractArray)
     dimsmatch(darkcounts, readouts, dims = 1:2) ||
-        throw(DimensionMismatch("size of darkcounts dose not match size of readouts"))
+        throw(DimensionMismatch("size of darkcounts does not match size of readouts"))
 end
 
 """
-    _init_pixel_detector_params(TargetType::Type{T}, period::Real, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real}) where {T}
+    _init_pixel_detector_params(TargetType::Type{T}, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real}) where {T}
 
 Initialize the parameters for a pixel detector such that they share the same data type `T`.
 """

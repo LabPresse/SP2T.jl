@@ -28,7 +28,7 @@ end
 """
     MHTrackChunk{T<:AbstractFloat, A<:AbstractArray{T}, V<:AbstractVector{T}}
 
-A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the sames fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of acceptances (row 1) and proposals (row 2), for the identity-swap move (column 1) and position updates (column 2).
+A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the same fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of acceptances (row 1) and proposals (row 2), for the identity-swap move (column 1) and position updates (column 2).
 """
 struct MHTrackChunk{
     T<:AbstractFloat,
@@ -251,6 +251,11 @@ function simulate!(tracks::TrackChunk{T}, msdᵥ::T) where {T}
     return tracks
 end
 
+"""
+    bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3})
+
+Fill `x` with Brownian bridges: for every particle, a random walk with mean squared displacement `msd` per frame and coordinate that starts at `xend[1, :, :]` and ends at `xend[2, :, :]`. `x` is `(nframes, ndims, nparticles)` and `xend` is `(2, ndims, nparticles)`.
+"""
 function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T}
     @views copyto!(x[1, :, :], -diff(xend, dims = 1)[1, :, :])
     simulate!(x, msd)

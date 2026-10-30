@@ -1,7 +1,7 @@
 """
-    Brightness{T<:AbstractFloat, P<:Gamma{T}} <: RandomVariable{T}
+    Brightness{T<:AbstractFloat, P} <: RandomVariable{T}
 
-A mutable struct representing the brightness random variable. `value::T` is the value, `prior::P` is a gamma distribution, `fixed::Bool` determines whether its `value` gets updated. `proposal::Beta{T}` is a beta proposal distribution for the mltiplicative random walk (see Pressé, Data Modeling for the Sciences, 2023, p195). `counter::Vector{Int}` is a vector recording the number of proposals and the number of acceptances.
+A mutable struct representing the brightness random variable. `value::T` is the value, `prior::P` is a gamma distribution, `fixed::Bool` determines whether its `value` gets updated. `proposal::Beta{T}` is a beta proposal distribution for the multiplicative random walk (see Pressé, Data Modeling for the Sciences, 2023, p195). `counter::Vector{Int}` records the number of acceptances and the number of proposals.
 """
 mutable struct Brightness{T<:AbstractFloat,P} <: RandomVariable{T}
     value::T
@@ -12,9 +12,9 @@ mutable struct Brightness{T<:AbstractFloat,P} <: RandomVariable{T}
 end
 
 """
-    Brightness{T}(; guess::Real, priorparams::Tuple{<:Real,<:Real}, fixed::Bool, proposalparam::Real, fixed::Bool)
+    Brightness{T}(; guess::Real, priorparams::Tuple{<:Real,<:Real}, fixed::Bool, proposalparams::Tuple{<:Real,<:Real})
 
-The constructor for `Brightness`. By default, `priorparams = (1, 1)`, `fixed = false`, and `proposalparams = (10, 1)`.
+The constructor for `Brightness`. By default, `priorparams = (1, 1)`, `fixed = false`, and `proposalparams = (1, 10)`.
 """
 Brightness{T}(;
     guess::Real,
@@ -56,7 +56,6 @@ function update!(
     isfixed(brightness) && return brightness
     valueᵖ, logacceptance = mrw_propose(brightness.proposal, brightness.value)
     set_poisson_means!(llarray, detector, tracksᵥ, brightness.value, valueᵖ, psf)
-    # get_Δloglikelihood!(llarray, detector)
     logacceptance +=
         get_Δloglikelihood!(llarray, detector) / 𝑇 + Δlogprior(brightness, valueᵖ) -
         log(rand())

@@ -1,7 +1,7 @@
 """
     GaussianPSF{T} <: PointSpreadFunction{T}
 
-An abstract type representing a generic Gaussian PSF (Gaussain in each 𝑧-plane). This serves as a base type for defining specific Gaussian PSF implementations. The type parameter `T` can be used to specify the type of data.
+An abstract type representing a generic Gaussian PSF (Gaussian in each 𝑧-plane). This serves as a base type for defining specific Gaussian PSF implementations. The type parameter `T` can be used to specify the type of data.
 """
 abstract type GaussianPSF{T} <: PointSpreadFunction{T} end
 
