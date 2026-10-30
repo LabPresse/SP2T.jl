@@ -55,11 +55,15 @@ function set_pixel_Δloglikelihood!(
     return Δllarray
 end
 
-function simulate_readouts!(detector::SPAD{T}, means::AbstractArray{T,3}) where {T}
+function simulate_readouts!(
+    rng::AbstractRNG,
+    detector::SPAD{T},
+    means::AbstractArray{T,3},
+) where {T}
     if detector.batchsize == 1
-        @. detector.readouts = $rand!($similar(means)) < -expm1(-means)
+        @. detector.readouts = $rand!($devicerng(rng, means), $similar(means)) < -expm1(-means)
     else
-        @. detector.readouts = rand(Binomial(detector.batchsize, -expm1(-means)))
+        detector.readouts .= rand.(Ref(rng), Binomial.(detector.batchsize, -expm1.(-means)))
     end
     return detector
 end

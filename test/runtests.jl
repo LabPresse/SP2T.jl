@@ -1,6 +1,7 @@
 using SP2T
 using Test
 using Distributions
+using StableRNGs
 
 println("Running PSF-related tests...")
 
@@ -156,6 +157,7 @@ end
     count.fixed = true
     fill!(count.likelihood, NaN)
     SP2T.update!(
+        StableRNG(1),
         count,
         tracks.effvalue[1],
         1.0,
@@ -176,6 +178,7 @@ end
         psf = psf,
         niters = 5,
         parametric = false,
+        rng = StableRNG(5),
     )
     @test all(==(1), chain.emittercounts)
     @test isequal(tracks.offchunk.value, offcandidates)
@@ -213,8 +216,9 @@ end
         active = .!dark,
     )
 
+    rng = StableRNG(2)
     for _ = 1:50
-        SP2T.update!(tracks.onchunk, tracks.proposals, 1e-4)
+        SP2T.update!(rng, tracks.onchunk, tracks.proposals, 1e-4)
     end
     value, active = tracks.onchunk.value, tracks.onchunk.active
     @test value[:, 1, :] == guess[:, 1, :]
@@ -242,7 +246,7 @@ println("Running simulation and sweep tests...")
         variance = 1e6,
     )
 
-    SP2T.simulate_readouts!(detector, zeros(8, 8, 50))
+    SP2T.simulate_readouts!(StableRNG(3), detector, zeros(8, 8, 50))
     @test count(iszero, detector.readouts) > length(detector.readouts) / 4
     @test maximum(detector.readouts) < 10_000
 end
@@ -273,6 +277,7 @@ end
     llarray = SP2T.LogLikelihoodArray{Float64}(detector.readouts)
 
     SP2T.parametricMCMC!(
+        StableRNG(4),
         tracks,
         MeanSquaredDisplacement{Float64}(guess = 2e-4),
         Brightness{Float64}(guess = 0.1),
@@ -292,7 +297,7 @@ println("Running bridge tests...")
     straight = [xend[1, d, m] + (k - 1) / (nframes - 1) * (xend[2, d, m] - xend[1, d, m])
         for k = 1:nframes, d = 1:2, m = 1:2]
     @test bridge!(zeros(nframes, 2, 2), 0.0, xend) ≈ straight
-    x = bridge!(zeros(nframes, 2, 2), 0.1, xend)
+    x = bridge!(StableRNG(6), zeros(nframes, 2, 2), 0.1, xend)
     @test x[1, :, :] ≈ xend[1, :, :]
     @test x[end, :, :] ≈ xend[2, :, :]
 end
@@ -460,3 +465,5 @@ end
     @test jumpdistances(chain, burn_in = 1) == [5.0, 13.0, 1.0, 2.0]
     @test jumpdistances(chain) == [0.0, 0.0, 0.0, 0.0, 5.0, 13.0, 1.0, 2.0]
 end
+
+include("samplers.jl")

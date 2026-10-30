@@ -62,8 +62,8 @@ function MHTrackChunk(value, active, displacement², effvalue, scaling)
     )
 end
 
-function initmh!(t::MHTrackChunk)
-    neglogrand!(t.logacceptance)
+function initmh!(rng::AbstractRNG, t::MHTrackChunk)
+    neglogrand!(rng, t.logacceptance)
     fill!(t.accepted, false)
     return t
 end
@@ -227,44 +227,58 @@ function reassign!(t::Tracks)
 end
 
 """
-    simulate!(x::AbstractArray{T,3}, msd::T)
+    simulate!([rng::AbstractRNG,] x::AbstractArray{T,3}, msd::T)
 
 Simulates particle tracks in `x` given the `msd`. `x` should already contains the initial particle positions.
 """
-function simulate!(x::AbstractArray{T,3}, msd::T) where {T}
-    @views _randn!(x[2:end, :, :], √msd)
+function simulate!(rng::AbstractRNG, x::AbstractArray{T,3}, msd::T) where {T}
+    @views _randn!(rng, x[2:end, :, :], √msd)
     cumsum!(x, x, dims = 1)
 end
 
+simulate!(x::AbstractArray{T,3}, msd::T) where {T} = simulate!(Random.default_rng(), x, msd)
+
 """
-    simulate!(x::AbstractArray{T,3}, msd::T, prior)
+    simulate!([rng::AbstractRNG,] x::AbstractArray{T,3}, msd::T, prior)
 
 Simulates particle tracks in `x` given the `msd` and the `prior` for the initial positions.
 """
-function simulate!(x::AbstractArray{T,3}, msd::T, prior) where {T}
-    @views rand!(x[1, :, :], prior)
-    simulate!(x, msd)
+function simulate!(rng::AbstractRNG, x::AbstractArray{T,3}, msd::T, prior) where {T}
+    @views rand!(rng, x[1, :, :], prior)
+    simulate!(rng, x, msd)
 end
 
-function simulate!(tracks::TrackChunk{T}, msdᵥ::T) where {T}
-    simulate!(tracks.value, msdᵥ, tracks.prior)
+simulate!(x::AbstractArray{T,3}, msd::T, prior) where {T} =
+    simulate!(Random.default_rng(), x, msd, prior)
+
+function simulate!(rng::AbstractRNG, tracks::TrackChunk{T}, msdᵥ::T) where {T}
+    simulate!(rng, tracks.value, msdᵥ, tracks.prior)
     return tracks
 end
 
 """
-    bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3})
+    bridge!([rng::AbstractRNG,] x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3})
 
 Fill `x` with Brownian bridges: for every particle, a random walk with mean squared displacement `msd` per frame and coordinate that starts at `xend[1, :, :]` and ends at `xend[2, :, :]`. `x` is `(nframes, ndims, nparticles)` and `xend` is `(2, ndims, nparticles)`.
 """
-function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T}
+function bridge!(
+    rng::AbstractRNG,
+    x::AbstractArray{T,3},
+    msd::T,
+    xend::AbstractArray{T,3},
+) where {T}
     @views copyto!(x[1, :, :], -diff(xend, dims = 1)[1, :, :])
-    simulate!(x, msd)
+    simulate!(rng, x, msd)
     N = size(x, 1) - 1
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
 
-function propose!(proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
+bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T} =
+    bridge!(Random.default_rng(), x, msd, xend)
+
+function propose!(rng::AbstractRNG, proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
     arw_propose!(
+        rng,
         proposals.value,
         tracks.value,
         view(proposals.scaling, :, :, 1:size(tracks.value, 3)),
@@ -369,6 +383,7 @@ function update!(
 end
 
 function update_onchunk!(
+    rng::AbstractRNG,
     tracks::Tracks{T},
     msdᵥ::T,
     brightnessᵥ::T,
@@ -378,8 +393,8 @@ function update_onchunk!(
     𝑇::T,
 ) where {T}
     tracksᵒ, tracksᵖ = tracks.onchunk, tracks.proposals # rename for clarity
-    initmh!(tracksᵖ)
-    propose!(tracksᵖ, tracksᵒ)
+    initmh!(rng, tracksᵖ)
+    propose!(rng, tracksᵖ, tracksᵒ)
     seteffvalue!(tracksᵒ)
     seteffvalue!(tracksᵖ)
     set_poisson_means!(

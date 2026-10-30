@@ -22,4 +22,5 @@ Distributions.params(P::DNormal) = P.μ, P.σ
 logprior(ℕ::DNormal{T}, x::AbstractArray{T}) where {T} =
     sum(vec(@. -(x - ℕ.μ)^2 / (2 * ℕ.σ^2) - log(ℕ.σ))) - length(x) * log(2 * T(π)) / 2
 
-Random.rand!(x::AbstractVecOrMat{T}, P::DNormal{T}) where {T} = _randn!(x, P.μ, P.σ)
+Random.rand!(rng::AbstractRNG, x::AbstractVecOrMat{T}, P::DNormal{T}) where {T} =
+    _randn!(rng, x, P.μ, P.σ)

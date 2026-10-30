@@ -34,7 +34,7 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
 | `src/annealing.jl` | `ConstantAnnealing`, `PolynomialAnnealing`, `temperature` |
 | `src/chain.jl` | `Sample`, `Chain` (halved when full), `findmap`, `findmle`, `jumpdistances`, `runMCMC`, `runMCMC!`, parametric and nonparametric sweeps |
 | `ext/` | `SP2TCUDAExt`: `CuArray` methods of internal functions that would otherwise index scalars |
-| `test/runtests.jl` | The test suite (see Testing) |
+| `test/runtests.jl` | The test suite (see Testing); includes `test/samplers.jl`, the seeded tests of the samplers' output distributions |
 | `examples/<case>/` | `simulation.jl` writes `frames`, `groundtruth` and `metadata` `.jld2`; `inference_cpu.jl` and `inference_gpu.jl` fit them. `examples/darkcounts.jld2` is shared. Run from the package root; they need JLD2, Distributions and CUDA, which are not package dependencies |
 | `backup/`, `extra/`, `data/`, `benchmarks/`, `test/scrach*.jl`, `note.md` | Scratch, gitignored |
 
@@ -44,6 +44,7 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
 - Units are the caller's (the examples use μm and s). `msd` is the per-coordinate variance of a one-frame displacement, 2·D·period; the `Sample` field holding it is named `diffusivity`. `brightness` and `darkcounts` are expected photons per frame (rate × period); `brightness` is divided by `psf.A`, so it is the expected count in a pixel when the emitter sits at its center.
 - Everything is parametrized on `T<:AbstractFloat`. Public constructors are `Type{T}(; kwargs...)` and convert their inputs to `T` (`convert`, `elconvert`); methods expect one `T` across all arguments.
 - One code path serves `Array` and `CuArray`: allocate with `similar(x, ...)`, avoid scalar indexing, prefer broadcasting and `batched_mul!`. `sum(vec(x))` instead of `sum(x)` is deliberate (faster with CUDA.jl). CUDA-specific methods go in `ext/` as overloads of internal functions; `src/` never loads CUDA.
+- Random draws take `rng::AbstractRNG` as their first argument, threaded down from `runMCMC`'s `rng` keyword. Array draws use `devicerng(rng, x)`, which is `rng` for CPU arrays and `CUDA.default_rng()` for CUDA arrays (defined in `ext/`). The exported `simulate!` and `bridge!`, and `simulate_readouts!`, also have methods without `rng` (using `Random.default_rng()`), which the example scripts call.
 - Mutating functions end in `!` and return the mutated object. Buffers are preallocated: in `LogLikelihoodArray`, `means[1]` is current and `means[2]` proposed; in `Tracks`, index 1 is current and 2 the proposal.
 - `onchunk`, `offchunk` and `proposals` are views into the `Tracks` arrays; call `reassign!` after `nemitters.value` changes. `effvalue = value ./ active` is `Inf` for inactive frames, so they contribute no photons. `active` is a fixed mask; proposals share it (`active[2]` is a separate buffer kept equal to `active[1]`, reserved for inferring the mask later; see F1 in `MEMORY.md`).
 - Names: `ᵒ` current, `ᵖ` proposed, `ᵥ` a value (`msdᵥ = msd.value`), `𝑇` temperature, `Δ` proposed minus current. Work in log space. Likelihood terms are divided by `𝑇`, priors are not.
@@ -72,7 +73,7 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
   - Tracks and moves: `Tracks` with an `active` mask (both layouts); the identity-swap move (frame-by-frame relabeling; crossing particles with swapped tails are untangled, with their masks); a fixed emitter count is never updated and selects the parametric sweep; a parametric step leaves `effvalue` up to date
   - Chain: `EmitterCount.limit`; `Chain`'s `propertynames`; thinning (at most `sizelimit` samples, equal power-of-two spacing); `findmap`, `findmle` with `burn_in`; `jumpdistances`
   - `PolynomialAnnealing`: 𝑇₀ at the start, 1 from `I` on, decreasing in between
-- Not tested: the samplers' output distributions (needs an `rng` argument, see T7 in `MEMORY.md`) and `runMCMC` beyond smoke runs.
-- Test dependencies: Test and Distributions. No data files. Most tests use fixed inputs; those that run a sampler use the global RNG and assert only properties that hold for any draw (or fail with negligible probability, stated in the test).
+  - Samplers (`test/samplers.jl`), seeded with `StableRNG`, against their target distributions from theory, with tolerances of 4 standard errors (batch means for Markov chains): `randc`; the MSD's tempered inverse-gamma posterior; the brightness and position Metropolis–Hastings chains, which sample their priors when the likelihood is switched off (𝑇 = Inf); the identity-swap acceptance rate; `simulate!` and `bridge!` variances; each detector's `simulate_readouts!`; and that `runMCMC` is reproducible for a given seed
+- Test dependencies: Test, Distributions and StableRNGs. No data files. Tests that draw random numbers pass a `StableRNG`.
 - Tests run on CPU arrays; CI has no GPU, so `ext/` is untested.
-- New sampler or fit tests: use a `StableRNG` seed (not yet a test dependency; ask first) or fixed data, and assert against a known ground truth with a tolerance derived from the noise, not tuned to current output.
+- New sampler or fit tests: use a `StableRNG` seed or fixed data, and assert against a known ground truth with a tolerance derived from the noise, not tuned to current output (as `test/samplers.jl` does).

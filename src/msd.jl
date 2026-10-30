@@ -35,17 +35,18 @@ logprior(msd::MeanSquaredDisplacement; normalization::Bool = false) =
     -(shape(msd.prior) + 1) * log(msd.value) - scale(msd.prior) / msd.value
 
 """
-    update!(msd::MeanSquaredDisplacement{T}, displacement²::AbstractArray{T,3}, 𝑇::T)
+    update!(rng::AbstractRNG, msd::MeanSquaredDisplacement{T}, displacement²::AbstractArray{T,3}, 𝑇::T)
 
 Directly sample `msd`'s new value from its posterior given the `displacement²` array and the temperature `𝑇`.
 """
 function update!(
+    rng::AbstractRNG,
     msd::MeanSquaredDisplacement{T},
     displacement²::AbstractArray{T,3},
     𝑇::T,
 ) where {T}
     isfixed(msd) && return msd
     Δparams = (length(displacement²), sum(vec(displacement²))) ./ (2 * 𝑇) #* sum(vec(displacement²))) as summing vec is currently faster using CUDA.jl
-    msd.value = _rand(msd.prior, Δparams)
+    msd.value = _rand(rng, msd.prior, Δparams)
     return msd
 end

@@ -46,6 +46,7 @@ Calculate `logprior(b, xᵖ) - logprior(b, b.value)`.
 Δlogprior(b::Brightness{T}, xᵖ::T) where {T<:AbstractFloat} = Δlogpdf(b.prior, xᵖ, b.value)
 
 function update!(
+    rng::AbstractRNG,
     brightness::Brightness{T},
     tracksᵥ::AbstractArray{T,3},
     llarray::LogLikelihoodArray{T},
@@ -54,11 +55,11 @@ function update!(
     𝑇::T,
 ) where {T}
     isfixed(brightness) && return brightness
-    valueᵖ, logacceptance = mrw_propose(brightness.proposal, brightness.value)
+    valueᵖ, logacceptance = mrw_propose(rng, brightness.proposal, brightness.value)
     set_poisson_means!(llarray, detector, tracksᵥ, brightness.value, valueᵖ, psf)
     logacceptance +=
         get_Δloglikelihood!(llarray, detector) / 𝑇 + Δlogprior(brightness, valueᵖ) -
-        log(rand())
+        log(rand(rng))
     accepted = logacceptance > 0
     brightness.counter .+= (accepted, 1)
     accepted && (brightness.value = valueᵖ)

@@ -81,6 +81,7 @@ function set_loglikelihood!(
 end
 
 function update!(
+    rng::AbstractRNG,
     count::EmitterCount{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
@@ -92,6 +93,6 @@ function update!(
     isfixed(count) && return count
     set_loglikelihood!(count, trackᵥ, brightnessᵥ, llarray, detector, psf)
     set_logposterior!(count, 𝑇)
-    count.value = randc(count.logposterior) - 1
+    count.value = randc(rng, count.logposterior) - 1
     return count
 end

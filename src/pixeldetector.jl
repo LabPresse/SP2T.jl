@@ -187,6 +187,9 @@ function set_poisson_means!(
     return llarray
 end
 
+simulate_readouts!(detector::PixelDetector, means::AbstractArray{<:Real,3}) =
+    simulate_readouts!(Random.default_rng(), detector, means)
+
 function getincident(
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,

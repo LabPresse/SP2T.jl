@@ -153,6 +153,7 @@ get_logposterior(
     logprior(tracks.nemitters)
 
 function parametricMCMC!(
+    rng::AbstractRNG,
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
@@ -161,16 +162,17 @@ function parametricMCMC!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    update_onchunk!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
-    update!(tracks.onchunk, tracks.proposals, msd.value) # swap identities partway through
+    update_onchunk!(rng, tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
+    update!(rng, tracks.onchunk, tracks.proposals, msd.value) # swap identities partway through
     seteffvalue!(tracks.onchunk)
-    update!(brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
+    update!(rng, brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
     setdisplacement²!(tracks.onchunk)
-    update!(msd, tracks.onchunk.displacement², 𝑇)
+    update!(rng, msd, tracks.onchunk.displacement², 𝑇)
     return tracks, msd
 end
 
 function nonparametricMCMC!(
+    rng::AbstractRNG,
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
@@ -179,15 +181,16 @@ function nonparametricMCMC!(
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
-    simulate!(tracks.offchunk, msd.value)
+    simulate!(rng, tracks.offchunk, msd.value)
     if any(tracks)
-        update_onchunk!(tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
-        update!(tracks.onchunk, tracks.proposals, msd.value) # swap identities partway through
-        onshuffle!(tracks)
+        update_onchunk!(rng, tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
+        update!(rng, tracks.onchunk, tracks.proposals, msd.value) # swap identities partway through
+        onshuffle!(rng, tracks)
     end
 
     seteffvalue!(tracks)
     update!(
+        rng,
         tracks.nemitters,
         tracks.effvalue[1],
         brightness.value,
@@ -198,10 +201,10 @@ function nonparametricMCMC!(
     )
     reassign!(tracks)
 
-    update!(brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
+    update!(rng, brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
 
     setdisplacement²!(tracks)
-    update!(msd, tracks.displacement²[1], 𝑇)
+    update!(rng, msd, tracks.displacement²[1], 𝑇)
     return tracks, msd
 end
 
@@ -217,6 +220,7 @@ Continue running a MCMC sampling with the specified keyword arguments. Requires 
 - `psf`: A `PointSpreadFunction` object representing the point spread function of the system.
 - `niters`: The number of additional iterations for the MCMC simulation.
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC. A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
+- `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
 The chain's size limit and annealing schedule are those stored in `chain`.
 """
 function runMCMC!(;
@@ -228,6 +232,7 @@ function runMCMC!(;
     psf::PointSpreadFunction{T},
     niters::Integer,
     parametric::Bool,
+    rng::AbstractRNG = Random.default_rng(),
 ) where {T}
     prev_niters = chain.samples[end].iteration
     llarray = LogLikelihoodArray{T}(detector.readouts)
@@ -237,7 +242,7 @@ function runMCMC!(;
         parametric || isfixed(tracks.nemitters) ? parametricMCMC! : nonparametricMCMC!
     @showprogress dt = 1 desc = "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
-        nextsample!(tracks, msd, brightness, llarray, detector, psf, 𝑇)
+        nextsample!(rng, tracks, msd, brightness, llarray, detector, psf, 𝑇)
         if tosave(chain, iter)
             isfull(chain) && shrink!(chain)
             extend!(chain, tracks, msd, brightness, llarray, detector, psf, iter, 𝑇)
@@ -246,7 +251,7 @@ function runMCMC!(;
 end
 
 """
-    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric)
+    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric; rng = Random.default_rng())
 
 Positional form of `runMCMC!(; kwargs...)`, with the arguments in the same order.
 """
@@ -258,7 +263,8 @@ runMCMC!(
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     niters::Integer,
-    parametric::Bool,
+    parametric::Bool;
+    rng::AbstractRNG = Random.default_rng(),
 ) where {T} = runMCMC!(
     chain = chain,
     tracks = tracks,
@@ -268,6 +274,7 @@ runMCMC!(
     psf = psf,
     niters = niters,
     parametric = parametric,
+    rng = rng,
 )
 
 """
@@ -283,6 +290,7 @@ Run a MCMC sampling with the specified keyword arguments. Requires the following
 - `sizelimit`: The maximum size of the chain (default: 1000).
 - `annealing`: An `Annealing` object representing the annealing schedule (default: `ConstantAnnealing{T}(1)`).
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`). A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
+- `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
 """
 function runMCMC(;
     tracks::Tracks{T},
@@ -294,6 +302,7 @@ function runMCMC(;
     sizelimit::Integer = 1000,
     annealing::Union{Annealing{T},Nothing} = nothing,
     parametric::Bool = false,
+    rng::AbstractRNG = Random.default_rng(),
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
     chain = Chain([Sample(tracks.onchunk, msd, brightness)], sizelimit, annealing)
@@ -306,6 +315,7 @@ function runMCMC(;
         psf = psf,
         niters = niters,
         parametric = parametric,
+        rng = rng,
     )
     return chain
 end

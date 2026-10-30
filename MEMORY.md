@@ -2,10 +2,6 @@
 
 Open issues from the code review of 2026-10-27. Each was confirmed on CPU unless it is under "Needs a GPU" (the Mac has no CUDA, CI has no GPU). Delete an entry once it is settled.
 
-## Tests to add
-
-- T7. Tests of the samplers' output distributions need an `rng` argument: the code uses the global RNG, so a `StableRNG` cannot be passed in.
-
 ## Performance (CPU)
 
 Measured with 30×30 pixels, 1000 frames, 8 candidates: one nonparametric iteration takes 262 ms, of which the emitter-count update takes 183 ms, the position update 67 ms and the brightness update 41 ms. One `set_poisson_mean!` takes 9 ms, one SPAD `set_pixel_loglikelihood!` 22 ms.
@@ -59,6 +55,10 @@ Each of these forces a GPU → CPU copy and a synchronization:
 - The identity-swap move (`update!(::TrackChunk, ::MHTrackChunk, msd)`): copies `accepted` to the CPU, builds the relabeling indices there and uploads them (`nframes × ndims × nemitters` integers), then gathers with `scratch[i]`. Check that the gather runs as one kernel (it needs `scratch` to be a `CuArray`, see G1) and what the transfers cost; the CPU cost is 0.1–1.2 ms per call at 2550 frames and 10 particles.
 
 Profile one iteration with `CUDA.@profile` (or Nsight Systems) to see whether these, rather than kernels, dominate.
+
+### G8. Random numbers on GPU
+
+Array draws go through `devicerng(rng, x)`, which `SP2TCUDAExt` maps to `CUDA.default_rng()` for a `CuArray` and, through `parent`, for a view of one. Check that `randn!`, `rand!` and `randexp!` with `CUDA.default_rng()` work on the views the samplers pass (e.g. `x[2:end, :, :]` in `simulate!`), and that seeding `CUDA.default_rng()` plus the host `rng` makes a GPU run reproducible. The SPAD (`batchsize > 1`) and `EMCCDGamma` simulations broadcast `rand.(Ref(rng), ...)` with Distributions.jl, which runs on CPU only, as before.
 
 ### G6. P2 on GPU
 

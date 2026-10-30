@@ -31,12 +31,12 @@ function _permute!(t::Tracks{T}, perm::AbstractVector{<:Integer}) where {T}
 end
 
 """
-    onshuffle!(t::Tracks)
+    onshuffle!(rng::AbstractRNG, t::Tracks)
 
 Shuffles the tracks of the emitting particles in `t`.
 """
-function onshuffle!(t::Tracks)
-    perm = randperm(t.nemitters.value)
+function onshuffle!(rng::AbstractRNG, t::Tracks)
+    perm = randperm(rng, t.nemitters.value)
     isequal(perm, 1:t.nemitters.value) || _permute!(t, perm)
     return t
 end
@@ -79,15 +79,20 @@ function relabel!(
 end
 
 """
-    update!(tracksᵒ::TrackChunk{T}, tracksᵖ::MHTrackChunk{T}, msdᵥ::T)
+    update!(rng::AbstractRNG, tracksᵒ::TrackChunk{T}, tracksᵖ::MHTrackChunk{T}, msdᵥ::T)
 
 Swap particle identities partway through the tracks. Propose a random relabeling `perm` of the particles and, independently for each boundary between frames `k - 1` and `k`, accept relabeling frames `k` onward by `perm` according to the change in the motion log-prior across that boundary. Positions in each frame are unchanged, so the likelihood and the first-frame prior are too. Accepted relabelings compose: frames after `c` accepted boundaries are relabeled by `perm` applied `c` times, which leaves the steps across every other boundary unchanged. `active` is relabeled with the positions.
 """
-function update!(tracksᵒ::TrackChunk{T}, tracksᵖ::MHTrackChunk{T}, msdᵥ::T) where {T}
+function update!(
+    rng::AbstractRNG,
+    tracksᵒ::TrackChunk{T},
+    tracksᵖ::MHTrackChunk{T},
+    msdᵥ::T,
+) where {T}
     nparticles = size(tracksᵒ.value, 3)
-    perm = randperm(nparticles)
+    perm = randperm(rng, nparticles)
     isequal(perm, 1:nparticles) && return tracksᵒ
-    initmh!(tracksᵖ)
+    initmh!(rng, tracksᵖ)
     permuteto!(tracksᵖ.value, tracksᵒ.value, perm, 2)
     setdisplacement²!(tracksᵒ)
     diff²!(tracksᵖ.displacement², tracksᵖ.value, tracksᵒ.value)

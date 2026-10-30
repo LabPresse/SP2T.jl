@@ -72,8 +72,13 @@ function set_pixel_Δloglikelihood!(
     return llarray
 end
 
-function simulate_readouts!(detector::EMCCD{T}, means::AbstractArray{T,3}) where {T}
-    floatreadouts = randn!(similar(detector.readouts, T))
+function simulate_readouts!(
+    rng::AbstractRNG,
+    detector::EMCCD{T},
+    means::AbstractArray{T,3},
+) where {T}
+    floatreadouts = similar(detector.readouts, T)
+    randn!(devicerng(rng, floatreadouts), floatreadouts)
     floatreadouts .*= sqrt(detector.variance)
     @. floatreadouts += detector.gain * means + detector.offset
     detector.readouts .= round.(UInt16, clamp.(floatreadouts, 0, typemax(UInt16)))
@@ -146,9 +151,14 @@ function set_pixel_Δloglikelihood!(
     return Δllarray
 end
 
-function simulate_readouts!(detector::EMCCDGamma{T}, means::AbstractArray{T,3}) where {T}
+function simulate_readouts!(
+    rng::AbstractRNG,
+    detector::EMCCDGamma{T},
+    means::AbstractArray{T,3},
+) where {T}
     floatreadouts =
         rand.(
+            Ref(rng),
             Gamma.(
                 means ./ detector.noise_excess_factor,
                 detector.noise_excess_factor * detector.gain,
