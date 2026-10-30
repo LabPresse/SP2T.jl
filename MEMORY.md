@@ -4,13 +4,7 @@ Open issues from the code review of 2026-10-27. Each was confirmed on CPU unless
 
 ## Tests to add
 
-All on CPU, with expected values from theory or Distributions.jl:
-
-- T1. Detector likelihoods against Distributions.jl up to terms that do not depend on the mean: SPAD vs `Binomial(batchsize, 1 − exp(−λ))`, EMCCD vs `Normal`, EMCCDGamma vs `Gamma`. Each Δ version equals the difference of two full versions.
-- T2. PSF: the integrated PSF sums to ≈ 1 over a wide window; the pixel under an emitter at its center gets `darkcount + brightness`.
-- T3. `framesum!`, `diff²!` and `staggered_diff²!` against direct formulas.
-- T6. `Chain`: thinning keeps at most `sizelimit` samples at equal spacing; `findmap` and `findmle` respect `burn_in`; `jumpdistances` on known tracks.
-- T7. Sampler tests need an `rng` argument: the code uses the global RNG, so a `StableRNG` cannot be passed in.
+- T7. Tests of the samplers' output distributions need an `rng` argument: the code uses the global RNG, so a `StableRNG` cannot be passed in.
 
 ## Performance (CPU)
 

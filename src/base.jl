@@ -62,7 +62,7 @@ LogLikelihoodArray{T}(frames::AbstractArray) where {T<:AbstractFloat} = LogLikel
 """
     framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T}
 
-A more efficient way to implement `r .= sum(A .* b, dims=3)`.
+Store in `r` the `b`-weighted sum over pixels of each frame of `A`; a more efficient way to implement `r .= vec(sum(A .* b, dims = (1, 2)))`.
 """
 framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T} =
     mul!(r, transpose(reshape(A, length(b), :)), vec(b))

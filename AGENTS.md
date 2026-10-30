@@ -65,7 +65,14 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
 
 ## Testing
 
-- `Pkg.test()` runs and passes. `test/runtests.jl` checks the PSF (`SP2T.gaussianpeak`, `CircularGaussian`'s `A` and `σ`, and `SP2T.getσ₀z₀`) against fixed reference values, and the derived properties of `EmitterCount` (`limit` equals the weak limit) and `Chain` (every name in `propertynames` is a `Symbol` that `getproperty` accepts), the track log-prior against `Distributions.logpdf`, `Δlogmotion!` (every frame of the updated parity gets exactly the motion change of its adjacent steps), `Tracks` built with an `active` mask, the `PolynomialAnnealing` schedule (𝑇₀ at the start, 1 from `I` on, decreasing in between), `DNormal.dims`, that detectors leave the caller's `darkcounts` unchanged, that a fixed emitter count is never updated and selects the parametric sweep, and the identity-swap move (frame-by-frame relabeling; two crossing particles with swapped tails are untangled, with their masks), that simulated EMCCD readouts are clipped at 0, that a parametric step leaves `effvalue` up to date, and that `bridge!` ends at both given points (a straight line for zero MSD). Detectors, likelihoods, samplers and `runMCMC` have no tests.
-- Test dependencies: Test and Distributions. The tests use fixed inputs, no RNG and no data files.
+- `Pkg.test()` runs and passes. `test/runtests.jl` checks, with expected values from theory or Distributions.jl:
+  - PSF: `gaussianpeak`, `CircularGaussian`'s `A` and `σ`, `getσ₀z₀` against fixed values; the pixel-integrated PSF sums to 1 and gives `A` to the centered pixel; `getincident` (2D, and 3D at z = 0 and z₀)
+  - Detector likelihoods (SPAD, EMCCD, EMCCDGamma) and their Δ versions against `Distributions.logpdf`, up to terms that do not depend on the expected count; detectors leave the caller's `darkcounts` unchanged; simulated EMCCD readouts are clipped at 0
+  - Priors and motion: the track log-prior against `logpdf`; `Δlogmotion!`; `framesum!`, `diff²!`, `staggered_diff²!`; `bridge!`; `DNormal.dims`
+  - Tracks and moves: `Tracks` with an `active` mask (both layouts); the identity-swap move (frame-by-frame relabeling; crossing particles with swapped tails are untangled, with their masks); a fixed emitter count is never updated and selects the parametric sweep; a parametric step leaves `effvalue` up to date
+  - Chain: `EmitterCount.limit`; `Chain`'s `propertynames`; thinning (at most `sizelimit` samples, equal power-of-two spacing); `findmap`, `findmle` with `burn_in`; `jumpdistances`
+  - `PolynomialAnnealing`: 𝑇₀ at the start, 1 from `I` on, decreasing in between
+- Not tested: the samplers' output distributions (needs an `rng` argument, see T7 in `MEMORY.md`) and `runMCMC` beyond smoke runs.
+- Test dependencies: Test and Distributions. No data files. Most tests use fixed inputs; those that run a sampler use the global RNG and assert only properties that hold for any draw (or fail with negligible probability, stated in the test).
 - Tests run on CPU arrays; CI has no GPU, so `ext/` is untested.
 - New sampler or fit tests: use a `StableRNG` seed (not yet a test dependency; ask first) or fixed data, and assert against a known ground truth with a tolerance derived from the noise, not tuned to current output.
