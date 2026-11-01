@@ -35,12 +35,18 @@ function SPAD{T}(;
     )
 end
 
+# Most SPAD readouts are 0, so `logexpm1` is evaluated only where it contributes: a real
+# branch (not `ifelse`) is 5× faster on CPU and up to 3.5× on Metal.
+clickterm(r::Integer, λ::T) where {T} = iszero(r) ? zero(T) : r * logexpm1(λ)
+Δclickterm(r::Integer, λ₁::T, λ₂::T) where {T} =
+    iszero(r) ? zero(T) : r * (logexpm1(λ₂) - logexpm1(λ₁))
+
 function set_pixel_loglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
     @. llarray.pixel =
-        detector.readouts * logexpm1(llarray.means[1]) -
+        clickterm(detector.readouts, llarray.means[1]) -
         detector.batchsize * llarray.means[1]
     return llarray
 end
@@ -50,7 +56,7 @@ function set_pixel_Δloglikelihood!(
     detector::SPAD{T},
 ) where {T}
     @. Δllarray.pixel =
-        detector.readouts * (logexpm1(Δllarray.means[2]) - logexpm1(Δllarray.means[1])) -
+        Δclickterm(detector.readouts, Δllarray.means[1], Δllarray.means[2]) -
         detector.batchsize * (Δllarray.means[2] - Δllarray.means[1])
     return Δllarray
 end

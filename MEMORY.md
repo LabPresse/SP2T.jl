@@ -4,19 +4,15 @@ Open issues from the code review of 2026-10-27. Each was confirmed on CPU unless
 
 ## Performance (CPU)
 
-Measured with 30×30 pixels, 1000 frames, 8 candidates: one nonparametric iteration takes 262 ms, of which the emitter-count update takes 183 ms, the position update 67 ms and the brightness update 41 ms. One `set_poisson_mean!` takes 9 ms, one SPAD `set_pixel_loglikelihood!` 22 ms.
-
-### P1. Skip `logexpm1` for zero SPAD readouts
-
-`readouts * logexpm1(mean)` evaluates `logexpm1` for every pixel, though most SPAD readouts are 0. A real branch, `iszero(r) ? zero(m) : r * logexpm1(m)`, gives identical results and is 9.4× faster (12.5 ms → 1.3 ms, 97% zeros). `ifelse` evaluates both arms and is not faster. Applies to `set_pixel_loglikelihood!` and `set_pixel_Δloglikelihood!`. GPU effect: see G4.
-
-### P2. Per-call allocations
-
-`set_poisson_mean!`, `set_loglikelihood!` (emitter count) and `getincident` allocate `psfcomponents` and `relativepos` on every call (≈ 1.9 MiB per call above; several calls per iteration). Preallocate once, e.g. in `LogLikelihoodArray`.
+2D example (50×50 pixels, 2550 frames, 10 candidates, Float32), after P1: one nonparametric iteration takes 459 ms on CPU and 166 ms on Metal (M1 Pro). Starting from the true tracks (2 on), the CPU spends 270 ms in the emitter-count update, 147 ms in the position update and 61 ms in the brightness update; one expected-count evaluation (`set_poisson_mean!`) takes 17 ms (copying `darkcounts` 4 ms, PSF integration 10 ms, `batched_mul!` 1 ms). P2 (preallocating the PSF buffers) was measured and dropped: allocation takes 0.01–0.04 ms per call.
 
 ### P3. Recomputed current expected counts
 
-`update_onchunk!` and `update!(::Brightness, ...)` recompute the expected counts of the current state, which the previous step already had. Caching them saves one PSF evaluation per update.
+`update_onchunk!` and `update!(::Brightness, ...)` recompute the expected counts of the current state, which the previous step already had. Caching them would save one `set_poisson_mean!` (17 ms on CPU) in each, about 7% of an iteration, at the cost of keeping the cache valid after every accepted move, emitter-count change and brightness change.
+
+### P4. Emitter-count likelihood over all pixels
+
+The emitter-count update evaluates the full log-likelihood once per candidate (`max_ntracks` times per iteration), over every pixel and frame, though adding one candidate only changes pixels near its track. Restricting each evaluation to a window around the candidate (a few PSF widths) would cut most of the 270 ms, but needs per-candidate windows that also work on GPUs.
 
 ## Future
 
@@ -34,7 +30,7 @@ Compiling the sweeps with Reactant.jl (XLA) could fuse kernels on CPU and GPU, b
 
 ## Needs a GPU
 
-On the Mac, Metal (an Apple GPU) can stand in for CUDA to check items that only depend on GPUArrays behavior (G1, G2, G4, G8); a pass on Metal is evidence, not proof, for CUDA.
+Timing single small GPU operations with host timers is unreliable on Metal (results varied by 100× between runs of the same operation, likely GPU power states); time whole steps, or use a GPU profiler (Xcode Instruments, Metal capture). On the Mac, Metal (an Apple GPU) can stand in for CUDA to check items that only depend on GPUArrays behavior (G1, G2, G8); a pass on Metal is evidence, not proof, for CUDA.
 
 ### G1. `ext/` methods may never be called
 
@@ -45,10 +41,6 @@ Check: on a GPU run, `typeof(tracks.onchunk.value)` and `typeof(tracks.proposals
 ### G2. Nested array wrappers in the PSF
 
 `integratepsf!` passes `view(tracksᵥ, :, 1:1, :)` to `_erf!`, which broadcasts over `PermutedDimsArray` of it; `lateral_std` does the same for z. That is a `PermutedDimsArray{SubArray{CuArray}}`. Check that this broadcast compiles to one GPU kernel (not a scalar fallback), with `CUDA.allowscalar(false)`, and time it against materializing `permutedims` first.
-
-### G4. P1 on GPU
-
-The zero-readout branch diverges within a warp, so it may gain less or nothing. Time both versions on a realistic data set before changing the shared code path.
 
 ### G5. Host synchronizations per iteration
 
@@ -65,10 +57,6 @@ Profile one iteration with `CUDA.@profile` (or Nsight Systems) to see whether th
 ### G8. Random numbers on GPU
 
 Array draws go through `devicerng(rng, x)`, which `SP2TCUDAExt` maps to `CUDA.default_rng()` for a `CuArray` and, through `parent`, for a view of one. Check that `randn!`, `rand!` and `randexp!` with `CUDA.default_rng()` work on the views the samplers pass (e.g. `x[2:end, :, :]` in `simulate!`), and that seeding `CUDA.default_rng()` plus the host `rng` makes a GPU run reproducible. The SPAD (`batchsize > 1`) and `EMCCDGamma` simulations broadcast `rand.(Ref(rng), ...)` with Distributions.jl, which runs on CPU only, as before.
-
-### G6. P2 on GPU
-
-On GPU the per-call buffers come from the memory pool. Check with `CUDA.@time` whether allocation counts or pool pressure matter.
 
 ### G7. `sum(vec(x))` instead of `sum(x)`
 
