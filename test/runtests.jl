@@ -467,3 +467,5 @@ end
 end
 
 include("samplers.jl")
+
+Sys.isapple() && include("metal.jl")

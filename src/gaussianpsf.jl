@@ -75,6 +75,24 @@ function lateral_std(
     return lateral_std!(similar(z′), z′, PSF)
 end
 
+"""
+    erfdiff(x::T, y::T) where {T<:AbstractFloat}
+
+`erf(y) - erf(x)`, accurate in the tails like `SpecialFunctions.erf(x, y)`, but with its constant in `T`, so it compiles for GPUs without Float64 support (Metal).
+"""
+function erfdiff(x::T, y::T) where {T<:AbstractFloat}
+    c = inv(sqrt(T(2)))
+    if abs(x) ≤ c && abs(y) ≤ c
+        erf(y) - erf(x)
+    elseif 0 ≤ x && 0 ≤ y
+        erfc(x) - erfc(y)
+    elseif x ≤ 0 && y ≤ 0
+        erfc(-y) - erfc(-x)
+    else
+        erf(y) - erf(x)
+    end
+end
+
 function _erf(
     x::AbstractArray{T,3},
     bnds::AbstractVector{T},
@@ -93,7 +111,7 @@ function _erf!(
     σ::T,
 ) where {T}
     𝐗 .= (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) * σ)
-    @views psfx .= erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+    @views psfx .= erfdiff.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
     return psfx
 end
 
@@ -105,7 +123,7 @@ function _erf!(
     σ::AbstractArray{T},
 ) where {T}
     𝐗 .= (bnds .- PermutedDimsArray(x, (2, 3, 1))) ./ (√convert(T, 2) .* σ)
-    @views psfx .= erf.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
+    @views psfx .= erfdiff.(𝐗[1:end-1, :, :], 𝐗[2:end, :, :]) ./ 2
     return psfx
 end
 

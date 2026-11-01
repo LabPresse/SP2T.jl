@@ -15,12 +15,15 @@ function _init_pixel_detector_params(
     cutoffs::Tuple{<:Real,<:Real},
 ) where {T}
     darkcounts = copyto!(similar(darkcounts, TargetType), darkcounts)
-    darkcounts[isinf.(darkcounts)] .= floatmax(eltype(darkcounts))
-    darkcounts[iszero.(darkcounts)] .= floatmin(eltype(darkcounts))
-    filter = similar(darkcounts) .= cutoffs[1] .< darkcounts .< cutoffs[2]
+    darkcounts[isinf.(darkcounts)] .= floatmax(T)
+    darkcounts[iszero.(darkcounts)] .= floatmin(T)
+    lower, upper = convert.(T, cutoffs)
+    filter = similar(darkcounts) .= lower .< darkcounts .< upper
     width, height = size(darkcounts)
-    pxboundsx = similar(darkcounts, width + 1) .= 0:pixel_size:width*pixel_size
-    pxboundsy = similar(darkcounts, height + 1) .= 0:pixel_size:height*pixel_size
+    pxsize = convert(T, pixel_size)
+    # built on the CPU in T: a Float64 range cannot be broadcast on GPUs without Float64
+    pxboundsx = copyto!(similar(darkcounts, width + 1), collect((0:width) .* pxsize))
+    pxboundsy = copyto!(similar(darkcounts, height + 1), collect((0:height) .* pxsize))
     return (pxboundsx, pxboundsy), darkcounts, filter
 end
 

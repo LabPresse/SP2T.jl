@@ -65,7 +65,8 @@ LogLikelihoodArray{T}(frames::AbstractArray) where {T<:AbstractFloat} = LogLikel
 Store in `r` the `b`-weighted sum over pixels of each frame of `A`; a more efficient way to implement `r .= vec(sum(A .* b, dims = (1, 2)))`.
 """
 framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T} =
-    mul!(r, transpose(reshape(A, length(b), :)), vec(b))
+    # zeroed first: Metal's mul! computes 0 * r, which keeps a NaN or Inf already in `r`
+    mul!(fill!(r, zero(T)), transpose(reshape(A, length(b), :)), vec(b))
 
 """
     devicerng(rng::AbstractRNG, x::AbstractArray)

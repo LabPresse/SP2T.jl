@@ -28,7 +28,13 @@ Measured with 30×30 pixels, 1000 frames, 8 candidates: one nonparametric iterat
 
 `runMCMC` and `runMCMC!` run the parametric sweep when `parametric = true` or `tracks.nemitters.fixed` is set. Consider making `fixed` the only switch: drop `parametric`, add a `Tracks` keyword to fix the count, so every random variable says whether it is sampled and the sweep follows (as `MeanSquaredDisplacement` and `Brightness` already do, and as F1 would for the mask). Breaking change: every example passes `parametric`, several positionally; do it when the examples are next updated.
 
+### F3. Reactant.jl (low priority)
+
+Compiling the sweeps with Reactant.jl (XLA) could fuse kernels on CPU and GPU, but needs fixed array shapes: always compute all `max_ntracks` candidates and switch them with a mask (the `active`/`effvalue = Inf` design points that way), and move host-side decisions (`randperm`, scalar accept/reject, Distributions.jl draws) into traced code. Reactant's Metal support is experimental (through Apple's JAX Metal plugin). Revisit only as part of such a fixed-shape redesign.
+
 ## Needs a GPU
+
+On the Mac, Metal (an Apple GPU) can stand in for CUDA to check items that only depend on GPUArrays behavior (G1, G2, G4, G8); a pass on Metal is evidence, not proof, for CUDA.
 
 ### G1. `ext/` methods may never be called
 

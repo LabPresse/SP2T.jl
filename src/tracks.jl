@@ -56,8 +56,8 @@ function MHTrackChunk(value, active, displacement², effvalue, scaling)
         effvalue,
         similar(value, nframes - 1),
         scaling,
-        fill!(similar(value, nframes), -Inf),
-        fill!(similar(value, nframes), 0.0),
+        fill!(similar(value, nframes), typemin(eltype(value))),
+        fill!(similar(value, nframes), zero(eltype(value))),
         zeros(Int, 2, 2),
     )
 end
@@ -150,7 +150,7 @@ function Tracks{T}(;
     value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
     values = (value, similar(value))
 
-    scaling isa Real && (scaling = fill!(similar(value), scaling))
+    scaling isa Real && (scaling = fill!(similar(value), convert(T, scaling)))
 
     active = if !isnothing(active)
         dimsmatch(guess, active, dims = 1) && size(active, 2) in (1, ndims) || throw(
@@ -252,6 +252,8 @@ simulate!(x::AbstractArray{T,3}, msd::T, prior) where {T} =
     simulate!(Random.default_rng(), x, msd, prior)
 
 function simulate!(rng::AbstractRNG, tracks::TrackChunk{T}, msdᵥ::T) where {T}
+    # no candidates (all on): Metal cannot launch kernels over empty arrays
+    isempty(tracks.value) && return tracks
     simulate!(rng, tracks.value, msdᵥ, tracks.prior)
     return tracks
 end
