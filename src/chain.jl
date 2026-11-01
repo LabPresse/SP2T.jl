@@ -203,8 +203,10 @@ function nonparametricMCMC!(
 
     update!(rng, brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
 
-    setdisplacement²!(tracks)
-    update!(rng, msd, tracks.displacement²[1], 𝑇)
+    # the off tracks are integrated out: drawn from the MSD, they would pull it toward its
+    # current value; they are redrawn from the new MSD before the next count update
+    setdisplacement²!(tracks.onchunk)
+    update!(rng, msd, tracks.onchunk.displacement², 𝑇)
     return tracks, msd
 end
 
