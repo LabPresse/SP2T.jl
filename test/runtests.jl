@@ -379,7 +379,7 @@ end
 # The brightness move rescales the emitter part of the expected counts, keeping the dark
 # counts: its Δ equals the difference of two full evaluations, also with a click where
 # the PSF has underflowed to 0.
-@testset for aux in (detector -> SP2T.LogLikelihoodArray{Float64}(detector.readouts),)
+@testset for aux in (detector -> SP2T.LogLikelihoodArray{Float64}(detector.readouts), SP2T.SPADLogLikelihood)
     detector, psfs, tracks = spadsetup()
     detector.readouts[end, end, :] .= 1
     llarray, x, psf = aux(detector), fill(0.05, size(tracks, 1), 2, 1), psfs[1] # 1.1 μm (11σ) from the click
@@ -387,6 +387,32 @@ end
     reference = full(1.3) - full(0.8)
     SP2T.set_poisson_means!(llarray, detector, x, 0.8, 1.3, psf)
     @test SP2T.get_Δloglikelihood!(llarray, detector) ≈ reference
+end
+
+# SPADLogLikelihood evaluates the likelihood only at nonzero readouts, plus a separable
+# sum over pixels: every quantity the sweep reads equals the dense LogLikelihoodArray's.
+@testset for batchsize in (1, 3), (psf, ndims) in ((1, 2), (2, 3))
+    detector, psfs, tracks = spadsetup(batchsize = batchsize)
+    x = tracks[:, 1:ndims, :]
+    ndims == 3 && (x[4, :, 1] .= 0.5) # a dark frame gives NaN with the 3D PSF (B11 in MEMORY.md)
+    y = x .+ 0.03 .* randn(StableRNG(8), size(x))
+    count = SP2T.EmitterCount{Float64}(0, 3, -1)
+    results = map((SP2T.LogLikelihoodArray{Float64}(detector.readouts), SP2T.SPADLogLikelihood(detector))) do llarray
+        SP2T.reset!(llarray, detector, 1)
+        empty = SP2T.get_loglikelihood!(llarray, detector)
+        SP2T.set_poisson_mean!(llarray, detector, x, 0.8, psfs[psf])
+        total = SP2T.get_loglikelihood!(llarray, detector)
+        SP2T.set_poisson_means!(llarray, detector, x, y, 0.8, psfs[psf])
+        frame = copy(SP2T.set_frame_Δloglikelihood!(llarray, detector).frame)
+        SP2T.set_poisson_means!(llarray, detector, x, 0.8, 1.1, psfs[psf])
+        brightness = SP2T.get_Δloglikelihood!(llarray, detector)
+        SP2T.set_loglikelihood!(count, x, 0.8, llarray, detector, psfs[psf])
+        return (empty, total, frame, brightness, count.loglikelihood[2:end])
+    end
+    @test all(isfinite, results[1][3])
+    for (sparse, dense) in zip(results[2], results[1])
+        @test sparse ≈ dense rtol = 1e-12
+    end
 end
 
 println("Running PSF integration tests...")

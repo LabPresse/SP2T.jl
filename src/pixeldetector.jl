@@ -133,15 +133,19 @@ function addincident!(
     )
 end
 
-function set_poisson_mean!(
+"""
+    add_poisson_mean!(llarray::LogLikelihoodAux{T}, detector::PixelDetector{T}, tracksᵥ::AbstractArray{T,3}, brightnessᵥ::T, psf::PointSpreadFunction{T}, i::Integer)
+
+Add the expected photon counts of the emitters in `tracksᵥ` to the state `i` of `llarray` (1 current, 2 proposed).
+"""
+function add_poisson_mean!(
     llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     psf::PointSpreadFunction{T},
-    i::Integer = 1,
+    i::Integer,
 ) where {T}
-    reset!(llarray, detector, i)
     nframes, ~, nemitters = size(tracksᵥ)
     psfcomponents = (
         similar(tracksᵥ, size(detector, 1), nemitters, nframes),
@@ -163,8 +167,20 @@ function set_poisson_mean!(
     return llarray
 end
 
+function set_poisson_mean!(
+    llarray::LogLikelihoodAux{T},
+    detector::PixelDetector{T},
+    tracksᵥ::AbstractArray{T,3},
+    brightnessᵥ::T,
+    psf::PointSpreadFunction{T},
+    i::Integer = 1,
+) where {T}
+    reset!(llarray, detector, i)
+    return add_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ, psf, i)
+end
+
 function set_poisson_means!(
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::PixelDetector{T},
     tracksᵥ₁::AbstractArray{T,3},
     tracksᵥ₂::AbstractArray{T,3},

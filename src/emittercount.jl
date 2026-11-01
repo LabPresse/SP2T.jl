@@ -51,29 +51,19 @@ function set_loglikelihood!(
     count::EmitterCount{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
 ) where {T}
     reset!(llarray, detector, 1)
-    nframes, ~, nparticles = size(tracksᵥ)
-    psfcomponents = (
-        similar(tracksᵥ, size(detector, 1), 1, nframes),
-        similar(tracksᵥ, size(detector, 2), 1, nframes),
-    )
-    relativepos = (
-        similar(tracksᵥ, size(detector, 1) + 1, 1, nframes),
-        similar(tracksᵥ, size(detector, 2) + 1, 1, nframes),
-    )
-    @inbounds for m = 1:nparticles
-        addincident!(
-            llarray.means[1],
-            psfcomponents,
-            relativepos,
+    for m in axes(tracksᵥ, 3)
+        add_poisson_mean!(
+            llarray,
+            detector,
             view(tracksᵥ, :, :, m:m),
             brightnessᵥ,
-            detector.pxbounds,
             psf,
+            1,
         )
         count.loglikelihood[m+1] = get_loglikelihood!(llarray, detector)
     end
@@ -85,7 +75,7 @@ function update!(
     count::EmitterCount{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,

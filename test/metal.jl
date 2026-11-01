@@ -53,10 +53,10 @@ else
     readouts = UInt16.(reshape([isodd(i ÷ 11) for i = 1:12*12*20], 12, 12, 20))
     truetracks = Float32.(cat([0.4 + 0.01k for k = 1:20, d = 1:2], [0.8 - 0.01k for k = 1:20, d = 1:2], dims = 3))
 
-    @testset let
+    @testset for aux in (detector -> SP2T.LogLikelihoodArray{Float32}(detector.readouts), SP2T.SPADLogLikelihood)
         loglikelihood = map((identity, private)) do device
             detector, psf, _ = metalsetup(device, readouts)
-            llarray = SP2T.LogLikelihoodArray{Float32}(detector.readouts)
+            llarray = aux(detector)
             SP2T.set_poisson_mean!(llarray, detector, device(truetracks), 0.5f0, psf)
             SP2T.get_loglikelihood!(llarray, detector)
         end

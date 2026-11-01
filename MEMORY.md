@@ -2,17 +2,23 @@
 
 Open issues from the code review of 2026-10-27. Each was confirmed on CPU unless it is under "Needs a GPU" (the Mac has no CUDA, CI has no GPU). Delete an entry once it is settled.
 
+## Bugs
+
+### B11. NaN in dark frames with the 3D PSF
+
+A dark frame (`active` 0) has `effvalue = Inf` in every coordinate, z included. `lateral_std` then gives σ = Inf, and `_erf!` computes (bounds − Inf)/(√2·Inf) = NaN, so with `CircularGaussianLorentzian` every dark frame's likelihood is NaN (the 2D PSF gives 0, as intended). NaN log-acceptances are never accepted and NaN emitter-count posteriors break `randc`. Any 3D run with an `active` mask is affected. Possible fix: give dark frames a finite σ (e.g. σ₀ where z is infinite), so the relative positions are −Inf and the PSF fractions 0. The SPAD equivalence test in `test/runtests.jl` keeps its dark frame out of the 3D case until this is fixed.
+
 ## Performance (CPU)
 
-2D example (50×50 pixels, 2550 frames, 10 candidates, Float32), after P1: one nonparametric iteration takes 459 ms on CPU and 166 ms on Metal (M1 Pro). Starting from the true tracks (2 on), the CPU spends 270 ms in the emitter-count update, 147 ms in the position update and 61 ms in the brightness update; one expected-count evaluation (`set_poisson_mean!`) takes 17 ms (copying `darkcounts` 4 ms, PSF integration 10 ms, `batched_mul!` 1 ms). P2 (preallocating the PSF buffers) was measured and dropped: allocation takes 0.01–0.04 ms per call.
+2D example (50×50 pixels, 2550 frames, 10 candidates, Float32), starting from the true tracks (2 on): one nonparametric iteration took 459 ms on CPU and 166 ms on Metal (M1 Pro) after P1, and takes 58 ms on CPU and 33 ms on Metal with the PSF cutoff (`pixelfraction`) and the sparse SPAD workspace (`SPADLogLikelihood`). The dense workspace with the cutoff takes 303 ms on CPU. P2 (preallocating the PSF buffers) was measured and dropped: allocation takes 0.01–0.04 ms per call.
 
 ### P3. Recomputed current expected counts
 
-`update_onchunk!` and `update!(::Brightness, ...)` recompute the expected counts of the current state, which the previous step already had. Caching them would save one `set_poisson_mean!` (17 ms on CPU) in each, about 7% of an iteration, at the cost of keeping the cache valid after every accepted move, emitter-count change and brightness change.
+`update_onchunk!` and `update!(::Brightness, ...)` recompute the expected counts of the current state, which the previous step already had. Caching them would save one `set_poisson_mean!` in each, at the cost of keeping the cache valid after every accepted move, emitter-count change and brightness change. Before the sparse workspace this was about 7% of an iteration; re-measure on the sparse path (where one evaluation is mostly PSF integration) before deciding.
 
-### P4. Emitter-count likelihood over all pixels
+### P4. Emitter-count likelihood over all pixels (EMCCD)
 
-The emitter-count update evaluates the full log-likelihood once per candidate (`max_ntracks` times per iteration), over every pixel and frame, though adding one candidate only changes pixels near its track. Restricting each evaluation to a window around the candidate (a few PSF widths) would cut most of the 270 ms, but needs per-candidate windows that also work on GPUs.
+With the dense workspace (EMCCD, EMCCDGamma), the emitter-count update evaluates the full log-likelihood once per candidate (`max_ntracks` times per iteration), over every pixel and frame, though adding one candidate only changes pixels near its track. Restricting each evaluation to a window around the candidate (a few PSF widths) would cut most of it, but needs per-candidate windows that also work on GPUs. SPAD no longer needs this: its sparse workspace touches only nonzero readouts.
 
 ## Future
 
@@ -61,3 +67,7 @@ Array draws go through `devicerng(rng, x)`, which `SP2TCUDAExt` maps to `CUDA.de
 ### G7. `sum(vec(x))` instead of `sum(x)`
 
 A comment in `src/msd.jl` says summing `vec` is faster with CUDA.jl. Recheck with the current CUDA.jl; if the difference is gone, use `sum(x)` and drop the convention from AGENTS.md.
+
+### G9. Sparse SPAD workspace on CUDA
+
+`SPADLogLikelihood` gathers the PSF components at the clicks with integer index arrays (`px[xindex]`), sums per frame with `sum!` over a reshaped vector, and builds its index arrays on the CPU, copying them to the device once per `runMCMC!` call. It passes on Metal (`test/metal.jl`); check on CUDA with `CUDA.allowscalar(false)` that the gathers run as kernels, and time an iteration against the dense workspace (`LogLikelihoodArray`) there.

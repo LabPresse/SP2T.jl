@@ -49,7 +49,7 @@ function update!(
     rng::AbstractRNG,
     brightness::Brightness{T},
     tracksᵥ::AbstractArray{T,3},
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,

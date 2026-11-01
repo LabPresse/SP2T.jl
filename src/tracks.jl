@@ -389,7 +389,7 @@ function update_onchunk!(
     tracks::Tracks{T},
     msdᵥ::T,
     brightnessᵥ::T,
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,

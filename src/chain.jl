@@ -115,7 +115,7 @@ function extend!(
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     iter::Integer,
@@ -131,7 +131,7 @@ function extend!(
 end
 
 function get_loglikelihood!(
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     tracks::Tracks{T},
     brightness::Brightness{T},
     detector::Detector{T},
@@ -157,7 +157,7 @@ function parametricMCMC!(
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
@@ -176,7 +176,7 @@ function nonparametricMCMC!(
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
     brightness::Brightness{T},
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
@@ -235,7 +235,7 @@ function runMCMC!(;
     rng::AbstractRNG = Random.default_rng(),
 ) where {T}
     prev_niters = chain.samples[end].iteration
-    llarray = LogLikelihoodArray{T}(detector.readouts)
+    llarray = loglikelihoodaux(detector)
     reset!(llarray, detector, 1)
     tracks.nemitters.loglikelihood[1] = get_loglikelihood!(llarray, detector)
     nextsample! =
