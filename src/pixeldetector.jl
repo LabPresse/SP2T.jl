@@ -186,6 +186,7 @@ function set_poisson_means!(
 ) where {T}
     set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₁, psf, 1)
     llarray.means[2] .=
+        detector.darkcounts .+
         (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁)
     return llarray
 end

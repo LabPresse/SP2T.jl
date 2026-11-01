@@ -350,6 +350,45 @@ end
     @test pixelΔloglikelihood(gamma, λ₁, λ₂) ≈ gammareference(λ₂) .- gammareference(λ₁)
 end
 
+# A SPAD frame, its PSFs, three emitters (the first dark in frame 4) and readouts
+# simulated from them. Dark counts above the cutoff filter out four pixels, which get
+# clicks of their own.
+function spadsetup(; batchsize = 3)
+    nx, ny, nframes = 12, 10, 6
+    darkcounts = fill(0.02, nx, ny)
+    darkcounts[[2, 7], [3, 9]] .= 0.5
+    detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = darkcounts,
+        cutoffs = (0, 0.1),
+        readouts = zeros(UInt16, nx, ny, nframes),
+        batchsize = batchsize,
+    )
+    optics = (numerical_aperture = 1.45, refractive_index = 1.515, emission_wavelength = 0.665, pixel_size = 0.1)
+    psfs = (CircularGaussian{Float64}(; optics...), CircularGaussianLorentzian{Float64}(; optics...))
+    rng = StableRNG(7)
+    tracks = [0.3 + 0.6 * rand(rng) + 0.02k for k = 1:nframes, d = 1:3, m = 1:3]
+    tracks[:, 3, :] .-= 0.6
+    tracks[4, :, 1] .= Inf
+    means = SP2T.getincident(tracks[:, 1:2, :], 0.8, darkcounts, detector.pxbounds, psfs[1])
+    SP2T.simulate_readouts!(rng, detector, means)
+    return detector, psfs, tracks
+end
+
+# The brightness move rescales the emitter part of the expected counts, keeping the dark
+# counts: its Δ equals the difference of two full evaluations, also with a click where
+# the PSF has underflowed to 0.
+@testset for aux in (detector -> SP2T.LogLikelihoodArray{Float64}(detector.readouts),)
+    detector, psfs, tracks = spadsetup()
+    detector.readouts[end, end, :] .= 1
+    llarray, x, psf = aux(detector), fill(0.05, size(tracks, 1), 2, 1), psfs[1] # 1.1 μm (11σ) from the click
+    full(b) = (SP2T.set_poisson_mean!(llarray, detector, x, b, psf); SP2T.get_loglikelihood!(llarray, detector))
+    reference = full(1.3) - full(0.8)
+    SP2T.set_poisson_means!(llarray, detector, x, 0.8, 1.3, psf)
+    @test SP2T.get_Δloglikelihood!(llarray, detector) ≈ reference
+end
+
 println("Running PSF integration tests...")
 
 # The pixel-integrated PSF sums to 1 over a ±10σ window, and the pixel centered on the
