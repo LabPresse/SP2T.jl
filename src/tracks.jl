@@ -137,6 +137,29 @@ function logprior(t::AbstractTrackChunk{T}, msdᵥ::T) where {T}
     ) / 2 + logprior(t.prior, view(t.value, 1, :, :))
 end
 
+"""
+    offlogprior([rng::AbstractRNG,] tracks::Tracks{T}, msdᵥ::T)
+
+The off candidates' `logprior` without simulating their tracks: its expectation over tracks drawn from the prior given `msdᵥ` or, with `rng`, an exact draw of it. For such tracks, every displacement divided by `√msdᵥ` and every first position standardized by the `DNormal` prior is standard normal, so the sum of their squares is χ²-distributed with `nframes · ndims` degrees of freedom per track; the expectation replaces it by its mean.
+"""
+offlogprior(tracks::Tracks{T}, msdᵥ::T) where {T} =
+    offlogprior(identity, tracks, msdᵥ) # E[χ²(k)] = k
+offlogprior(rng::AbstractRNG, tracks::Tracks{T}, msdᵥ::T) where {T} =
+    offlogprior(k -> convert(T, rand(rng, Chisq(k))), tracks, msdᵥ)
+offlogprior(::Nothing, tracks::Tracks{T}, msdᵥ::T) where {T} = offlogprior(tracks, msdᵥ)
+
+function offlogprior(χ²::F, tracks::Tracks{T}, msdᵥ::T) where {F<:Function,T}
+    noff = tracks.nemitters.limit - tracks.nemitters.value
+    iszero(noff) && return zero(T)
+    nframes, ndims = size(tracks.value[1], 1), size(tracks.value[1], 2)
+    σ = tracks.onchunk.prior.σ
+    lognormalization =
+        (nframes - 1) * ndims * log(2 * T(π) * msdᵥ) +
+        ndims * log(2 * T(π)) +
+        2 * sum(log, σ)
+    return -(noff * lognormalization + χ²(noff * nframes * ndims)) / 2
+end
+
 function Tracks{T}(;
     guess::AbstractArray{<:Real,3},
     prior::P,

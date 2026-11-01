@@ -60,6 +60,33 @@ println("Running prior-related tests...")
     @test SP2T.logprior(chunk, msd) ≈ expected
 end
 
+# The log posterior covers all candidates, the off ones through their expected log prior.
+# Switching candidate 3 on (same tracks, same log-likelihood) replaces its expected log
+# prior by its actual one, so log𝒫 changes by logonprob - (S/msd + Σz² - nframes·ndims)/2,
+# with S its squared displacements and z its standardized first position. That change has
+# no units: it is the same with positions in μm or in nm (× 1000, msd × 10⁶).
+@testset let value = reshape([0.1 * i^1.5 for i = 1:30], 5, 2, 3), μ = [0.5, 0.8], σ = [0.4, 0.3], msd = 0.04
+    function Δlogposterior(c)
+        tracks = Tracks{Float64}(
+            guess = c .* value,
+            prior = SP2T.DNormal{Float64}(c .* μ, c .* σ),
+            max_ntracks = 4,
+            scaling = 0.01,
+            logonprob = -3,
+        )
+        msdc = MeanSquaredDisplacement{Float64}(guess = c^2 * msd)
+        on = SP2T.get_logposterior(0.0, tracks, msdc)
+        tracks.nemitters.value = 2
+        SP2T.reassign!(tracks)
+        return on - SP2T.get_logposterior(0.0, tracks, msdc)
+    end
+    S = sum(diff(value[:, :, 3], dims = 1) .^ 2)
+    z² = sum(((value[1, :, 3] .- μ) ./ σ) .^ 2)
+    expected = -3 - (S / msd + z² - 5 * 2) / 2
+    @test Δlogposterior(1) ≈ expected
+    @test Δlogposterior(1000) ≈ expected
+end
+
 println("Running motion-related tests...")
 
 # Frame k of parity i gets the motion change of the steps leaving it (k → k+1, entry k

@@ -120,9 +120,10 @@ function extend!(
     psf::PointSpreadFunction{T},
     iter::Integer,
     𝑇::T,
+    logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
 ) where {T}
     loglikelihood = get_loglikelihood!(llarray, tracks, brightness, detector, psf)
-    logposterior = get_logposterior(loglikelihood, tracks, msd)
+    logposterior = get_logposterior(loglikelihood, tracks, msd, logposterior_rng)
     push!(
         chain.samples,
         Sample(tracks.onchunk, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
@@ -142,13 +143,17 @@ function get_loglikelihood!(
     return get_loglikelihood!(llarray, detector)
 end
 
+# The log posterior of the whole weak-limit state, all `limit` candidates, so every sample's
+# density has the same units; the off candidates enter through `offlogprior`.
 get_logposterior(
     loglikelihood::T,
     tracks::Tracks{T},
     msd::MeanSquaredDisplacement{T},
+    logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
 ) where {T} =
     loglikelihood +
     logprior(tracks.onchunk, msd.value) +
+    offlogprior(logposterior_rng, tracks, msd.value) +
     logprior(msd) +
     logprior(tracks.nemitters)
 
@@ -223,6 +228,7 @@ Continue running a MCMC sampling with the specified keyword arguments. Requires 
 - `niters`: The number of additional iterations for the MCMC simulation.
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC. A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 - `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
+- `logposterior_rng`: The log posterior of each sample covers all `max_ntracks` candidates, so that samples with different emitter counts compare. The off candidates' tracks enter through their expected log prior (default: `nothing`), or, given a random number generator, through an exact draw of it, as if their tracks had been simulated. That generator is kept apart from `rng`, so the chain itself does not change.
 The chain's size limit and annealing schedule are those stored in `chain`.
 """
 function runMCMC!(;
@@ -235,6 +241,7 @@ function runMCMC!(;
     niters::Integer,
     parametric::Bool,
     rng::AbstractRNG = Random.default_rng(),
+    logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
 ) where {T}
     prev_niters = chain.samples[end].iteration
     llarray = loglikelihoodaux(detector)
@@ -247,13 +254,24 @@ function runMCMC!(;
         nextsample!(rng, tracks, msd, brightness, llarray, detector, psf, 𝑇)
         if tosave(chain, iter)
             isfull(chain) && shrink!(chain)
-            extend!(chain, tracks, msd, brightness, llarray, detector, psf, iter, 𝑇)
+            extend!(
+                chain,
+                tracks,
+                msd,
+                brightness,
+                llarray,
+                detector,
+                psf,
+                iter,
+                𝑇,
+                logposterior_rng,
+            )
         end
     end
 end
 
 """
-    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric; rng = Random.default_rng())
+    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric; rng = Random.default_rng(), logposterior_rng = nothing)
 
 Positional form of `runMCMC!(; kwargs...)`, with the arguments in the same order.
 """
@@ -267,6 +285,7 @@ runMCMC!(
     niters::Integer,
     parametric::Bool;
     rng::AbstractRNG = Random.default_rng(),
+    logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
 ) where {T} = runMCMC!(
     chain = chain,
     tracks = tracks,
@@ -277,6 +296,7 @@ runMCMC!(
     niters = niters,
     parametric = parametric,
     rng = rng,
+    logposterior_rng = logposterior_rng,
 )
 
 """
@@ -293,6 +313,7 @@ Run a MCMC sampling with the specified keyword arguments. Requires the following
 - `annealing`: An `Annealing` object representing the annealing schedule (default: `ConstantAnnealing{T}(1)`).
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`). A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 - `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
+- `logposterior_rng`: The log posterior of each sample covers all `max_ntracks` candidates, so that samples with different emitter counts compare. The off candidates' tracks enter through their expected log prior (default: `nothing`), or, given a random number generator, through an exact draw of it, as if their tracks had been simulated. That generator is kept apart from `rng`, so the chain itself does not change.
 """
 function runMCMC(;
     tracks::Tracks{T},
@@ -305,6 +326,7 @@ function runMCMC(;
     annealing::Union{Annealing{T},Nothing} = nothing,
     parametric::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
+    logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
     chain = Chain([Sample(tracks.onchunk, msd, brightness)], sizelimit, annealing)
@@ -318,6 +340,7 @@ function runMCMC(;
         niters = niters,
         parametric = parametric,
         rng = rng,
+        logposterior_rng = logposterior_rng,
     )
     return chain
 end

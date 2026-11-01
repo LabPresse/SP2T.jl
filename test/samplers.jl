@@ -127,6 +127,33 @@ end
     @test abs(tracks.proposals.counter[1, 1] / ncalls - p) < 4 * √(p * (1 - p) / ncalls)
 end
 
+# The off candidates' log prior: over tracks simulated from the prior, its mean is the
+# expectation `offlogprior` returns; the exact version draws it with the same distribution,
+# whose variance is k/2 for k = noff·nframes·ndims standardized coordinates.
+@testset let rng = StableRNG(19),
+    tracks = Tracks{Float64}(
+        guess = zeros(20, 2, 1),
+        prior = SP2T.DNormal{Float64}([0.5, 0.8], [0.4, 0.3]),
+        max_ntracks = 4,
+        scaling = 0.01,
+        logonprob = -3,
+    ),
+    msd = 0.04,
+    ndraws = 20_000
+
+    expectation = SP2T.offlogprior(tracks, msd)
+    simulated = map(1:ndraws) do _
+        simulate!(rng, tracks.offchunk, msd)
+        SP2T.logprior(tracks.offchunk, msd)
+    end
+    drawn = [SP2T.offlogprior(rng, tracks, msd) for _ = 1:ndraws]
+    v = 3 * 20 * 2 / 2
+    for x in (simulated, drawn)
+        @test abs(mean(x) - expectation) < 4 * √(v / ndraws)
+        @test abs(var(x) - v) < 4 * v * √(2 / ndraws)
+    end
+end
+
 # Simulated displacements have variance msd per coordinate; a Brownian bridge's midpoint
 # has variance msd·N/4 for N steps.
 @testset let rng = StableRNG(16), msd = 0.04
@@ -170,7 +197,8 @@ end
     @test abs(mean(gamma.readouts) - λ * gᵧ) < 4 * √(vᵧ / n)
 end
 
-# The same seed gives the same chain; a different seed a different one.
+# The same seed gives the same chain; a different seed a different one. Drawing the off
+# candidates' log prior exactly uses its own generator and leaves the chain unchanged.
 @testset let detector = SPAD{Float64}(
         period = 1e-5,
         pixel_size = 0.1,
@@ -185,7 +213,7 @@ end
         pixel_size = 0.1,
     )
 
-    function run(seed)
+    function run(seed; kwargs...)
         tracks = Tracks{Float64}(
             guess = fill(0.3, 10, 2, 1),
             prior = SP2T.DNormal{Float64}([0.3, 0.3], [0.5, 0.5]),
@@ -193,7 +221,7 @@ end
             scaling = 0.01,
             logonprob = -2,
         )
-        return runMCMC(
+        return runMCMC(;
             tracks = tracks,
             msd = MeanSquaredDisplacement{Float64}(guess = 2e-4),
             brightness = Brightness{Float64}(guess = 0.5),
@@ -201,10 +229,15 @@ end
             psf = psf,
             niters = 50,
             rng = StableRNG(seed),
+            kwargs...,
         )
     end
     a, b, c = run(18), run(18), run(19)
     @test a.msds == b.msds && a.brightnesses == b.brightnesses
     @test a.emittercounts == b.emittercounts && a.lasttracks == b.lasttracks
     @test a.msds != c.msds
+    d = run(18, logposterior_rng = StableRNG(20))
+    @test d.msds == a.msds && d.lasttracks == a.lasttracks
+    @test d.loglikelihoods[2:end] == a.loglikelihoods[2:end]
+    @test d.logposteriors[2:end] != a.logposteriors[2:end]
 end
