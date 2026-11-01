@@ -67,7 +67,7 @@ Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] pro
 ## Testing
 
 - `Pkg.test()` runs and passes. `test/runtests.jl` checks, with expected values from theory or Distributions.jl:
-  - PSF: `gaussianpeak`, `CircularGaussian`'s `A` and `σ`, `getσ₀z₀` against fixed values; the pixel-integrated PSF sums to 1 and gives `A` to the centered pixel; `getincident` (2D, and 3D at z = 0 and z₀)
+  - PSF: `gaussianpeak`, `CircularGaussian`'s `A` and `σ`, `getσ₀z₀` against fixed values; the pixel-integrated PSF sums to 1 and gives `A` to the centered pixel; the cutoff in `pixelfraction` stays within `erfc(6)/2`; `getincident` (2D, and 3D at z = 0 and z₀)
   - Detector likelihoods (SPAD, EMCCD, EMCCDGamma) and their Δ versions against `Distributions.logpdf`, up to terms that do not depend on the expected count; detectors leave the caller's `darkcounts` unchanged; simulated EMCCD readouts are clipped at 0; the brightness move's rescaled Δ equals two full evaluations
   - Priors and motion: the track log-prior against `logpdf`; `Δlogmotion!`; `framesum!`, `diff²!`, `staggered_diff²!`; `bridge!`; `DNormal.dims`
   - Tracks and moves: `Tracks` with an `active` mask (both layouts); the identity-swap move (frame-by-frame relabeling; crossing particles with swapped tails are untangled, with their masks); a fixed emitter count is never updated and selects the parametric sweep; a parametric step leaves `effvalue` up to date

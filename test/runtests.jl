@@ -406,6 +406,14 @@ println("Running PSF integration tests...")
     @test sum(frame) ≈ 1
 end
 
+# The cutoff sets a pixel's PSF fraction to 0 only when both edges lie beyond 6 (in units
+# of √2σ) on the same side, where the exact fraction is below erfc(6) / 2.
+@testset let edges = collect(-12.0:0.25:12.0)
+    x, y = edges[1:end-1], edges[2:end]
+    @test all(abs.(SP2T.pixelfraction.(x, y) .- SP2T.erfdiff.(x, y) ./ 2) .≤ SP2T.erfc(6) / 2)
+    @test SP2T.pixelfraction.(x, y)[abs.(x) .< 6] == SP2T.erfdiff.(x, y)[abs.(x) .< 6] ./ 2
+end
+
 # An emitter at the center of pixel (11, 11) of a 21×21 frame (±10σ in each direction)
 # adds `brightness` to that pixel and `brightness / psf.A` photons over the frame. In 3D,
 # the lateral width grows to σ₀√2 at z = z₀.
