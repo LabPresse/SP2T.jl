@@ -20,6 +20,14 @@ A dark frame (`active` 0) has `effvalue = Inf` in every coordinate, z included. 
 
 With the dense workspace (EMCCD, EMCCDGamma), the emitter-count update evaluates the full log-likelihood once per candidate (`max_ntracks` times per iteration), over every pixel and frame, though adding one candidate only changes pixels near its track. Restricting each evaluation to a window around the candidate (a few PSF widths) would cut most of it, but needs per-candidate windows that also work on GPUs. SPAD no longer needs this: its sparse workspace touches only nonzero readouts.
 
+## Sampling and summaries (planned, in this order)
+
+Motivation (2026-11-02): from its own starting values (tracks at zero, brightness 0.1, MSD 2e-5), the 2D example settles within ~120 iterations into 10 dim emitters (brightness ≈ 0.015, MSD ≈ 9e-6) 0.4–0.6 μm from the particles, and stays there for 3000 iterations. Started at the ground truth it stays there (2 on, brightness ≈ 0.098, MSD ≈ 2e-4). The truth's log-likelihood is higher by ~5,300. So both are stable modes and the chain cannot travel between them. All moves below must leave the posterior unchanged (`docs/logposterior.qmd`); test each by sampling the prior with the likelihood switched off (𝑇 = Inf).
+
+### S3. Coordinate-invariant posterior summaries (postprocessing)
+
+From a chain: the emitter count's posterior probabilities; medians and credible intervals of the MSD and brightness; per-frame track summaries (mean positions, localization maps), which first need labels resolved across samples. `findmap` stays as a coordinate-dependent point estimate (its docstring says so).
+
 ## Future
 
 ### F1. Infer the `active` mask

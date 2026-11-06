@@ -87,6 +87,33 @@ end
     @test Δlogposterior(1000) ≈ expected
 end
 
+# log𝒫 is the posterior density in the coordinates (first positions, standardized increments
+# ε = displacement/√msd, msd): standard normal ε, the DNormal first positions, the off
+# candidates through their expected log prior in these coordinates, the MSD and count
+# priors. With ε and the log-likelihood fixed, changing the MSD changes only its prior.
+@testset let ε = reshape([sin(7.3i) for i = 1:24], 4, 2, 3), x₁ = [0.4 0.6 0.9; 0.7 0.5 0.2], μ = [0.5, 0.8], σ = [0.4, 0.3]
+    function logposterior(msdᵥ)
+        value = cat(reshape(x₁, 1, 2, 3), reshape(x₁, 1, 2, 3) .+ √msdᵥ .* cumsum(ε, dims = 1), dims = 1)
+        tracks = Tracks{Float64}(
+            guess = value,
+            prior = SP2T.DNormal{Float64}(μ, σ),
+            max_ntracks = 4,
+            scaling = 0.01,
+            logonprob = -3,
+        )
+        return SP2T.get_logposterior(0.0, tracks, MeanSquaredDisplacement{Float64}(guess = msdᵥ))
+    end
+    msdlogprior(msdᵥ) = SP2T.logprior(MeanSquaredDisplacement{Float64}(guess = msdᵥ))
+    expectedoff = 4 * 2 * -(1 + log(2π)) / 2 + sum(@. -log(σ) - (1 + log(2π)) / 2)
+    expected(msdᵥ) =
+        sum(logpdf.(Normal(), ε)) + sum(logpdf.(Normal.(μ, σ), x₁)) + expectedoff +
+        msdlogprior(msdᵥ) - 3 * 3
+    for msdᵥ in (1e-4, 0.04)
+        @test logposterior(msdᵥ) ≈ expected(msdᵥ)
+    end
+    @test logposterior(1e-4) - logposterior(0.04) ≈ msdlogprior(1e-4) - msdlogprior(0.04)
+end
+
 println("Running motion-related tests...")
 
 # Frame k of parity i gets the motion change of the steps leaving it (k → k+1, entry k

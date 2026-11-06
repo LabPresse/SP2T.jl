@@ -160,6 +160,16 @@ function offlogprior(χ²::F, tracks::Tracks{T}, msdᵥ::T) where {F<:Function,T
     return -(noff * lognormalization + χ²(noff * nframes * ndims)) / 2
 end
 
+"""
+    logjacobian(tracks::Tracks{T}, msdᵥ::T)
+
+`(N/2)·log(msdᵥ)`, the log Jacobian from the displacements of all candidates to the standardized increments `ε = displacement / √msdᵥ`, with `N` their number of coordinates. Added to the log posterior, it gives its density in the coordinates (first positions, `ε`, MSD), where the tracks' prior does not depend on the MSD; see `docs/logposterior.qmd`.
+"""
+function logjacobian(tracks::Tracks{T}, msdᵥ::T) where {T}
+    nframes, ndims = size(tracks.value[1], 1), size(tracks.value[1], 2)
+    return (nframes - 1) * ndims * tracks.nemitters.limit * log(msdᵥ) / 2
+end
+
 function Tracks{T}(;
     guess::AbstractArray{<:Real,3},
     prior::P,
@@ -438,3 +448,4 @@ function update_onchunk!(
     countacceptance!(tracksᵖ)
     return tracksᵒ
 end
+

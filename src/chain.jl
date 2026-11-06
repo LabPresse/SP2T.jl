@@ -84,6 +84,11 @@ savestride(chain::Chain) =
 
 tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 
+"""
+    findmap(chain::Chain; burn_in::Integer = 0)
+
+Return the sample with the largest log posterior (`chain.logposteriors`) after the first `burn_in` samples, and its index. The log posterior is a density, in the coordinates of `docs/logposterior.qmd` (first positions, standardized increments, MSD). Where a density is largest depends on the coordinates, and with thousands of track coordinates that point is not a typical posterior sample: use the result as a convenient point estimate, not as a summary of the posterior.
+"""
 function findmap(chain::Chain; burn_in::Integer = 0)
     ~, i = findmax(chain.logposteriors[burn_in+1:end])
     return chain.samples[i+burn_in], i + burn_in
@@ -144,7 +149,9 @@ function get_loglikelihood!(
 end
 
 # The log posterior of the whole weak-limit state, all `limit` candidates, so every sample's
-# density has the same units; the off candidates enter through `offlogprior`.
+# density has the same units; the off candidates enter through `offlogprior`. Its density is
+# in the coordinates (first positions, standardized increments, MSD) (`logjacobian`), where
+# the tracks' prior does not depend on the MSD; see docs/logposterior.qmd.
 get_logposterior(
     loglikelihood::T,
     tracks::Tracks{T},
@@ -154,6 +161,7 @@ get_logposterior(
     loglikelihood +
     logprior(tracks.onchunk, msd.value) +
     offlogprior(logposterior_rng, tracks, msd.value) +
+    logjacobian(tracks, msd.value) +
     logprior(msd) +
     logprior(tracks.nemitters)
 
