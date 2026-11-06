@@ -139,6 +139,9 @@ dimsmatch(A::AbstractArray, B::AbstractArray; dims::Union{Integer,AbstractUnitRa
 Δlogpdf(P::Gamma{T}, xᵖ::T, xᵒ::T) where {T<:AbstractFloat} =
     (shape(P) - 1) * log(xᵖ / xᵒ) - (xᵖ - xᵒ) / scale(P)
 
+Δlogpdf(P::InverseGamma{T}, xᵖ::T, xᵒ::T) where {T<:AbstractFloat} =
+    -(shape(P) + 1) * log(xᵖ / xᵒ) - scale(P) * (1 / xᵖ - 1 / xᵒ)
+
 """
     mrw_propose(rng::AbstractRNG, P, xᵒ::T)
 

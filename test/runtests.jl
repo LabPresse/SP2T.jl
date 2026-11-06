@@ -343,6 +343,57 @@ end
     @test tracks.onchunk.effvalue == tracks.onchunk.value ./ tracks.onchunk.active
 end
 
+# The rescaling MSD move and the joint count–brightness move run only when asked for. Each
+# counts its proposals: the joint move one per nonparametric iteration, the rescaling move
+# one per iteration with an emitter on (every iteration when the count is fixed at 1).
+@testset let detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 6, 6),
+        cutoffs = (0, Inf),
+        readouts = UInt16.(reshape([isodd(i ÷ 7) for i = 1:360], 6, 6, 10)),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    ),
+    niters = 20
+
+    function run(parametric; kwargs...)
+        tracks = Tracks{Float64}(
+            guess = fill(0.3, 10, 2, 1),
+            prior = SP2T.DNormal{Float64}([0.3, 0.3], [0.5, 0.5]),
+            max_ntracks = 3,
+            scaling = 0.01,
+            logonprob = -2,
+        )
+        msd = MeanSquaredDisplacement{Float64}(guess = 2e-4)
+        chain = runMCMC(;
+            tracks = tracks,
+            msd = msd,
+            brightness = Brightness{Float64}(guess = 0.5),
+            detector = detector,
+            psf = psf,
+            niters = niters,
+            parametric = parametric,
+            rng = StableRNG(21),
+            kwargs...,
+        )
+        return msd.counter, tracks.nemitters.counter, chain
+    end
+    for parametric in (false, true)
+        msdcounter, countcounter = run(parametric)
+        @test msdcounter == [0, 0] && countcounter == [0, 0]
+    end
+    msdcounter, countcounter, chain = run(false; msdrescale = true, countbrightness = true)
+    @test countcounter[2] == niters
+    @test msdcounter[2] == count(>(0), chain.emittercounts[2:end]) > 0
+    msdcounter, countcounter = run(true; msdrescale = true, countbrightness = true)
+    @test msdcounter[2] == niters && countcounter == [0, 0]
+end
+
 println("Running bridge tests...")
 
 # With zero MSD a Brownian bridge is the straight line between its ends; with any MSD it

@@ -1,0 +1,111 @@
+---
+title: "The joint count–brightness move"
+subtitle: "Why rescaling the brightness leaves the posterior unchanged"
+format:
+  html:
+    toc: true
+    number-sections: true
+    html-math-method: mathjax
+---
+
+The nonparametric sweep updates the emitter count at a fixed brightness, and the brightness at a fixed count. Between "a few bright emitters" and "many dim ones", the posterior has a ridge that these two updates cross only slowly. The joint move switches one emitter on or off and rescales the shared brightness, so the expected photons stay the same. This note shows that the move leaves the posterior distribution unchanged: it changes how the chain travels, not what it samples. It also shows why the move needs the Jacobian $n/n'$.
+
+# Setup
+
+The notation follows `docs/logposterior.qmd`. The state is $\theta = (n, b, x_{1:M}, v)$: the emitter count $n$ (candidates $1, \dots, n$ are on), the brightness $b > 0$, the tracks of all $M$ candidates, and the MSD $v$. At temperature $T$ (with $T = 1$ for the posterior itself) the target density is
+
+$$
+\pi(\theta) \propto \mathcal{L}(n, x_{1:n}, b)^{1/T}\; e^{\lambda n} \prod_{m=1}^{M} p(x_m \mid v)\; p(v)\; p(b),
+$$
+
+with $\lambda$ = `logonprob` and $p(b)$ the gamma prior. The density is with respect to counting measure in $n$ and Lebesgue measure in $b$, the tracks and $v$. All $M$ tracks belong to the state whether on or off, so switching an emitter on or off changes no dimension: the track of candidate $n+1$ is already there.
+
+# The move
+
+1. Draw a direction $s \in \{-1, +1\}$, each with probability $\tfrac12$, and set $n' = n + s$.
+2. If $n = 0$ or $n' \notin \{1, \dots, M\}$, reject: stay at $\theta$.
+3. Otherwise, propose $\theta' = \Psi_s(\theta)$, which changes only $n$ and $b$:
+   $$
+   n' = n + s, \qquad b' = b\,\frac{n}{n'} .
+   $$
+   The tracks and $v$ are unchanged. The expected photons from all emitters, which scale as $n\,b$ for emitters inside the frame, stay the same: $n' b' = n b$.
+4. Accept with probability
+   $$
+   \alpha_s(\theta) = \min\Big\{1,\; \frac{\pi(\theta')}{\pi(\theta)}\, \frac{n}{n'}\Big\}.
+   $$
+
+The rule $b' = b\,n/n'$ needs $n \ge 1$ and $n' \ge 1$: at $n = 0$ it would give $b' = 0$, outside the support of $b$. Step 2 excludes those cases.
+
+**The maps pair up.** Let $S_s$ be the states where direction $s$ is allowed, $S_{+1} = \{1 \le n \le M - 1\}$ and $S_{-1} = \{2 \le n \le M\}$. Then $\Psi_{+1}$ maps $S_{+1}$ one-to-one onto $S_{-1}$, and $\Psi_{-1}$ maps it back:
+
+$$
+\Psi_{-1}\big(\Psi_{+1}(n, b)\big) = \Big(n,\; b\,\frac{n}{n+1}\cdot\frac{n+1}{n}\Big) = (n, b),
+$$
+
+and likewise the other way round. Each forward proposal therefore has exactly one reverse proposal, which is drawn with the same probability $\tfrac12$.
+
+**The Jacobian.** For a fixed $n$, the map $b \mapsto b' = b\,n/n'$ is linear, so
+
+$$
+\Big\lvert \frac{\partial b'}{\partial b} \Big\rvert = \frac{n}{n'}, \qquad db' = \frac{n}{n'}\, db .
+$$
+
+# Detailed balance
+
+A move keeps $\pi$ invariant if it satisfies detailed balance: the probability flow from any set of states $A$ into any set $B$ equals the flow from $B$ into $A$. Rejected proposals keep the chain where it is, which contributes the same flow in both directions, so only accepted transitions need checking. Those go from $(n, b)$ to $(n', b') = \Psi_s(n, b)$, with everything else fixed.
+
+Take a transition $\theta \to \theta'$ in direction $s$ and its reverse $\theta' \to \theta$ in direction $-s$. The forward flow out of a small interval $db$ around $b$ is
+
+$$
+\pi(\theta)\, db \cdot \tfrac12 \cdot \alpha_s(\theta)
+= \tfrac12 \min\Big\{\pi(\theta),\; \pi(\theta')\,\frac{n}{n'}\Big\}\, db .
+$$
+
+The reverse flow comes from the interval $db'$ around $b'$ that $\Psi_s$ maps $db$ onto. Its acceptance probability is $\alpha_{-s}(\theta') = \min\{1, \frac{\pi(\theta)}{\pi(\theta')}\frac{n'}{n}\}$, since the counts swap roles, so
+
+$$
+\pi(\theta')\, db' \cdot \tfrac12 \cdot \alpha_{-s}(\theta')
+= \tfrac12 \min\Big\{\pi(\theta'),\; \pi(\theta)\,\frac{n'}{n}\Big\}\, \frac{n}{n'}\, db
+= \tfrac12 \min\Big\{\pi(\theta')\,\frac{n}{n'},\; \pi(\theta)\Big\}\, db .
+$$
+
+The two flows are equal for every $\theta$, so the move satisfies detailed balance, and $\pi$ is its invariant distribution. At $T = 1$ that is the posterior: the move changes which states the chain visits next, never the distribution it samples.
+
+# What the Jacobian does
+
+Without the factor $n/n'$, the acceptance would be $\min\{1, \pi(\theta')/\pi(\theta)\}$. Repeating the calculation shows which densities $\tilde\pi$ the move would then balance. Try $\tilde\pi(\theta) = \pi(\theta)\,h(n)$:
+
+$$
+h(n) \min\{\pi(\theta), \pi(\theta')\}\, db
+= h(n') \min\{\pi(\theta'), \pi(\theta)\}\, \frac{n}{n'}\, db
+\quad\Longleftrightarrow\quad
+\frac{h(n)}{h(n')} = \frac{n}{n'},
+$$
+
+so $h(n) = n$. The move would balance $\pi(\theta)\, n$, which favors more emitters, while the count update balances $\pi$. Combined, the sweep would sample neither distribution. The Jacobian is the correction that makes the volume element $db$ consistent between the two counts.
+
+# Combining it with the rest of the sweep
+
+The nonparametric sweep applies its updates in turn: the off tracks drawn from their prior, the position and identity-swap moves, the count update at a fixed brightness, this move, the brightness update and the MSD draw. All but the last keep $\pi$ invariant on their own. The MSD draw integrates the off tracks out, which is exact together with their redraw at the start of the next sweep (a partially collapsed Gibbs step). A composition of kernels that each leave $\pi$ invariant leaves $\pi$ invariant, so inserting this move between the count and brightness updates changes no stationary distribution.
+
+The count update at a fixed brightness is the "keep $b$" half of the mix chosen for births and deaths, and this move is the "rescale $b$" half. Running both in every sweep, rather than choosing one at random, is also exact. For the same reason, the chain can still reach $n = 0$ and leave it, through the count update.
+
+# Turning it on
+
+The move is off by default: `runMCMC` and `runMCMC!` run it only with `countbrightness = true`, and only in the nonparametric sweep (the parametric sweep never changes the count). On simulated SPAD data (five data sets, 32×32 pixels, 600 frames, two particles, 23 chains per setting started near the truth), it did not make chains converge sooner or more often: 20 of 23 converged, as without it. Its three stuck chains kept 4 to 6 emitters on for 10,000 iterations, two of them at about 1/2 and 1/3 of the true brightness. Turn it on when chains seem to trade a few bright emitters for many dim ones only slowly.
+
+# What SP2T computes
+
+`update!(rng, count::EmitterCount, brightness::Brightness, ...)` in `src/brightness.jl` uses the log of $\alpha_s$:
+
+$$
+\log \frac{\pi(\theta')}{\pi(\theta)} + \log \frac{n}{n'}
+= \frac{\log \mathcal{L}(n', x_{1:n'}, b') - \log \mathcal{L}(n, x_{1:n}, b)}{T}
++ \lambda\,(n' - n)
++ \log \frac{p(b')}{p(b)}
++ \log \frac{n}{n'} .
+$$
+
+The tracks and the MSD are unchanged, so their prior terms cancel. $\log \mathcal{L}(n, x_{1:n}, b)$ is read from the count update, which has just computed it at the current brightness. $\log \mathcal{L}(n', x_{1:n'}, b')$ costs one likelihood evaluation.
+
+`test/samplers.jl` checks the result with the likelihood switched off ($T = \infty$). It alternates this move with the brightness update and checks that the chain samples the prior: $p(n) \propto e^{\lambda n}$ on $n = 1, \dots, M$, and the gamma prior of $b$, independent of $n$. Without the Jacobian, that test fails.

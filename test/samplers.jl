@@ -62,6 +62,95 @@ end
     @test abs(m - 0.5) < 4se
 end
 
+# With the likelihood switched off, the joint count–brightness move (which rescales the
+# brightness by n/n′, with its Jacobian) alternated with the brightness update samples the
+# prior: on n = 1…4 (the move needs an emitter before and after), p(n) ∝ e^(logonprob·n),
+# and the brightness Gamma(2, 0.5), independent of n.
+@testset let rng = StableRNG(21),
+    detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 2, 2),
+        cutoffs = (0, Inf),
+        readouts = zeros(UInt16, 2, 2, 1),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    ),
+    count = SP2T.EmitterCount{Float64}(2, 4, -0.4),
+    brightness = Brightness{Float64}(guess = 1.0, priorparams = (2, 0.5), proposalparams = (10, 1)),
+    tracksᵥ = fill(0.1, 1, 2, 4),
+    llarray = SP2T.LogLikelihoodArray{Float64}(detector.readouts),
+    nsteps = 200_000
+
+    fill!(count.likelihood, 0) # finite, as the move compares against it
+    counts, brightnesses = zeros(Int, nsteps), zeros(nsteps)
+    for i = 1:nsteps
+        SP2T.update!(rng, count, brightness, tracksᵥ, llarray, detector, psf, Inf)
+        SP2T.update!(rng, brightness, view(tracksᵥ, :, :, 1:count.value), llarray, detector, psf, Inf)
+        counts[i], brightnesses[i] = count.value, brightness.value
+    end
+    p = exp.(-0.4 .* (1:4)) ./ sum(exp.(-0.4 .* (1:4)))
+    for n = 1:4
+        m, se = batchmean(Float64.(counts .== n))
+        @test abs(m - p[n]) < 4se
+    end
+    m, se = batchmean(brightnesses)
+    @test abs(m - 1.0) < 4se
+    m, se = batchmean((brightnesses .- 1.0) .^ 2)
+    @test abs(m - 0.5) < 4se
+    @test 0 < count.counter[1] < count.counter[2] == nsteps
+end
+
+# With the likelihood switched off, one rescaling MSD move keeps the prior. Starting from
+# exact prior draws (msd ~ InverseGamma(6, 0.05), two tracks from the track prior), the MSD
+# afterwards still has the inverse-gamma quantiles, and S/msd (S the tracks' squared
+# displacements, N = 9·2·2 of them) is still χ²(N), independent of the MSD.
+@testset let rng = StableRNG(24), nreplicates = 40_000,
+    detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 4, 4),
+        cutoffs = (0, Inf),
+        readouts = zeros(UInt16, 4, 4, 10),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    ),
+    tracks = Tracks{Float64}(
+        guess = fill(0.2, 10, 2, 2),
+        prior = SP2T.DNormal{Float64}([0.2, 0.2], [0.1, 0.1]),
+        max_ntracks = 2,
+        scaling = 0.01,
+        logonprob = -1,
+    ),
+    msd = MeanSquaredDisplacement{Float64}(guess = 0.01, priorparams = (6, 0.05), proposalscale = 0.5),
+    llarray = SP2T.SPADLogLikelihood(detector)
+
+    msds, scaled = zeros(nreplicates), zeros(nreplicates)
+    for i = 1:nreplicates
+        msd.value = rand(rng, msd.prior)
+        simulate!(rng, tracks.value[1], msd.value, tracks.onchunk.prior)
+        SP2T.update!(rng, msd, tracks, 0.5, llarray, detector, psf, Inf)
+        msds[i] = msd.value
+        scaled[i] = sum(diff(tracks.onchunk.value, dims = 1) .^ 2) / msd.value
+    end
+    for p in (0.1, 0.5, 0.9)
+        tolerance = 4 * √(p * (1 - p) / nreplicates)
+        @test abs(count(<(quantile(msd.prior, p)), msds) / nreplicates - p) < tolerance
+        @test abs(count(<(quantile(Chisq(36), p)), scaled) / nreplicates - p) < tolerance
+        both = count((msds .< quantile(msd.prior, 0.5)) .& (scaled .< quantile(Chisq(36), p)))
+        @test abs(both / nreplicates - p / 2) < 4 * √(p / 2 * (1 - p / 2) / nreplicates)
+    end
+    @test 0.2 < msd.counter[1] / msd.counter[2] < 1
+end
+
 # With the likelihood switched off, the position updates sample the track prior: the
 # first frame from DNormal(μ, σ), then Brownian steps of variance msd, so frame k has mean
 # μ and variance σ² + (k - 1)·msd.

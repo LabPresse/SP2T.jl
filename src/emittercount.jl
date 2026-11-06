@@ -1,7 +1,7 @@
 """
     EmitterCount{T<:AbstractFloat, V<:AbstractVector{T}} <: RandomVariable{T}
 
-A mutable struct that represents the random variable of the number of tracks (the number of emitting particles). The length of `V` should match the weak limit (the total number of particle candidates).
+A mutable struct that represents the random variable of the number of tracks (the number of emitting particles). The length of `V` should match the weak limit (the total number of particle candidates). `counter::Vector{Int}` records the acceptances and proposals of the joint count–brightness move.
 """
 mutable struct EmitterCount{T<:AbstractFloat,V<:AbstractVector{T}} <: RandomVariable{T}
     value::Int
@@ -9,6 +9,7 @@ mutable struct EmitterCount{T<:AbstractFloat,V<:AbstractVector{T}} <: RandomVari
     fixed::Bool
     likelihood::V
     posterior::V
+    counter::Vector{Int}
 end
 
 EmitterCount{T}(
@@ -22,6 +23,7 @@ EmitterCount{T}(
     fixed,
     Vector{T}(undef, limit + 1),
     Vector{T}(undef, limit + 1),
+    zeros(Int, 2),
 )
 
 function Base.getproperty(n::EmitterCount, s::Symbol)

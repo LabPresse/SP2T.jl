@@ -1,28 +1,33 @@
 """
     MeanSquaredDisplacement{T<:AbstractFloat, P<:InverseGamma{T}} <: RandomVariable{T}
 
-A mutable struct representing the mean squared displacement random variable. `value::T` is the value, `prior::P` is an inverse gamma distribution, `fixed::Bool` determines whether its `value` gets updated.
+A mutable struct representing the mean squared displacement random variable. `value::T` is the value, `prior::P` is an inverse gamma distribution, `fixed::Bool` determines whether its `value` gets updated. `proposalscale::T` is the standard deviation of `log(msd′/msd)` in the rescaling move, and `counter::Vector{Int}` records its acceptances and proposals.
 """
 mutable struct MeanSquaredDisplacement{T<:AbstractFloat,P<:InverseGamma{T}} <:
                RandomVariable{T}
     value::T
     prior::P
     fixed::Bool
+    proposalscale::T
+    counter::Vector{Int}
 end
 
 """
-    MeanSquaredDisplacement{T}(; guess::Real, priorparams::Tuple{<:Real,<:Real}, fixed::Bool)
+    MeanSquaredDisplacement{T}(; guess::Real, priorparams::Tuple{<:Real,<:Real}, fixed::Bool, proposalscale::Real)
 
-The constructor for `MeanSquaredDisplacement`. By default, `priorparams = (2, 1e-5)` and `fixed = false`.
+The constructor for `MeanSquaredDisplacement`. By default, `priorparams = (2, 1e-5)`, `fixed = false` and `proposalscale = 0.05`.
 """
 MeanSquaredDisplacement{T}(;
     guess::Real,
     priorparams::Tuple{<:Real,<:Real} = (2, 1e-5),
     fixed::Bool = false,
+    proposalscale::Real = 0.05,
 ) where {T<:AbstractFloat} = MeanSquaredDisplacement(
     convert(T, guess),
     InverseGamma(convert.(T, priorparams)...),
     fixed,
+    convert(T, proposalscale),
+    zeros(Int, 2),
 )
 
 """

@@ -173,7 +173,9 @@ function parametricMCMC!(
     llarray::LogLikelihoodAux{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
-    𝑇::T,
+    𝑇::T;
+    msdrescale::Bool = false,
+    countbrightness::Bool = false, # ignored: the emitter count is fixed
 ) where {T}
     update_onchunk!(rng, tracks, msd.value, brightness.value, llarray, detector, psf, 𝑇)
     update!(rng, tracks.onchunk, tracks.proposals, msd.value) # swap identities partway through
@@ -181,6 +183,7 @@ function parametricMCMC!(
     update!(rng, brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
     setdisplacement²!(tracks.onchunk)
     update!(rng, msd, tracks.onchunk.displacement², 𝑇)
+    msdrescale && update!(rng, msd, tracks, brightness.value, llarray, detector, psf, 𝑇)
     return tracks, msd
 end
 
@@ -192,7 +195,9 @@ function nonparametricMCMC!(
     llarray::LogLikelihoodAux{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
-    𝑇::T,
+    𝑇::T;
+    msdrescale::Bool = false,
+    countbrightness::Bool = false,
 ) where {T}
     simulate!(rng, tracks.offchunk, msd.value)
     if any(tracks)
@@ -212,6 +217,17 @@ function nonparametricMCMC!(
         psf,
         𝑇,
     )
+    # rescales the brightness; the count update above is the move at a fixed brightness
+    countbrightness && update!(
+        rng,
+        tracks.nemitters,
+        brightness,
+        tracks.effvalue[1],
+        llarray,
+        detector,
+        psf,
+        𝑇,
+    )
     reassign!(tracks)
 
     update!(rng, brightness, tracks.onchunk.effvalue, llarray, detector, psf, 𝑇)
@@ -220,6 +236,7 @@ function nonparametricMCMC!(
     # current value; they are redrawn from the new MSD before the next count update
     setdisplacement²!(tracks.onchunk)
     update!(rng, msd, tracks.onchunk.displacement², 𝑇)
+    msdrescale && update!(rng, msd, tracks, brightness.value, llarray, detector, psf, 𝑇)
     return tracks, msd
 end
 
@@ -237,6 +254,9 @@ Continue running a MCMC sampling with the specified keyword arguments. Requires 
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC. A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 - `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
 - `logposterior_rng`: The log posterior of each sample covers all `max_ntracks` candidates, so that samples with different emitter counts compare. The off candidates' tracks enter through their expected log prior (default: `nothing`), or, given a random number generator, through an exact draw of it, as if their tracks had been simulated. That generator is kept apart from `rng`, so the chain itself does not change.
+- `msdrescale`: Also run the rescaling MSD move after the MSD's Gibbs draw, which stretches the on tracks with the MSD (default: `false`; `docs/msdrescale.qmd`). It costs one likelihood evaluation per iteration.
+- `countbrightness`: Also run the joint count–brightness move after the emitter-count update, which switches one emitter on or off and rescales the brightness by n/n′ (default: `false`; `docs/countbrightness.qmd`). Nonparametric sweep only.
+Both moves leave the posterior unchanged; they change only how the chain moves.
 The chain's size limit and annealing schedule are those stored in `chain`.
 """
 function runMCMC!(;
@@ -250,16 +270,29 @@ function runMCMC!(;
     parametric::Bool,
     rng::AbstractRNG = Random.default_rng(),
     logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
+    msdrescale::Bool = false,
+    countbrightness::Bool = false,
 ) where {T}
     prev_niters = chain.samples[end].iteration
     llarray = loglikelihoodaux(detector)
     reset!(llarray, detector, 1)
     tracks.nemitters.loglikelihood[1] = get_loglikelihood!(llarray, detector)
-    nextsample! =
-        parametric || isfixed(tracks.nemitters) ? parametricMCMC! : nonparametricMCMC!
+    parametric = parametric || isfixed(tracks.nemitters)
+    nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
     @showprogress dt = 1 desc = "Computing..." for iter in prev_niters .+ (1:niters)
         𝑇 = temperature(chain, iter)
-        nextsample!(rng, tracks, msd, brightness, llarray, detector, psf, 𝑇)
+        nextsample!(
+            rng,
+            tracks,
+            msd,
+            brightness,
+            llarray,
+            detector,
+            psf,
+            𝑇;
+            msdrescale,
+            countbrightness,
+        )
         if tosave(chain, iter)
             isfull(chain) && shrink!(chain)
             extend!(
@@ -279,7 +312,7 @@ function runMCMC!(;
 end
 
 """
-    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric; rng = Random.default_rng(), logposterior_rng = nothing)
+    runMCMC!(chain, tracks, msd, brightness, detector, psf, niters, parametric; rng = Random.default_rng(), logposterior_rng = nothing, msdrescale = false, countbrightness = false)
 
 Positional form of `runMCMC!(; kwargs...)`, with the arguments in the same order.
 """
@@ -294,6 +327,8 @@ runMCMC!(
     parametric::Bool;
     rng::AbstractRNG = Random.default_rng(),
     logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
+    msdrescale::Bool = false,
+    countbrightness::Bool = false,
 ) where {T} = runMCMC!(
     chain = chain,
     tracks = tracks,
@@ -305,6 +340,8 @@ runMCMC!(
     parametric = parametric,
     rng = rng,
     logposterior_rng = logposterior_rng,
+    msdrescale = msdrescale,
+    countbrightness = countbrightness,
 )
 
 """
@@ -322,6 +359,9 @@ Run a MCMC sampling with the specified keyword arguments. Requires the following
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`). A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 - `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
 - `logposterior_rng`: The log posterior of each sample covers all `max_ntracks` candidates, so that samples with different emitter counts compare. The off candidates' tracks enter through their expected log prior (default: `nothing`), or, given a random number generator, through an exact draw of it, as if their tracks had been simulated. That generator is kept apart from `rng`, so the chain itself does not change.
+- `msdrescale`: Also run the rescaling MSD move after the MSD's Gibbs draw, which stretches the on tracks with the MSD (default: `false`; `docs/msdrescale.qmd`). It costs one likelihood evaluation per iteration.
+- `countbrightness`: Also run the joint count–brightness move after the emitter-count update, which switches one emitter on or off and rescales the brightness by n/n′ (default: `false`; `docs/countbrightness.qmd`). Nonparametric sweep only.
+Both moves leave the posterior unchanged; they change only how the chain moves.
 """
 function runMCMC(;
     tracks::Tracks{T},
@@ -335,6 +375,8 @@ function runMCMC(;
     parametric::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
     logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
+    msdrescale::Bool = false,
+    countbrightness::Bool = false,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
     chain = Chain([Sample(tracks.onchunk, msd, brightness)], sizelimit, annealing)
@@ -349,6 +391,8 @@ function runMCMC(;
         parametric = parametric,
         rng = rng,
         logposterior_rng = logposterior_rng,
+        msdrescale = msdrescale,
+        countbrightness = countbrightness,
     )
     return chain
 end

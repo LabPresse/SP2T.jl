@@ -449,3 +449,39 @@ function update_onchunk!(
     return tracksᵒ
 end
 
+"""
+    update!(rng::AbstractRNG, msd::MeanSquaredDisplacement{T}, tracks::Tracks{T}, brightnessᵥ::T, llarray::LogLikelihoodAux{T}, detector::PixelDetector{T}, psf::PointSpreadFunction{T}, 𝑇::T)
+
+The rescaling (non-centered) MSD move, run after the MSD's Gibbs draw: propose `msd′ = msd·exp(proposalscale·z)`, `z` standard normal, and stretch every on track around its first position by `√(msd′/msd)`, which keeps its standardized increments, `displacement/√msd`, fixed. The tracks' prior and the stretch's Jacobian cancel, so the move is accepted with the likelihood ratio, the MSD prior ratio and the proposal ratio `msd′/msd`. Alternating it with the Gibbs draw (interweaving) lets the MSD change without waiting for the tracks to roughen (`docs/msdrescale.qmd`). The off tracks are integrated out, as in the Gibbs draw.
+"""
+function update!(
+    rng::AbstractRNG,
+    msd::MeanSquaredDisplacement{T},
+    tracks::Tracks{T},
+    brightnessᵥ::T,
+    llarray::LogLikelihoodAux{T},
+    detector::PixelDetector{T},
+    psf::PointSpreadFunction{T},
+    𝑇::T,
+) where {T}
+    tracksᵒ, tracksᵖ = tracks.onchunk, tracks.proposals # rename for clarity
+    (isfixed(msd) || isempty(tracksᵒ.value)) && return msd
+    msd.counter[2] += 1
+    valueᵖ = msd.value * exp(msd.proposalscale * randn(rng, T))
+    stretch = sqrt(valueᵖ / msd.value)
+    x₁ = view(tracksᵒ.value, 1:1, :, :)
+    @. tracksᵖ.value = x₁ + stretch * (tracksᵒ.value - x₁)
+    seteffvalue!(tracksᵒ)
+    seteffvalue!(tracksᵖ)
+    set_poisson_means!(llarray, detector, tracksᵒ.effvalue, tracksᵖ.effvalue, brightnessᵥ, psf)
+    logacceptance =
+        get_Δloglikelihood!(llarray, detector) / 𝑇 + Δlogpdf(msd.prior, valueᵖ, msd.value) +
+        log(valueᵖ / msd.value) - log(rand(rng))
+    if logacceptance > 0
+        tracksᵒ.value .= tracksᵖ.value
+        tracksᵒ.effvalue .= tracksᵖ.effvalue
+        msd.value = valueᵖ
+        msd.counter[1] += 1
+    end
+    return msd
+end

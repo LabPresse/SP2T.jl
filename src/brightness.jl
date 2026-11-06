@@ -65,3 +65,39 @@ function update!(
     accepted && (brightness.value = valueᵖ)
     return brightness
 end
+
+"""
+    update!(rng::AbstractRNG, count::EmitterCount{T}, brightness::Brightness{T}, tracksᵥ::AbstractArray{T,3}, llarray::LogLikelihoodAux{T}, detector::PixelDetector{T}, psf::PointSpreadFunction{T}, 𝑇::T)
+
+A joint Metropolis–Hastings move of the emitter count and the brightness: switch one emitter on or off (`n → n′ = n ± 1`, each with probability ½) and rescale the shared brightness to `b′ = b·n/n′`, so the expected photons from all emitters stay the same. It moves along the ridge between few bright and many dim emitters, which the count update (at a fixed brightness) and the brightness update (at a fixed count) cross only slowly. The rescaling is its own inverse between the two counts, with Jacobian `n/n′`; the candidates' tracks keep their values, as all of them belong to the state. `tracksᵥ` holds all candidates (`tracks.effvalue[1]`), and `count.loglikelihood[n+1]` must be the log-likelihood of the current state, as the count update leaves it.
+"""
+function update!(
+    rng::AbstractRNG,
+    count::EmitterCount{T},
+    brightness::Brightness{T},
+    tracksᵥ::AbstractArray{T,3},
+    llarray::LogLikelihoodAux{T},
+    detector::PixelDetector{T},
+    psf::PointSpreadFunction{T},
+    𝑇::T,
+) where {T}
+    (isfixed(count) || isfixed(brightness)) && return count
+    n = count.value
+    nᵖ = n + rand(rng, (-1, 1))
+    count.counter[2] += 1
+    # b·n/n′ needs at least one emitter before and after
+    (n ≥ 1 && 1 ≤ nᵖ ≤ count.limit) || return count
+    valueᵖ = brightness.value * n / nᵖ
+    set_poisson_mean!(llarray, detector, view(tracksᵥ, :, :, 1:nᵖ), valueᵖ, psf)
+    Δloglikelihood = get_loglikelihood!(llarray, detector) - count.loglikelihood[n+1]
+    logacceptance =
+        Δloglikelihood / 𝑇 +
+        count.logprior * (nᵖ - n) +
+        Δlogprior(brightness, valueᵖ) +
+        log(T(n) / nᵖ) - log(rand(rng))
+    if logacceptance > 0
+        count.value, brightness.value = nᵖ, valueᵖ
+        count.counter[1] += 1
+    end
+    return count
+end
