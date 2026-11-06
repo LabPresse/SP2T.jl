@@ -1,0 +1,108 @@
+---
+title: "Effective sample size"
+subtitle: "How the samplers' efficiency after convergence was measured"
+format:
+  html:
+    toc: true
+    number-sections: true
+    html-math-method: mathjax
+---
+
+Draws from a Markov chain are correlated, so $N$ of them estimate a posterior mean less precisely than $N$ independent draws would. The effective sample size (ESS) is the number of independent draws that would give the same precision. This note defines it, gives the estimator used to compare SP2T's sweeps (with and without `msdrescale` and `countbrightness`), and lists what it does and does not measure.
+
+# Definition
+
+Let $x_1, \dots, x_N$ be a stationary chain of a scalar quantity, with variance $\sigma^2$ and lag-$k$ autocorrelation $\rho_k = \operatorname{Cor}(x_i, x_{i+k})$. The variance of the chain's mean is
+
+$$
+\operatorname{Var}(\bar x) = \frac{\sigma^2}{N} \Big(1 + 2 \sum_{k=1}^{N-1} \Big(1 - \frac{k}{N}\Big) \rho_k\Big) \;\approx\; \frac{\sigma^2}{N}\, \tau,
+\qquad
+\tau = 1 + 2 \sum_{k=1}^{\infty} \rho_k ,
+$$
+
+for $N \gg \tau$. $\tau$ is the integrated autocorrelation time: roughly how many iterations one independent draw costs. $N$ independent draws give $\operatorname{Var}(\bar x) = \sigma^2/N$, so the chain is worth
+
+$$
+\boxed{\;\mathrm{ESS} = \frac{N}{\tau}\;}
+$$
+
+independent draws for estimating the posterior mean of $x$.
+
+# Estimator
+
+The sum over $\rho_k$ cannot be taken directly: at large lags the estimated $\rho_k$ are mostly noise, and summing them makes $\tau$ arbitrarily noisy. Geyer's initial monotone sequence estimator (Geyer 1992, the family Stan and ArviZ use) truncates the sum where the signal ends, using a property of reversible chains.
+
+1. **Autocorrelations.** With $y_i = x_i - \bar x$ and $v = \frac{1}{N} \sum_i y_i^2$,
+   $$
+   \hat\rho_k = \frac{1}{N v} \sum_{i=1}^{N-k} y_i\, y_{i+k}.
+   $$
+   Dividing by $N$ rather than $N - k$ shrinks the large-lag estimates toward 0.
+2. **Pair sums.** $\Gamma_m = \hat\rho_{2m} + \hat\rho_{2m+1}$ for $m = 0, 1, 2, \dots$, with $\hat\rho_0 = 1$. For a reversible chain, the true pair sums are positive and decreasing in $m$.
+3. **Initial positive sequence.** Stop at the first $m$ with $\Gamma_m \le 0$; the pairs before it are kept.
+4. **Monotone.** Replace each kept $\Gamma_m$ by $\min(\Gamma_m, \Gamma_{m-1})$, so the sequence does not increase.
+5. **Result.** Since $\tau = 1 + 2 \sum_{k \ge 1} \rho_k = -1 + 2 \sum_{m \ge 0} \Gamma_m$,
+   $$
+   \hat\tau = 2 \sum_{m < m^*} \Gamma_m - 1, \qquad \widehat{\mathrm{ESS}} = \frac{N}{\hat\tau},
+   $$
+   with $m^*$ the first pair dropped.
+
+In Julia:
+
+```julia
+using LinearAlgebra, Statistics
+
+function ess(x::AbstractVector)
+    n = length(x)
+    y = x .- mean(x)
+    v = dot(y, y) / n
+    v > 0 || return NaN
+    ρ(k) = dot(view(y, 1:n-k), view(y, 1+k:n)) / (n * v)
+    s, Γprev, m = 0.0, Inf, 0
+    while 2m + 1 < n
+        Γ = ρ(2m) + ρ(2m + 1)
+        Γ > 0 || break          # initial positive sequence
+        Γ = min(Γ, Γprev)       # initial monotone sequence
+        s += Γ
+        Γprev = Γ
+        m += 1
+    end
+    return n / (2s - 1)
+end
+```
+
+Its cost is one $O(N)$ dot product per lag, up to lag $\approx 2\hat\tau$, which is negligible here. An FFT gives all lags at once in $O(N \log N)$ when $\tau$ is long.
+
+# How the comparison used it
+
+The sweeps were compared on five simulated SPAD data sets (32×32 pixels, 600 frames, two particles, brightness 0.3, MSD 2e-4), with two seeds each. Every chain started at the true tracks, brightness and MSD, ran 20,000 iterations and discarded the first 1,000, leaving $N = 19{,}000$.
+
+- **Quantities.** The MSD; the brightness; two positions; and the log-likelihood. The emitter count is not among them: it stayed at 2 throughout.
+- **Positions.** The labels of the on tracks change (`onshuffle!`, the identity-swap move), so a fixed label's position is not a meaningful series. The two positions are the x coordinates, at frame 300, of the on emitters nearest each true particle at that frame. They do not depend on the labels.
+- **Log-likelihood.** It was evaluated every 10 iterations ($N = 1{,}900$), as it costs an extra likelihood evaluation. Thinning cannot raise an ESS, so its value is a lower bound, close to the full chain's when $\tau \gg 10$.
+- **Per chain.** The ESS is computed for each chain separately, and the median over chains is reported for each variant.
+- **Per CPU second.** ESS per second divides by the processor time (`clock()`) of the 19,000 kept sweeps. It excludes the discarded start and the recording, including the extra log-likelihood evaluations. CPU time rather than wall time keeps other load on the machine out of the comparison.
+
+# What it measures, and what it does not
+
+- **Mixing within a mode.** A single chain's ESS describes how fast the chain explores the region it is in. A chain stuck in another mode can have a large ESS there. Detecting that needs several chains from different starts and a between-chain comparison (split-$\hat R$ and the bulk and tail ESS of Vehtari et al. 2021), or comparing their `log𝒫`. Here every chain started at the truth and stayed with two emitters, so the within-mode ESS is the quantity of interest. The separate convergence tests (iterations until two emitters and a log-likelihood within 10 of the truth's) cover reaching the mode.
+- **Posterior means.** The ESS refers to estimating the mean of $x$. Tail quantities, such as the endpoints of a 95% interval, usually have a smaller ESS.
+- **Its own uncertainty.** With $\widehat{\mathrm{ESS}}$ between 25 and 70, the estimate of $\tau$ rests on only a few dozen autocorrelation times and is uncertain by roughly ±20–30%. Differences of that size between variants are noise.
+- **Stationarity.** The definition assumes the chain is already stationary. Starting at the truth, which is a typical posterior draw when the simulation matches the model, and discarding 1,000 iterations makes that a good approximation.
+
+# Results
+
+Medians over 10 chains (two seeds × five data sets) per variant:
+
+| Variant | CPU per iteration | MSD | Brightness | Position 1 | Position 2 | Log-likelihood |
+|---|---|---|---|---|---|---|
+| plain sweep | 15.9 ms | 29 | 2,769 | 63 | 68 | 45 |
+| `msdrescale` | 19.9 ms | 25 | 2,793 | 50 | 64 | 59 |
+| `countbrightness` | 20.2 ms | 27 | 2,871 | 53 | 55 | 37 |
+| both | 21.7 ms | 26 | 2,669 | 57 | 67 | 48 |
+
+Per CPU minute, the plain sweep gave 5.8 effective MSD draws, 559 of the brightness and 12.7 and 13.6 of the positions. With `msdrescale`, these were 4.0, 444, 7.9 and 10.0, with the log-likelihood equal (9.4 against 9.1). Per iteration, the variants agree within the estimator's uncertainty, so per second the plain sweep is the most efficient. In every variant, the MSD's $\hat\tau \approx 700$ iterations follows the slow mixing of the positions, which pin the tracks' roughness and so the MSD.
+
+# References
+
+- C. J. Geyer, "Practical Markov chain Monte Carlo," *Statistical Science* 7, 473–483 (1992).
+- A. Vehtari, A. Gelman, D. Simpson, B. Carpenter, P.-C. Bürkner, "Rank-normalization, folding, and localization: an improved $\hat R$ for assessing convergence of MCMC," *Bayesian Analysis* 16, 667–718 (2021).
