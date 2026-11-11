@@ -9,11 +9,18 @@ function spad_probability_reference(r, B, mean)
     end
 end
 
-spad_reference_match(actual, expected, ::Type{T}, mult) where {T} =
-    actual == expected || (isfinite(actual) && isfinite(expected) &&
+function spad_reference_match(actual, expected, ::Type{T}, mult; allow_subnormal_zero = false) where {T}
+    # Metal Shading Language §8.1 permits Float32 arithmetic to flush a
+    # subnormal result to zero. Classify the host-rounded BigFloat reference.
+    if allow_subnormal_zero && T === Float32 && issubnormal(expected) && iszero(actual)
+        return true
+    end
+    return actual == expected || (isfinite(actual) && isfinite(expected) &&
         isapprox(actual, expected; rtol = mult * eps(T), atol = 16 * nextfloat(zero(T))))
+end
 
-function spad_saturation_regression_suite(adapt = identity; precisions = (Float32, Float64))
+function spad_saturation_regression_suite(adapt = identity; precisions = (Float32, Float64),
+    allow_subnormal_zero = false)
     @testset "SPAD finite, saturated, and close-mean references $(adapt) $(T)" for T in precisions
         B = UInt16(8)
         for r in UInt16.((0, 1, 4, 8))
@@ -29,12 +36,18 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
                 fill!(sparse.means[i], iszero(r) ? zero(T) : λ)
                 fill!(sparse.linear[i], iszero(r) ? λ : zero(T))
             end
-            for λ in T.((0, floatmin(T), 1e-8, 0.1, 1, 10, 100, 1e5, Inf))
+            metal_full_hit = allow_subnormal_zero && T === Float32 && r == B
+            means = T[0, floatmin(T), 1e-8, 0.1, 1, 10, 100, 1e5, Inf]
+            # Both totals are normal Float32 tails; at 88 only the per-hit
+            # factor is subnormal. The count-weighted score must survive.
+            metal_full_hit && append!(means, T[80, 88])
+            for λ in means
                 setmeans!(λ, 1)
                 expected = T(spad_probability_reference(r, B, λ))
                 for aux in (dense, sparse)
                     actual = SP2T.get_loglikelihood!(aux, detector)
-                    @test spad_reference_match(actual, expected, T, 32)
+                    @test spad_reference_match(actual, expected, T, 32;
+                        allow_subnormal_zero = metal_full_hit)
                 end
             end
             pairs = [(T(1e-8), T(2e-8)), (T(0.1), T(0.2)), (T(10), T(11)),
@@ -42,6 +55,7 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
                 (T(0.7), nextfloat(T(0.7))), (nextfloat(T(0.7)), T(0.7))]
             if r == B
                 append!(pairs, [(T(Inf), T(Inf)), (zero(T), one(T)), (one(T), zero(T))])
+                metal_full_hit && append!(pairs, [(T(80), T(81)), (T(88), T(89))])
             elseif iszero(r)
                 append!(pairs, [(zero(T), zero(T)), (zero(T), T(0.2))])
             end
@@ -52,7 +66,8 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
                 end
                 for aux in (dense, sparse)
                     actual = SP2T.get_Δloglikelihood!(aux, detector)
-                    @test spad_reference_match(actual, expected, T, 64)
+                    @test spad_reference_match(actual, expected, T, 64;
+                        allow_subnormal_zero = metal_full_hit)
                 end
             end
         end
@@ -115,9 +130,13 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
         @test isapprox(Array(sparse.darksum), expected_dark; atol, rtol)
         for (oldb, newb) in ((T(0), T(2)), (T(0.4), T(1.2)), (T(2), T(0)))
             oldscore, newscore = framescores(oldb), framescores(newb)
-            for aux in (dense, sparse)
+            @testset "$(nameof(typeof(aux))) brightness $oldb to $newb" for aux in (dense, sparse)
                 SP2T.set_poisson_means!(aux, d, adapt(coords), oldb, newb, psf)
-                @test isapprox(SP2T.get_loglikelihood!(aux, d), sum(oldscore); atol, rtol)
+                score = SP2T.get_loglikelihood!(aux, d)
+                if !isfinite(score)
+                    @info "Nonfinite masked SPAD score" workspace=typeof(aux) filter=Array(d.filter) means=Array(aux.means[1]) pixels=Array(aux.pixel) frames=Array(aux.frame)
+                end
+                @test isapprox(score, sum(oldscore); atol, rtol)
                 @test isapprox(Array(aux.frame), oldscore; atol, rtol)
                 SP2T.set_frame_Δloglikelihood!(aux, d)
                 @test isapprox(Array(aux.frame), newscore - oldscore; atol, rtol)

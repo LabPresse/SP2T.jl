@@ -16,7 +16,7 @@ else
 
     @testset "Metal Float32 detector and SPAD regressions" begin
         detector_regression_suite(private; precisions = (Float32,))
-        spad_saturation_regression_suite(private; precisions = (Float32,))
+        spad_saturation_regression_suite(private; precisions = (Float32,), allow_subnormal_zero = true)
         Metal.synchronize()
     end
 
