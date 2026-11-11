@@ -56,13 +56,30 @@ _spad_included_full(f::T, r, B, λ::T) where {T} =
 _spad_included_delta(f::T, r, B, old::T, new::T) where {T} =
     iszero(f) ? zero(T) : _spad_Δloglikelihood(r, B, old, new)
 
+# At exp(-λ) < eps(T), -log(1-exp(-λ)) equals exp(-λ) to working
+# precision. Scale by the count before forming the final product: the
+# per-hit tail can be subnormal even when the count-weighted tail is normal.
+function _spad_counted_tail(r::Integer, λ::T) where {T}
+    half = exp(-λ / T(2))
+    return (T(r) * half) * half
+end
+
 function _spad_loglikelihood(r::Integer, B::Integer, λ::T) where {T}
+    if r == B && !iszero(r) && λ > -log(eps(T))
+        return -_spad_counted_tail(r, λ)
+    end
     hits = iszero(r) ? zero(T) : T(r) * _spad_log_hit(λ)
     misses = r == B ? zero(T) : (T(B) - T(r)) * λ
     return hits - misses
 end
 
 function _spad_Δloglikelihood(r::Integer, B::Integer, old::T, new::T) where {T}
+    lo, hi = min(old, new), max(old, new)
+    if r == B && !iszero(r) && lo > -log(eps(T))
+        old == new && return zero(T)
+        delta = _spad_counted_tail(r, lo) * (-expm1(-(hi - lo)))
+        return new > old ? delta : -delta
+    end
     hits = iszero(r) ? zero(T) : T(r) * _spad_Δlog_hit(old, new)
     misses = r == B ? zero(T) : (T(B) - T(r)) * (new - old)
     return hits - misses

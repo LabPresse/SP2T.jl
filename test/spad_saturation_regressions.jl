@@ -38,9 +38,10 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
             end
             metal_full_hit = allow_subnormal_zero && T === Float32 && r == B
             means = T[0, floatmin(T), 1e-8, 0.1, 1, 10, 100, 1e5, Inf]
-            # Both totals are normal Float32 tails; at 88 only the per-hit
-            # factor is subnormal. The count-weighted score must survive.
-            metal_full_hit && append!(means, T[80, 88])
+            # The second per-hit tail is subnormal, but both count-weighted
+            # results are normal. A flush-to-zero exception cannot apply.
+            tail_means = T === Float32 ? (T(80), T(88)) : (T(700), T(709))
+            r == B && append!(means, tail_means)
             for λ in means
                 setmeans!(λ, 1)
                 expected = T(spad_probability_reference(r, B, λ))
@@ -55,7 +56,7 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
                 (T(0.7), nextfloat(T(0.7))), (nextfloat(T(0.7)), T(0.7))]
             if r == B
                 append!(pairs, [(T(Inf), T(Inf)), (zero(T), one(T)), (one(T), zero(T))])
-                metal_full_hit && append!(pairs, [(T(80), T(81)), (T(88), T(89))])
+                append!(pairs, [(λ, λ + one(T)) for λ in tail_means])
             elseif iszero(r)
                 append!(pairs, [(zero(T), zero(T)), (zero(T), T(0.2))])
             end
@@ -134,7 +135,7 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
                 SP2T.set_poisson_means!(aux, d, adapt(coords), oldb, newb, psf)
                 score = SP2T.get_loglikelihood!(aux, d)
                 if !isfinite(score)
-                    @info "Nonfinite masked SPAD score" workspace=typeof(aux) filter=Array(d.filter) means=Array(aux.means[1]) pixels=Array(aux.pixel) frames=Array(aux.frame)
+                    @info "Nonfinite masked SPAD score" workspace=typeof(aux) filter=repr(vec(Array(d.filter))) means=repr(vec(Array(aux.means[1]))) pixels=repr(vec(Array(aux.pixel))) frames=repr(Array(aux.frame))
                 end
                 @test isapprox(score, sum(oldscore); atol, rtol)
                 @test isapprox(Array(aux.frame), oldscore; atol, rtol)
