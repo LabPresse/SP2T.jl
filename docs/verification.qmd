@@ -29,6 +29,13 @@ and sums the intensity at the included zero readouts. Both computations preserve
 small positive tails at saturation. Filtered pixels and padding are excluded
 before evaluating a likelihood at an invalid excluded mean.
 
+On a Mac with a functional Metal GPU, the package tests also run the Float32
+detector and SPAD reference suites on private device arrays with scalar indexing
+disabled. Metal allows a mathematically subnormal Float32 result to flush to
+zero. The full-hit tests check against a high-precision count-weighted reference
+and require a nonzero tail whenever that result is normal, even if the
+individual hit contribution is subnormal.
+
 The identity move draws two indices independently and uniformly. Distinct indices
 define a transposition shared across frame boundaries; equal indices give a no-op.
 Only tracks with identical fixed activity histories may exchange identities. This

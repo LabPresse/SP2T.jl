@@ -134,9 +134,6 @@ function spad_saturation_regression_suite(adapt = identity; precisions = (Float3
             @testset "$(nameof(typeof(aux))) brightness $oldb to $newb" for aux in (dense, sparse)
                 SP2T.set_poisson_means!(aux, d, adapt(coords), oldb, newb, psf)
                 score = SP2T.get_loglikelihood!(aux, d)
-                if !isfinite(score)
-                    @info "Nonfinite masked SPAD score" workspace=typeof(aux) filter=repr(vec(Array(d.filter))) means=repr(vec(Array(aux.means[1]))) pixels=repr(vec(Array(aux.pixel))) frames=repr(Array(aux.frame))
-                end
                 @test isapprox(score, sum(oldscore); atol, rtol)
                 @test isapprox(Array(aux.frame), oldscore; atol, rtol)
                 SP2T.set_frame_Δloglikelihood!(aux, d)

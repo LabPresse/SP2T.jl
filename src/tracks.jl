@@ -86,7 +86,8 @@ end
 
 function _seteffvalue!(effective::AbstractArray{T,3}, value, active) where {T}
     isempty(effective) && return effective
-    @. effective = ifelse(iszero(active), T(Inf), value)
+    inactive_position = T(Inf)
+    @. effective = ifelse(iszero(active), inactive_position, value)
     if size(value, 2) == 3
         mask_column = size(active, 2) == 1 ? 1 : 3
         axial_active = @view active[:, mask_column:mask_column, :]
