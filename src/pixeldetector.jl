@@ -1,10 +1,10 @@
 function check_pixel_dimsmatch(darkcounts::AbstractArray, readouts::AbstractArray)
     dimsmatch(darkcounts, readouts, dims = 1:2) ||
-        throw(DimensionMismatch("size of darkcounts dose not match size of readouts"))
+        throw(DimensionMismatch("size of darkcounts does not match size of readouts"))
 end
 
 """
-    _init_pixel_detector_params(TargetType::Type{T}, period::Real, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real}) where {T}
+    _init_pixel_detector_params(TargetType::Type{T}, pixel_size::Real, darkcounts::AbstractMatrix{<:Real}, cutoffs::Tuple{<:Real,<:Real}) where {T}
 
 Initialize the parameters for a pixel detector such that they share the same data type `T`.
 """
@@ -14,13 +14,16 @@ function _init_pixel_detector_params(
     darkcounts::AbstractMatrix{<:Real},
     cutoffs::Tuple{<:Real,<:Real},
 ) where {T}
-    darkcounts = elconvert(TargetType, darkcounts)
-    darkcounts[isinf.(darkcounts)] .= floatmax(eltype(darkcounts))
-    darkcounts[iszero.(darkcounts)] .= floatmin(eltype(darkcounts))
-    filter = similar(darkcounts) .= cutoffs[1] .< darkcounts .< cutoffs[2]
+    darkcounts = copyto!(similar(darkcounts, TargetType), darkcounts)
+    darkcounts[isinf.(darkcounts)] .= floatmax(T)
+    darkcounts[iszero.(darkcounts)] .= floatmin(T)
+    lower, upper = convert.(T, cutoffs)
+    filter = similar(darkcounts) .= lower .< darkcounts .< upper
     width, height = size(darkcounts)
-    pxboundsx = similar(darkcounts, width + 1) .= 0:pixel_size:width*pixel_size
-    pxboundsy = similar(darkcounts, height + 1) .= 0:pixel_size:height*pixel_size
+    pxsize = convert(T, pixel_size)
+    # built on the CPU in T: a Float64 range cannot be broadcast on GPUs without Float64
+    pxboundsx = copyto!(similar(darkcounts, width + 1), collect((0:width) .* pxsize))
+    pxboundsy = copyto!(similar(darkcounts, height + 1), collect((0:height) .* pxsize))
     return (pxboundsx, pxboundsy), darkcounts, filter
 end
 
@@ -48,7 +51,6 @@ function sum_pixel_loglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
 ) where {T}
-    @. llarray.pixel = ifelse(iszero(detector.filter), zero(T), llarray.pixel)
     framesum!(llarray.frame, llarray.pixel, detector.filter)
     return llarray
 end
@@ -131,15 +133,19 @@ function addincident!(
     )
 end
 
-function set_poisson_mean!(
+"""
+    add_poisson_mean!(llarray::LogLikelihoodAux{T}, detector::PixelDetector{T}, tracksᵥ::AbstractArray{T,3}, brightnessᵥ::T, psf::PointSpreadFunction{T}, i::Integer)
+
+Add the expected photon counts of the emitters in `tracksᵥ` to the state `i` of `llarray` (1 current, 2 proposed).
+"""
+function add_poisson_mean!(
     llarray::LogLikelihoodArray{T},
     detector::PixelDetector{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
     psf::PointSpreadFunction{T},
-    i::Integer = 1,
+    i::Integer,
 ) where {T}
-    reset!(llarray, detector, i)
     nframes, ~, nemitters = size(tracksᵥ)
     psfcomponents = (
         similar(tracksᵥ, size(detector, 1), nemitters, nframes),
@@ -161,8 +167,20 @@ function set_poisson_mean!(
     return llarray
 end
 
+function set_poisson_mean!(
+    llarray::LogLikelihoodAux{T},
+    detector::PixelDetector{T},
+    tracksᵥ::AbstractArray{T,3},
+    brightnessᵥ::T,
+    psf::PointSpreadFunction{T},
+    i::Integer = 1,
+) where {T}
+    reset!(llarray, detector, i)
+    return add_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ, psf, i)
+end
+
 function set_poisson_means!(
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::PixelDetector{T},
     tracksᵥ₁::AbstractArray{T,3},
     tracksᵥ₂::AbstractArray{T,3},
@@ -184,14 +202,16 @@ function set_poisson_means!(
 ) where {T}
     set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₁, psf, 1)
     if iszero(brightnessᵥ₁)
-        set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₂, psf, 2)
-    else
-        llarray.means[2] .=
-            (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁) .+
-            detector.darkcounts
+        return set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₂, psf, 2)
     end
+    llarray.means[2] .=
+        detector.darkcounts .+
+        (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁)
     return llarray
 end
+
+simulate_readouts!(detector::PixelDetector, means::AbstractArray{<:Real,3}) =
+    simulate_readouts!(Random.default_rng(), detector, means)
 
 function getincident(
     tracksᵥ::AbstractArray{T,3},

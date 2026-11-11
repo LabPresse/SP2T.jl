@@ -1,0 +1,113 @@
+---
+title: "The rescaling MSD move"
+subtitle: "Interweaving a non-centered MSD update with the Gibbs draw"
+format:
+  html:
+    toc: true
+    number-sections: true
+    html-math-method: mathjax
+---
+
+The MSD is drawn from its conditional given the on tracks, an inverse gamma (the centered update). When the tracks are smooth, that draw finds a small MSD. A small MSD makes the next tracks smoother still, so the two lock each other in. The rescaling move changes the MSD and stretches the tracks with it, keeping their standardized increments fixed (the non-centered update). This note derives its acceptance probability, shows that it leaves the posterior unchanged, and explains why alternating it with the Gibbs draw helps.
+
+# Setup
+
+The notation follows `docs/logposterior.qmd`. The off tracks are integrated out, as in the Gibbs draw, so the target is the marginal
+
+$$
+\pi(n, x_{1:n}, v, b) \propto \mathcal{L}(n, x_{1:n}, b)^{1/T}\, e^{\lambda n} \prod_{m=1}^{n} p(x_m \mid v)\; p(v)\, p(b),
+$$
+
+with the random-walk track prior $p(x \mid v)$ and the inverse-gamma prior $p(v)$. Write $N = (K-1)\,D\,n$ for the displacement coordinates of the on tracks.
+
+# The move
+
+Draw $z \sim \mathcal{N}(0, 1)$ and propose
+
+$$
+v' = v\, e^{\tau z}, \qquad x'_{m,k} = x_{m,1} + c\,(x_{m,k} - x_{m,1}) \text{ for every on track } m \text{ and frame } k, \qquad c = \sqrt{v'/v},
+$$
+
+with $\tau$ = `proposalscale` (default 0.05). The first positions stay where they are, and every displacement is multiplied by $c$, so the standardized increments do not change:
+
+$$
+\varepsilon'_{m,k} = \frac{\Delta x'_{m,k}}{\sqrt{v'}} = \frac{c\, \Delta x_{m,k}}{c \sqrt{v}} = \varepsilon_{m,k}.
+$$
+
+In the coordinates $(x_{\cdot,1}, \varepsilon, v)$ of construction B in `docs/logposterior.qmd`, the move is a random walk on $\log v$ with everything else fixed.
+
+# Acceptance
+
+**In standardized coordinates.** There, the target density is
+
+$$
+\pi_B \propto \mathcal{L}\big(n, X(x_{\cdot,1}, \varepsilon, v), b\big)^{1/T}\, e^{\lambda n} \prod_{m} \Big[\prod_d \mathcal{N}(x_{m,1,d};\, \mu_d, \sigma_d^2) \prod_{k,d} \mathcal{N}(\varepsilon_{m,k,d};\, 0, 1)\Big]\; p(v)\, p(b),
+$$
+
+and the tracks' prior does not depend on $v$. The proposal for $v$ is a log-normal random walk, $q(v' \mid v) = \mathcal{N}(\log v';\, \log v, \tau^2)/v'$, so
+
+$$
+\frac{q(v \mid v')}{q(v' \mid v)} = \frac{1/v}{1/v'} = \frac{v'}{v}.
+$$
+
+The Metropolis–Hastings ratio is therefore
+
+$$
+\boxed{\;\frac{\pi_B(v')}{\pi_B(v)}\, \frac{q(v \mid v')}{q(v' \mid v)}
+= e^{\Delta \log \mathcal{L}/T}\; \frac{p(v')}{p(v)}\; \frac{v'}{v}\;}
+$$
+
+with $\Delta \log \mathcal{L}$ the log-likelihood of the stretched tracks minus that of the current ones.
+
+**In position coordinates.** The same ratio follows from the positions directly. Read the move as a map $(v, x, z) \mapsto (v', x', -z)$, which is its own inverse; $\mathcal{N}(-z) = \mathcal{N}(z)$, so the auxiliary draws cancel. Its Jacobian with respect to $(v, x)$ is
+
+$$
+\Big\lvert \frac{\partial (v', x')}{\partial (v, x)} \Big\rvert = \frac{\partial v'}{\partial v} \cdot c^{N} = \frac{v'}{v} \Big(\frac{v'}{v}\Big)^{N/2},
+$$
+
+since $v \mapsto v e^{\tau z}$ has derivative $e^{\tau z} = v'/v$ and every one of the $N$ displacements is multiplied by $c$ (the derivative of $x'$ with respect to $v$ sits in a block that does not change the determinant). The track prior changes by
+
+$$
+\frac{\prod_m p(x'_m \mid v')}{\prod_m p(x_m \mid v)} = \prod_{k, d, m} \frac{\mathcal{N}(c\, \Delta x;\, 0, c^2 v)}{\mathcal{N}(\Delta x;\, 0, v)} = c^{-N} = \Big(\frac{v'}{v}\Big)^{-N/2},
+$$
+
+and the first positions do not move. The track prior and the stretch's Jacobian cancel, leaving the same factor $v'/v$:
+
+$$
+\frac{\pi(v', x')}{\pi(v, x)} \Big\lvert \frac{\partial (v', x')}{\partial (v, x)} \Big\rvert = e^{\Delta \log \mathcal{L}/T}\, \frac{p(v')}{p(v)}\, \frac{v'}{v}.
+$$
+
+**Invariance.** A Metropolis–Hastings move whose acceptance uses this ratio satisfies detailed balance with respect to $\pi$, by the same calculation as in `docs/countbrightness.qmd` (forward and reverse flows are each the minimum of the same two terms). So $\pi$ is its invariant distribution.
+
+# Integrating the off tracks out
+
+The move acts on the marginal over the off tracks, just as the Gibbs draw does. In the nonparametric sweep, the off tracks are redrawn from the prior given the current MSD at the start of the next sweep, before anything reads them. The sweep is then a partially collapsed Gibbs sampler: a step that integrates the off tracks out is followed by a draw of the off tracks, which keeps the full weak-limit posterior invariant. In the parametric sweep there are no off candidates to redraw, and the target is the marginal itself.
+
+# Why interweave
+
+With the move on, the sweep draws the MSD twice: first from its centered conditional $v \mid x$ (inverse gamma, exact), then with the rescaling move, which updates $v$ given the standardized increments $\varepsilon$. Each keeps $\pi$ invariant, so their composition does too. This is the interweaving strategy (ancillarity–sufficiency interweaving, Yu & Meng 2011):
+
+- **Data informative about the tracks:** the tracks are pinned down, and the centered draw moves $v$ well, because $v \mid x$ is wide relative to how much the tracks constrain it.
+- **Data weak about the tracks:** the centered draw is stuck near the tracks' current roughness, while the rescaling move changes $v$ and the tracks together, limited only by the likelihood.
+
+Alternating the two mixes at least as well as the better of them for this pair of coordinates.
+
+**A limit.** The stretch is about each track's first position, so a frame $k$ moves by $(c - 1)(x_k - x_1)$. For long tracks that have wandered far from their start, even a small $c - 1$ moves late frames by a lot, and the likelihood rejects the stretch. The default $\tau = 0.05$ keeps proposals modest; `msd.counter` records acceptances and proposals.
+
+# Turning it on
+
+The move is off by default: `runMCMC` and `runMCMC!` run it, in either sweep, only with `msdrescale = true`. On simulated SPAD data (five data sets, 32×32 pixels, 600 frames, two particles, 23 chains per setting started near the truth), 22 of its chains converged against 20 without it. Converging chains took slightly fewer iterations, but each iteration cost about 25% more CPU time, so they took about as long. Turn it on when the MSD and the tracks' roughness seem locked together, as in the data-weak case above.
+
+# What SP2T computes
+
+`update!(rng, msd::MeanSquaredDisplacement, tracks::Tracks, brightness, llarray, detector, psf, 𝑇)` in `src/tracks.jl`, called right after the Gibbs draw in either sweep when `msdrescale = true`:
+
+$$
+\texttt{logacceptance} = \frac{\Delta \log \mathcal{L}}{T} + \Big[-(\alpha + 1)\log\frac{v'}{v} - \beta\Big(\frac{1}{v'} - \frac{1}{v}\Big)\Big] + \log\frac{v'}{v},
+$$
+
+the bracket being $\log p(v') - \log p(v)$ for the inverse gamma (`Δlogpdf`). It writes the stretched tracks into the proposal buffers (`tracks.proposals`), evaluates both states' expected counts, and copies the stretched tracks back when accepted. Cost: one likelihood evaluation of the on tracks per sweep. It skips the move when the MSD is fixed or no emitter is on.
+
+# Testing
+
+`test/samplers.jl` checks invariance directly. It draws 40,000 independent states exactly from the prior (the MSD from InverseGamma(6, 0.05), two tracks from the track prior), applies one move with the likelihood switched off and a large $\tau = 0.5$, and checks three things. The MSD's quantiles still match the inverse gamma's; $S/v$, the tracks' squared displacements over the MSD, is still $\chi^2(N)$; and the two are still independent. Dropping the proposal ratio $v'/v$ makes the MSD's median check fail by 0.021 against a tolerance of 0.006. Stretching by $v'/v$ instead of $\sqrt{v'/v}$ fails by 0.088.

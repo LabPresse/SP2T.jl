@@ -1,7 +1,7 @@
 """
     EmitterCount{T<:AbstractFloat, V<:AbstractVector{T}} <: RandomVariable{T}
 
-A mutable struct that represents the random variable of the number of tracks (the number of emitting particles). The length of `V` should match the weak limit (the total number of particle candidates).
+A mutable struct that represents the random variable of the number of tracks (the number of emitting particles). The length of `V` should match the weak limit (the total number of particle candidates). `counter::Vector{Int}` records the acceptances and proposals of the joint count–brightness move.
 """
 mutable struct EmitterCount{T<:AbstractFloat,V<:AbstractVector{T}} <: RandomVariable{T}
     value::Int
@@ -9,6 +9,7 @@ mutable struct EmitterCount{T<:AbstractFloat,V<:AbstractVector{T}} <: RandomVari
     fixed::Bool
     likelihood::V
     posterior::V
+    counter::Vector{Int}
 end
 
 EmitterCount{T}(
@@ -22,11 +23,12 @@ EmitterCount{T}(
     fixed,
     Vector{T}(undef, limit + 1),
     Vector{T}(undef, limit + 1),
+    zeros(Int, 2),
 )
 
 function Base.getproperty(n::EmitterCount, s::Symbol)
     if s == :limit
-        return length(getfield(n, :log𝒫)) - 1
+        return length(getfield(n, :likelihood)) - 1
     elseif s == :logprior
         return n.prior
     elseif s == :loglikelihood
@@ -51,29 +53,19 @@ function set_loglikelihood!(
     count::EmitterCount{T},
     tracksᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
 ) where {T}
     reset!(llarray, detector, 1)
-    nframes, ~, nparticles = size(tracksᵥ)
-    psfcomponents = (
-        similar(tracksᵥ, size(detector, 1), 1, nframes),
-        similar(tracksᵥ, size(detector, 2), 1, nframes),
-    )
-    relativepos = (
-        similar(tracksᵥ, size(detector, 1) + 1, 1, nframes),
-        similar(tracksᵥ, size(detector, 2) + 1, 1, nframes),
-    )
-    @inbounds for m = 1:nparticles
-        addincident!(
-            llarray.means[1],
-            psfcomponents,
-            relativepos,
+    for m in axes(tracksᵥ, 3)
+        add_poisson_mean!(
+            llarray,
+            detector,
             view(tracksᵥ, :, :, m:m),
             brightnessᵥ,
-            detector.pxbounds,
             psf,
+            1,
         )
         count.loglikelihood[m+1] = get_loglikelihood!(llarray, detector)
     end
@@ -81,16 +73,18 @@ function set_loglikelihood!(
 end
 
 function update!(
+    rng::AbstractRNG,
     count::EmitterCount{T},
     trackᵥ::AbstractArray{T,3},
     brightnessᵥ::T,
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::Detector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
+    isfixed(count) && return count
     set_loglikelihood!(count, trackᵥ, brightnessᵥ, llarray, detector, psf)
     set_logposterior!(count, 𝑇)
-    count.value = randc(count.logposterior) - 1
+    count.value = randc(rng, count.logposterior) - 1
     return count
 end

@@ -1,0 +1,179 @@
+---
+title: "The log posterior of a sample"
+subtitle: "Track positions versus standardized increments"
+format:
+  html:
+    toc: true
+    number-sections: true
+    html-math-method: mathjax
+---
+
+SP2T stores a posterior ranking score, `log𝒫`, with every sample, and `findmap` picks its largest finite value after burn-in. This note shows that the posterior can be built in two ways, from track positions or from standardized increments; that both give the same posterior distribution; and that their densities still differ at a point by a factor that depends on the MSD. `log𝒫` uses the second coordinate convention, which is why `get_logposterior` adds `logjacobian`. With off candidates, its expected-prior substitution makes it a ranking score rather than the exact joint log density of a stored full state or a marginalized log density.
+
+# Setup
+
+| Symbol | Meaning |
+|---|---|
+| $K$, $D$ | number of frames; coordinates per position (2, or 3 with `CircularGaussianLorentzian`) |
+| $M$, $n$ | number of candidates (`max_ntracks`); number of emitters on, candidates $1, \dots, n$ |
+| $x_{m,k} \in \mathbb{R}^D$ | position of candidate $m$ in frame $k$; $x_m = (x_{m,1}, \dots, x_{m,K})$ |
+| $\Delta x_{m,k} = x_{m,k+1} - x_{m,k}$ | displacement, $k = 1, \dots, K-1$ |
+| $v$, $b$ | MSD (variance of a one-frame displacement per coordinate) and brightness |
+| $\mathcal{L}(n, x_{1:n}, b)$ | likelihood of the readouts; it depends only on the tracks that are on |
+| $N = (K-1)\,D\,M$ | number of displacement coordinates of all candidates |
+
+Priors: $p(n) \propto e^{\lambda n}$ for $n = 0, \dots, M$ ($\lambda$ is `logonprob`); first positions $x_{m,1,d} \sim \mathcal{N}(\mu_d, \sigma_d^2)$ (`DNormal`); $v \sim \text{InverseGamma}(\alpha, \beta)$; $b \sim \text{Gamma}$. The state always contains all $M$ tracks, on or off; this is the weak limit.
+
+# Construction A: track positions
+
+Each track is a Gaussian random walk in the positions:
+
+$$
+p_A(x_m \mid v) = \prod_{d=1}^{D} \mathcal{N}(x_{m,1,d};\, \mu_d, \sigma_d^2) \prod_{k=1}^{K-1} \prod_{d=1}^{D} \mathcal{N}(\Delta x_{m,k,d};\, 0, v).
+$$
+
+With $\theta_A = (n, x_{1:M}, v, b)$, the posterior density is
+
+$$
+\pi_A(\theta_A) \propto \mathcal{L}(n, x_{1:n}, b)\; p(n) \prod_{m=1}^{M} p_A(x_m \mid v)\; p(v)\, p(b).
+$$
+
+This is the construction the sampler is written in: the MSD is drawn from its inverse-gamma conditional given the displacements, and the positions are updated by Metropolis–Hastings with the random-walk prior.
+
+# Construction B: standardized increments
+
+Write each displacement as a scaled standard normal increment,
+
+$$
+\varepsilon_{m,k,d} = \frac{\Delta x_{m,k,d}}{\sqrt{v}} \sim \mathcal{N}(0, 1) \text{ i.i.d., independent of } v,
+\qquad
+x_{m,k} = x_{m,1} + \sqrt{v} \sum_{j=1}^{k-1} \varepsilon_{m,j}.
+$$
+
+With $\theta_B = (n, x_{1:M,1}, \varepsilon, v, b)$, the posterior density is
+
+$$
+\pi_B(\theta_B) \propto \mathcal{L}\big(n, X(x_{1}, \varepsilon, v)_{1:n}, b\big)\; p(n) \prod_{m=1}^{M} \Big[\prod_{d} \mathcal{N}(x_{m,1,d};\, \mu_d, \sigma_d^2) \prod_{k,d} \mathcal{N}(\varepsilon_{m,k,d};\, 0, 1)\Big]\; p(v)\, p(b),
+$$
+
+where $X(x_1, \varepsilon, v)$ rebuilds the tracks. Here $v$ enters through the likelihood (it scales the tracks) and through its own prior, but not through the tracks' prior.
+
+# The two constructions give the same posterior
+
+Let $\Phi(x_{1:M,1}, \varepsilon, v) = (x_{1:M}, v)$ be the map that rebuilds the tracks, leaving $n$ and $b$ unchanged. For $v > 0$ it is a bijection, with inverse $\varepsilon = \Delta x / \sqrt{v}$.
+
+**Jacobian.** Order the inputs as $(x_{\cdot,1}, \varepsilon, v)$ and the outputs as $(x_{\cdot,1}, x_{\cdot,2:K}, v)$:
+
+$$
+J_\Phi =
+\begin{pmatrix}
+I & 0 & 0 \\
+\partial x_{\cdot,2:K} / \partial x_{\cdot,1} & \sqrt{v}\, L & \partial x_{\cdot,2:K} / \partial v \\
+0 & 0 & 1
+\end{pmatrix},
+$$
+
+where $L$, for each candidate and coordinate, is the lower-triangular matrix of ones that turns increments into cumulative sums ($\det L = 1$). Expanding along the last row leaves a block lower-triangular matrix, so
+
+$$
+\lvert \det J_\Phi \rvert = \det\big(\sqrt{v}\, L\big) = v^{N/2}.
+$$
+
+**Change of variables.** For a single displacement coordinate,
+
+$$
+\mathcal{N}(\sqrt{v}\,\varepsilon;\, 0, v)\,\sqrt{v}
+= \frac{\sqrt{v}}{\sqrt{2\pi v}}\, e^{-v\varepsilon^2 / (2v)}
+= \mathcal{N}(\varepsilon;\, 0, 1),
+$$
+
+so, over all candidates,
+
+$$
+\prod_{m=1}^{M} p_A(x_m \mid v)\; v^{N/2}
+= \prod_{m=1}^{M} \Big[\prod_{d} \mathcal{N}(x_{m,1,d};\, \mu_d, \sigma_d^2) \prod_{k,d} \mathcal{N}(\varepsilon_{m,k,d};\, 0, 1)\Big].
+$$
+
+The likelihood, $p(n)$, $p(v)$ and $p(b)$ are the same functions of the state in both constructions. Therefore
+
+$$
+\boxed{\;\pi_B(\theta_B) = \pi_A\big(\Phi(\theta_B)\big)\, \lvert \det J_\Phi \rvert = \pi_A\big(\Phi(\theta_B)\big)\, v^{N/2}\;}
+$$
+
+which is exactly the change-of-variables formula. Hence, for every set $E$ of states,
+
+$$
+\int_{E} \pi_A(\theta_A)\, d\theta_A = \int_{\Phi^{-1}(E)} \pi_B(\theta_B)\, d\theta_B,
+$$
+
+and the normalizing constants agree. A and B are the same posterior written in two coordinate systems. They have the same marginals (of $n$, $v$, $b$ and the tracks that are on), the same expectations, and the same credible sets, and a chain that samples one samples the other through $\Phi$. Choosing B for `log𝒫` therefore changes no sample.
+
+# Densities at a point differ
+
+Taking logs of the boxed identity,
+
+$$
+\log \pi_B = \log \pi_A + \frac{N}{2} \log v .
+$$
+
+A density is not invariant under a change of coordinates, so the sample where it is largest (the MAP, `findmap`) depends on the construction.
+
+**Why construction A rewards a small MSD.** For a track that is typical for its MSD, $\sum_{k,d} \Delta x_{m,k,d}^2 \approx (K-1) D\, v$, and its displacement terms are
+
+$$
+\log \prod_{k,d} \mathcal{N}(\Delta x_{m,k,d};\, 0, v) \approx -\frac{(K-1) D}{2}\,\big(\log 2\pi v + 1\big),
+$$
+
+which grows without bound as $v \to 0$. A small MSD concentrates the prior on smooth tracks: the density rises, while the volume of track configurations typical for that MSD shrinks by $v^{N/2}$, so the probability does not change. In construction B, the same terms are $-\tfrac{(K-1)D}{2}(\log 2\pi + 1)$ for every $v$: the tracks' prior volume does not depend on the MSD. Differences in $\log \pi_B$ between samples reflect the fit, the emitter count, the MSD prior and how typical the increments are, not how narrowly the MSD packs the prior.
+
+# Off candidates
+
+To avoid simulating the off tracks, `log𝒫` uses their expected log prior under the prior given $v$ (`offlogprior`). For one off candidate:
+
+$$
+\begin{aligned}
+\text{A:}\quad \mathbb{E}\big[\log p_A(x_m \mid v)\big] &= -\frac{(K-1) D}{2}\big(\log 2\pi v + 1\big) - \sum_{d} \Big(\log \sigma_d + \tfrac12 \log 2\pi + \tfrac12\Big), \\
+\text{B:}\quad \mathbb{E}\big[\log p_B\big] &= -\frac{(K-1) D}{2}\big(\log 2\pi + 1\big) - \sum_{d} \Big(\log \sigma_d + \tfrac12 \log 2\pi + \tfrac12\Big).
+\end{aligned}
+$$
+
+They differ by $\tfrac{(K-1)D}{2}\log v$, that candidate's share of the Jacobian, as the change of variables requires. With `logposterior_rng`, the expectation is replaced by an exact draw: the sum of squared standardized increments and first positions of the off tracks is $\chi^2$-distributed with $(M-n)\,K\,D$ degrees of freedom.
+
+An expected log prior is not the log of an integrated prior, and an independent draw is not the density of the particular stored off-track coordinates. These substitutions do not change the sampler, but limit interpretation of `findmap` when candidates are off. With every candidate on, the score is the standardized-coordinate joint log posterior up to sample-independent constants.
+
+# What SP2T computes
+
+$$
+\log \mathcal{P} = \underbrace{\log \mathcal{L}}_{\texttt{get\_loglikelihood!}}
++ \underbrace{\sum_{m \le n} \log p_A(x_m \mid v)}_{\texttt{logprior(onchunk, msd)}}
++ \underbrace{\sum_{m > n} \mathbb{E}\big[\log p_A(x_m \mid v)\big]}_{\texttt{offlogprior}}
++ \underbrace{\tfrac{N}{2} \log v}_{\texttt{logjacobian}}
++ \underbrace{\log p(v)}_{\texttt{logprior(msd)}}
++ \underbrace{\lambda\, n}_{\texttt{logprior(nemitters)}}
++ \underbrace{\log p(b)}_{\texttt{logprior(brightness)}}
+$$
+
+This is a score in construction B, with the off-candidate qualification above. The track and first-position terms are normalized, because their constants depend on $v$; omitted MSD/count prior normalizers are shared by all samples. Standardizing the first positions by $\sigma_d$ as well would only add a constant, so it is left out. Saved samples include the normalized brightness prior. The three-argument internal `get_logposterior(loglikelihood, tracks, msd)` helper remains a reduced score without brightness; the brightness-aware overload is used when saving samples.
+
+`test/runtests.jl` checks this against a direct evaluation in construction B with Distributions.jl, and that with the increments $\varepsilon$ and the log-likelihood fixed, changing $v$ changes `log𝒫` only by $\log p(v)$.
+
+# Example: the 2D example
+
+The following historical calculation omits the brightness prior and predates the repaired sampler. It illustrates the coordinate Jacobian, not the current complete saved-score calculation or current sampler behavior. It compares two states of the 2D example (`examples/2D`, 50 × 50 pixels, $K = 2550$, $D = 2$, $M = 10$, so $N = 50{,}980$): the ground truth and an earlier stuck state.
+
+| | Ground truth | Stuck state | Truth − stuck |
+|---|---:|---:|---:|
+| Emitters on, brightness, MSD | 2, 0.1, 2.0 × 10⁻⁴ | 10, 0.0147, 9.38 × 10⁻⁶ | |
+| $\log \mathcal{L}$ | −92,139.8 | −97,485.5 | 5,345.7 |
+| Track prior in A (on + expected off) | 144,637.6 | 222,867.0 | −78,229.4 |
+| $\log p(n)$ | −20.0 | −100.0 | 80.0 |
+| $\log p(v)$ | 25.5 | 33.7 | −8.2 |
+| $\log \pi_A$ | 52,503.4 | 125,315.2 | −72,811.8 |
+| $\tfrac{N}{2} \log v$ | −217,103.3 | −295,101.9 | 77,998.6 |
+| $\log \pi_B$ (`log𝒫`) | −164,599.9 | −169,786.7 | **5,186.8** |
+
+Both states are typical for their own MSD (the per-step variance of their tracks is $2.04 \times 10^{-4}$ and $9.33 \times 10^{-6}$), so in construction A the stuck state's track prior is higher by about $\tfrac{N}{2}\log(2.0\times10^{-4} / 9.38\times10^{-6}) \approx 78{,}000$, which outweighs the truth's better fit. In construction B, that term is removed, and the truth is ahead by about the likelihood difference.
+
+# Caveat
+
+The highest-density sample depends on the coordinates whatever they are; B is a convention, chosen because in it the tracks' prior volume does not depend on the MSD. Neither density measures how much posterior probability a mode holds. Comparing modes by probability requires estimating each mode's marginal likelihood, for example by thermodynamic integration over a temperature ladder.

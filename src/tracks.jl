@@ -28,7 +28,7 @@ end
 """
     MHTrackChunk{T<:AbstractFloat, A<:AbstractArray{T}, V<:AbstractVector{T}}
 
-A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the sames fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of proposals and the number of acceptances.
+A struct that represents a track chunk used in the Metropolis-Hastings algorithm. Besides the same fields in TrackChunk, 'ΣΔdisplacement²::V' is the total difference (sum over particles) between two sets of squared displacements. `scaling::V` for the scaling constant for the additive random walk. (See Pressé, Data Modeling for the Sciences, 2023, p180.) `logacceptance::V`, log acceptance ratio. 'accepted::V', whether to accept the proposals at each frame. `counter::Matrix{Int}`, a matrix recording the number of acceptances (row 1) and proposals (row 2), for the identity-swap move (column 1) and position updates (column 2).
 """
 struct MHTrackChunk{
     T<:AbstractFloat,
@@ -56,14 +56,14 @@ function MHTrackChunk(value, active, displacement², effvalue, scaling)
         effvalue,
         similar(value, nframes - 1),
         scaling,
-        fill!(similar(value, nframes), -Inf),
-        fill!(similar(value, nframes), 0.0),
+        fill!(similar(value, nframes), typemin(eltype(value))),
+        fill!(similar(value, nframes), zero(eltype(value))),
         zeros(Int, 2, 2),
     )
 end
 
-function initmh!(t::MHTrackChunk)
-    neglogrand!(t.logacceptance)
+function initmh!(rng::AbstractRNG, t::MHTrackChunk)
+    neglogrand!(rng, t.logacceptance)
     fill!(t.accepted, false)
     return t
 end
@@ -74,24 +74,29 @@ setacceptance!(t::MHTrackChunk; start::Integer, step::Integer) =
 """
     seteffvalue!(tracks::AbstractTrackChunk{T})
 
-Set the effective positions used by the detector. Inactive emitters have infinite lateral coordinates and zero axial coordinates, so they contribute no photons. Currently, `active` should ONLY be used in parametric runs.
+Set the effective positions, preserving active coordinates. Inactive particles
+have infinite lateral coordinates and zero axial coordinate in 3D, so they
+contribute no photons without forming `0/0` or an infinite Lorentzian width.
+Currently, `active` should ONLY be used in parametric runs.
 """
 function seteffvalue!(tracks::AbstractTrackChunk{T}) where {T}
-    seteffvalue!(tracks.effvalue, tracks.value, tracks.active)
+    _seteffvalue!(tracks.effvalue, tracks.value, tracks.active)
     return tracks
 end
 
-function seteffvalue!(effective::AbstractArray{T,3}, value::AbstractArray{T,3}, active::AbstractArray{T,3}) where {T}
+function _seteffvalue!(effective::AbstractArray{T,3}, value, active) where {T}
+    isempty(effective) && return effective
     @. effective = ifelse(iszero(active), T(Inf), value)
-    # Keep the 3D PSF width finite when an emitter is inactive.
-    if size(value, 2) >= 3
-        @views @. effective[:, 3:end, :] = ifelse(iszero(active[:, 3:end, :]), zero(T), value[:, 3:end, :])
+    if size(value, 2) == 3
+        mask_column = size(active, 2) == 1 ? 1 : 3
+        axial_active = @view active[:, mask_column:mask_column, :]
+        @views effective[:, 3:3, :] .= ifelse.(iszero.(axial_active), zero(T), value[:, 3:3, :])
     end
     return effective
 end
 
 """
-    Tracks{T<:AbstractFloat, A<:AbstractArray{T,3}, NT<:NEmitters{T}, TR<:TrackChunk{T}, MH<:MHTrackChunk{T}}
+    Tracks{T<:AbstractFloat, A<:AbstractArray{T,3}, NT<:EmitterCount{T}, TR<:TrackChunk{T}, MH<:MHTrackChunk{T}}
 
 A mutable struct that encapsulates the number of emitting particles, track chunks, and full values. Note that the `value` of a `TrackChunk` should be a pointer to the `value` of `Tracks`, and the same for `active`, `displacement²`, and `effvalue`. The `onchunk` and `offchunk` fields are used to store the track chunks for the on and off parts of the tracks, respectively. The `proposals` field is used to store the proposals for the Metropolis-Hastings algorithm.
 """
@@ -141,10 +146,42 @@ TrackChunk(
 
 function logprior(t::AbstractTrackChunk{T}, msdᵥ::T) where {T}
     setdisplacement²!(t)
-    # Keep Gaussian normalizers because the number of emitters can change.
-    return -((log(msdᵥ) + log(T(2π))) * length(t.displacement²) +
-             sum(vec(t.displacement²)) / msdᵥ) / 2 +
-           logprior(t.prior, view(t.value, 1, :, :); normalization = true)
+    return -(
+        log(2 * T(π) * msdᵥ) * length(t.displacement²) + sum(vec(t.displacement²)) / msdᵥ
+    ) / 2 + logprior(t.prior, view(t.value, 1, :, :))
+end
+
+"""
+    offlogprior([rng::AbstractRNG,] tracks::Tracks{T}, msdᵥ::T)
+
+The off candidates' `logprior` without simulating their tracks: its expectation over tracks drawn from the prior given `msdᵥ` or, with `rng`, an exact draw of it. For such tracks, every displacement divided by `√msdᵥ` and every first position standardized by the `DNormal` prior is standard normal, so the sum of their squares is χ²-distributed with `nframes · ndims` degrees of freedom per track; the expectation replaces it by its mean. This is a score proxy, not a marginalized log density or the log density of the particular off-track values stored in `tracks`.
+"""
+offlogprior(tracks::Tracks{T}, msdᵥ::T) where {T} =
+    offlogprior(identity, tracks, msdᵥ) # E[χ²(k)] = k
+offlogprior(rng::AbstractRNG, tracks::Tracks{T}, msdᵥ::T) where {T} =
+    offlogprior(k -> convert(T, rand(rng, Chisq(k))), tracks, msdᵥ)
+offlogprior(::Nothing, tracks::Tracks{T}, msdᵥ::T) where {T} = offlogprior(tracks, msdᵥ)
+
+function offlogprior(χ²::F, tracks::Tracks{T}, msdᵥ::T) where {F<:Function,T}
+    noff = tracks.nemitters.limit - tracks.nemitters.value
+    iszero(noff) && return zero(T)
+    nframes, ndims = size(tracks.value[1], 1), size(tracks.value[1], 2)
+    σ = tracks.onchunk.prior.σ
+    lognormalization =
+        (nframes - 1) * ndims * log(2 * T(π) * msdᵥ) +
+        ndims * log(2 * T(π)) +
+        2 * sum(log, σ)
+    return -(noff * lognormalization + χ²(noff * nframes * ndims)) / 2
+end
+
+"""
+    logjacobian(tracks::Tracks{T}, msdᵥ::T)
+
+`(N/2)·log(msdᵥ)`, the log Jacobian from the displacements of all candidates to the standardized increments `ε = displacement / √msdᵥ`, with `N` their number of coordinates. Added to the log posterior, it gives its density in the coordinates (first positions, `ε`, MSD), where the tracks' prior does not depend on the MSD; see `docs/logposterior.qmd`.
+"""
+function logjacobian(tracks::Tracks{T}, msdᵥ::T) where {T}
+    nframes, ndims = size(tracks.value[1], 1), size(tracks.value[1], 2)
+    return (nframes - 1) * ndims * tracks.nemitters.limit * log(msdᵥ) / 2
 end
 
 function Tracks{T}(;
@@ -157,21 +194,29 @@ function Tracks{T}(;
 ) where {T,P}
     guess = elconvert(T, guess)
     nframes, ndims, nguesses = size(guess)
+    max_ntracks >= nguesses || throw(ArgumentError("max_ntracks must include every guessed track"))
+    if !isnothing(active)
+        size(active, 1) == nframes && size(active, 2) in (1, ndims) &&
+            size(active, 3) == nguesses || throw(DimensionMismatch(
+                "active must match guessed frames and particles, with 1 or $ndims columns",
+            ))
+        all(x -> iszero(x) || isone(x), active) || throw(ArgumentError(
+            "active must contain only zero or one",
+        ))
+        size(active, 2) == 1 || all(active .== view(active, :, 1:1, :)) ||
+            throw(ArgumentError("active must agree across coordinates of each particle"))
+    end
     value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
     values = (value, similar(value))
 
-    scaling isa Real && (scaling = fill!(similar(value), scaling))
+    scaling isa Real && (scaling = fill!(similar(value), convert(T, scaling)))
 
-    activity = fill!(similar(value), one(T))
-    if !isnothing(active)
-        size(active, 1) == nframes && size(active, 2) in (1, ndims) &&
-            size(active, 3) == nguesses || throw(DimensionMismatch("activity must match the guessed frames and emitters"))
-        all(x -> iszero(x) || isone(x), active) || throw(ArgumentError("activity must be binary"))
-        @views activity[:, :, 1:nguesses] .= active
-        @views all(activity[:, :, 1:nguesses] .== activity[:, 1:1, 1:nguesses]) ||
-            throw(ArgumentError("activity must agree across coordinates"))
+    active = if !isnothing(active)
+        _resize3(elconvert(T, active), max_ntracks, fill = one(T))
+    else
+        fill!(similar(value, nframes, ndims, max_ntracks), true)
     end
-    active = activity
+    # Proposals share the current mask; the separate buffer leaves room for proposing masks.
     actives = (active, copy(active))
     Δx² = similar(value, nframes - 1, ndims, max_ntracks)
     Δx²s = (Δx², similar(Δx²))
@@ -203,7 +248,7 @@ function setdisplacement²!(tracks::Tracks, i::Integer = 1)
 end
 
 function seteffvalue!(tracks::Tracks, i::Integer = 1)
-    seteffvalue!(tracks.effvalue[i], tracks.value[i], tracks.active[i])
+    _seteffvalue!(tracks.effvalue[i], tracks.value[i], tracks.active[i])
     return tracks
 end
 
@@ -236,40 +281,62 @@ function reassign!(t::Tracks)
 end
 
 """
-    simulate!(x::AbstractArray{T,3}, msd::T)
+    simulate!([rng::AbstractRNG,] x::AbstractArray{T,3}, msd::T)
 
 Simulates particle tracks in `x` given the `msd`. `x` should already contains the initial particle positions.
 """
-function simulate!(x::AbstractArray{T,3}, msd::T) where {T}
-    @views _randn!(x[2:end, :, :], √msd)
+function simulate!(rng::AbstractRNG, x::AbstractArray{T,3}, msd::T) where {T}
+    @views _randn!(rng, x[2:end, :, :], √msd)
     cumsum!(x, x, dims = 1)
 end
 
+simulate!(x::AbstractArray{T,3}, msd::T) where {T} = simulate!(Random.default_rng(), x, msd)
+
 """
-    simulate!(x::AbstractArray{T,3}, msd::T, prior)
+    simulate!([rng::AbstractRNG,] x::AbstractArray{T,3}, msd::T, prior)
 
 Simulates particle tracks in `x` given the `msd` and the `prior` for the initial positions.
 """
-function simulate!(x::AbstractArray{T,3}, msd::T, prior) where {T}
-    @views rand!(x[1, :, :], prior)
-    simulate!(x, msd)
+function simulate!(rng::AbstractRNG, x::AbstractArray{T,3}, msd::T, prior) where {T}
+    @views rand!(rng, x[1, :, :], prior)
+    simulate!(rng, x, msd)
 end
 
-function simulate!(tracks::TrackChunk{T}, msdᵥ::T) where {T}
-    simulate!(tracks.value, msdᵥ, tracks.prior)
+simulate!(x::AbstractArray{T,3}, msd::T, prior) where {T} =
+    simulate!(Random.default_rng(), x, msd, prior)
+
+function simulate!(rng::AbstractRNG, tracks::TrackChunk{T}, msdᵥ::T) where {T}
+    # no candidates (all on): Metal cannot launch kernels over empty arrays
+    isempty(tracks.value) && return tracks
+    simulate!(rng, tracks.value, msdᵥ, tracks.prior)
     return tracks
 end
 
-function bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T}
+"""
+    bridge!([rng::AbstractRNG,] x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3})
+
+Fill `x` with Brownian bridges: for every particle, a random walk with mean squared displacement `msd` per frame and coordinate that starts at `xend[1, :, :]` and ends at `xend[2, :, :]`. `x` is `(nframes, ndims, nparticles)` and `xend` is `(2, ndims, nparticles)`.
+"""
+function bridge!(
+    rng::AbstractRNG,
+    x::AbstractArray{T,3},
+    msd::T,
+    xend::AbstractArray{T,3},
+) where {T}
     @views copyto!(x[1, :, :], -diff(xend, dims = 1)[1, :, :])
-    simulate!(x, msd)
+    simulate!(rng, x, msd)
     N = size(x, 1) - 1
     @views @. x = x - (0:N) / N * x[end:end, :, :] + xend[2:2, :, :]
 end
 
-function propose!(proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
+bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T} =
+    bridge!(Random.default_rng(), x, msd, xend)
+
+function propose!(rng::AbstractRNG, proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
+    # Activity is fixed conditioning data, not part of the position proposal.
     copyto!(proposals.active, tracks.active)
     arw_propose!(
+        rng,
         proposals.value,
         tracks.value,
         view(proposals.scaling, :, :, 1:size(tracks.value, 3)),
@@ -325,9 +392,8 @@ function Δlogmotion!(
     idx2::StepRange,
     ΣΔΔx²::AbstractVector{T},
 ) where {T}
-    # The last frame has no outgoing edge to overwrite a reused likelihood buffer.
-    fill!(Δ, zero(T))
-    @views copyto!(Δ[idx1], ΣΔΔx²[idx1])
+    @views fill!(Δ[first(idx1):step(idx1):end], zero(T))
+    @views Δ[idx1] .+= ΣΔΔx²[idx1]
     @views Δ[idx2.+1] .+= ΣΔΔx²[idx2]
     return Δ
 end
@@ -375,17 +441,18 @@ function update!(
 end
 
 function update_onchunk!(
+    rng::AbstractRNG,
     tracks::Tracks{T},
     msdᵥ::T,
     brightnessᵥ::T,
-    llarray::LogLikelihoodArray{T},
+    llarray::LogLikelihoodAux{T},
     detector::PixelDetector{T},
     psf::PointSpreadFunction{T},
     𝑇::T,
 ) where {T}
     tracksᵒ, tracksᵖ = tracks.onchunk, tracks.proposals # rename for clarity
-    initmh!(tracksᵖ)
-    propose!(tracksᵖ, tracksᵒ)
+    initmh!(rng, tracksᵖ)
+    propose!(rng, tracksᵖ, tracksᵒ)
     seteffvalue!(tracksᵒ)
     seteffvalue!(tracksᵖ)
     set_poisson_means!(
@@ -402,6 +469,42 @@ function update_onchunk!(
     update!(tracksᵒ, tracksᵖ, msdᵥ, llarray.frame, 1) # update particle positions at odd frame indices
     update!(tracksᵒ, tracksᵖ, msdᵥ, llarray.frame, 2) # update particle positions at even frame indices
     countacceptance!(tracksᵖ)
-    seteffvalue!(tracksᵒ)
     return tracksᵒ
+end
+
+"""
+    update!(rng::AbstractRNG, msd::MeanSquaredDisplacement{T}, tracks::Tracks{T}, brightnessᵥ::T, llarray::LogLikelihoodAux{T}, detector::PixelDetector{T}, psf::PointSpreadFunction{T}, 𝑇::T)
+
+The rescaling (non-centered) MSD move, run after the MSD's Gibbs draw: propose `msd′ = msd·exp(proposalscale·z)`, `z` standard normal, and stretch every on track around its first position by `√(msd′/msd)`, which keeps its standardized increments, `displacement/√msd`, fixed. The tracks' prior and the stretch's Jacobian cancel, so the move is accepted with the likelihood ratio, the MSD prior ratio and the proposal ratio `msd′/msd`. Alternating it with the Gibbs draw (interweaving) lets the MSD change without waiting for the tracks to roughen (`docs/msdrescale.qmd`). The off tracks are integrated out, as in the Gibbs draw.
+"""
+function update!(
+    rng::AbstractRNG,
+    msd::MeanSquaredDisplacement{T},
+    tracks::Tracks{T},
+    brightnessᵥ::T,
+    llarray::LogLikelihoodAux{T},
+    detector::PixelDetector{T},
+    psf::PointSpreadFunction{T},
+    𝑇::T,
+) where {T}
+    tracksᵒ, tracksᵖ = tracks.onchunk, tracks.proposals # rename for clarity
+    (isfixed(msd) || isempty(tracksᵒ.value)) && return msd
+    msd.counter[2] += 1
+    valueᵖ = msd.value * exp(msd.proposalscale * randn(rng, T))
+    stretch = sqrt(valueᵖ / msd.value)
+    x₁ = view(tracksᵒ.value, 1:1, :, :)
+    @. tracksᵖ.value = x₁ + stretch * (tracksᵒ.value - x₁)
+    seteffvalue!(tracksᵒ)
+    seteffvalue!(tracksᵖ)
+    set_poisson_means!(llarray, detector, tracksᵒ.effvalue, tracksᵖ.effvalue, brightnessᵥ, psf)
+    logacceptance =
+        get_Δloglikelihood!(llarray, detector) / 𝑇 + Δlogpdf(msd.prior, valueᵖ, msd.value) +
+        log(valueᵖ / msd.value) - log(rand(rng))
+    if logacceptance > 0
+        tracksᵒ.value .= tracksᵖ.value
+        tracksᵒ.effvalue .= tracksᵖ.effvalue
+        msd.value = valueᵖ
+        msd.counter[1] += 1
+    end
+    return msd
 end

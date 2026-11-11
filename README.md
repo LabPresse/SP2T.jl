@@ -21,7 +21,7 @@ In other words, SP²T is the 1-bit special case of QTrack, while QTrack refers t
 
 ### Julia
 
-QTrack (including its 1-bit special case, SP²T) is written in [Julia](https://julialang.org/), so please download and install Julia (v1.11 or newer) following the official [instructions](https://julialang.org/downloads/). Thanks to Julia’s built-in package manager, most of the packages required by QTrack do not need to be installed manually—they will be installed automatically when you install the package. The [Installation](#installation) section lists a few exceptions.
+QTrack (including its 1-bit special case, SP²T) is written in [Julia](https://julialang.org/), so please download and install Julia (v1.13 or newer) following the official [instructions](https://julialang.org/downloads/). Thanks to Julia’s built-in package manager, most of the packages required by QTrack do not need to be installed manually—they will be installed automatically when you install the package. The [Installation](#installation) section lists a few exceptions.
 
 If helpful, the required Julia packages are listed in `Project.toml`.
 

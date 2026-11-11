@@ -1,0 +1,68 @@
+---
+title: "Regression verification"
+format: html
+---
+
+Run the repository's CPU CI command with Julia 1.13:
+
+```julia
+using Pkg
+Pkg.test()
+```
+
+The suite includes detector, score, activity-mask, continuation, and identity-swap
+regressions. The MSD reference uses likelihood-only tempering: its conditional is
+`InverseGamma(alpha + n/2, beta + sum(displacement_squared)/2)` at every temperature.
+The identity test enumerates a finite conditional target and checks both stationarity
+and detailed balance, including the actual sampler's event mapping. Distributional
+sampler tests use fixed seeds and theory-based tolerances.
+
+For SPAD readout `r` out of `B` binary trials, the pixel score (apart from its
+binomial coefficient) is `r*log(1-exp(-lambda)) - (B-r)*lambda`. Evaluate the hit
+term with stable `expm1`/`log1p` branches, and skip zero hit or miss counts before
+multiplying. The dense and sparse paths are checked against high-precision binomial
+probabilities at zero, near the smallest representable means, and at saturation.
+The sparse workspace scores nonzero readouts directly and accumulates nonnegative
+zero-readout intensity separately. The generic implementation reduces bounded
+tiles. On CUDA, one block handles each frame, updates the clicked photon means,
+and sums the intensity at the included zero readouts. Both computations preserve
+small positive tails at saturation. Filtered pixels and padding are excluded
+before evaluating a likelihood at an invalid excluded mean.
+
+The identity move draws two indices independently and uniformly. Distinct indices
+define a transposition shared across frame boundaries; equal indices give a no-op.
+Only tracks with identical fixed activity histories may exchange identities. This
+keeps the observation likelihood and fixed masks unchanged. For a shared involution,
+accepted boundary flips reverse their energy differences and rejected-boundary
+probabilities agree under reversal. Arbitrary shared permutations do not satisfy
+this condition for multiple cuts. Whole-track shuffling also preserves fixed masks.
+
+For optional CUDA verification, use a separate Julia 1.13 environment containing this
+checkout, its declared CUDA weak dependency, and Test, Distributions, StableRNGs, and
+Random. Resolve the environment under Julia 1.13; do not reuse a manifest from an older
+Julia version. Then run:
+
+```julia
+include("test/cuda.jl")
+```
+
+This entry point requires a functional CUDA device, disables scalar indexing, and
+runs the detector reference controls for Float32 and Float64. A CUDA-free CI runner
+does not establish CUDA compatibility. Record the exact source, Julia, CUDA package,
+toolkit, compiler, driver, device, and dependency manifest with validation results.
+Retain compile/runtime errors separately from failed numerical assertions.
+
+`Chain.iteration` counts completed transitions independently of retained samples.
+When reconstructing a chain from a separately saved live sampler state, supply its
+actual iteration explicitly; retained samples cannot recover an unsaved final state.
+Same-process continuation tests do not establish disk recovery or checkpoint durability.
+
+The saved score includes the brightness prior and uses standardized increments.
+Off candidates retain the documented expected or independently drawn log-prior proxy;
+this is not their marginalized density or the density of stored off coordinates.
+See `logposterior.qmd` for the resulting interpretation of `findmap`.
+
+Passing deterministic regressions and finite-kernel checks does not by itself establish
+posterior convergence, physical calibration, unknown-count recovery, or portability
+to untested hardware and operating systems. Bind any additional posterior study to its
+actual model, data, source snapshot, seeds, diagnostic gates, and environment.

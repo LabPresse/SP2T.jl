@@ -1,0 +1,332 @@
+# Sampler tests: each sampler, run with a fixed StableRNG seed, must reproduce its target
+# distribution, known from theory. Tolerances are 4 standard errors of the estimate:
+# exact for independent draws, from batch means for Markov chains.
+
+println("Running sampler tests...")
+
+# Mean of a correlated chain and its standard error from `nbatches` contiguous batches.
+function batchmean(x::AbstractVector, nbatches::Integer = 100)
+    len = length(x) ÷ nbatches
+    means = [mean(@view x[(i-1)*len+1:i*len]) for i = 1:nbatches]
+    return mean(means), std(means) / √nbatches
+end
+
+# The fraction of draws equal to each category matches its probability.
+@testset let rng = StableRNG(11), p = [0.1, 0.2, 0.3, 0.4], ndraws = 40_000
+    draws = [SP2T.randc(rng, log.(p) .+ 7) for _ = 1:ndraws]
+    for (i, pᵢ) in enumerate(p)
+        @test abs(count(==(i), draws) / ndraws - pᵢ) < 4 * √(pᵢ * (1 - pᵢ) / ndraws)
+    end
+end
+
+# Only the observation likelihood is tempered. The conditional motion prior gives
+# shape α + n/2 and scale β + Σd²/2, independently of the temperature.
+@testset for 𝑇 in (1.0, 2.0, Inf)
+    rng = StableRNG(12)
+    displacement² = reshape([0.01 * i for i = 1:40], 10, 2, 2)
+    msd = MeanSquaredDisplacement{Float64}(guess = 1.0, priorparams = (2, 0.1))
+    posterior = InverseGamma(2 + 40 / 2, 0.1 + sum(displacement²) / 2)
+    ndraws = 20_000
+    draws = [SP2T.update!(rng, msd, displacement², 𝑇).value for _ = 1:ndraws]
+    @test abs(mean(draws) - mean(posterior)) < 4 * std(posterior) / √ndraws
+    @test abs(count(<(median(posterior)), draws) / ndraws - 0.5) < 4 * √(0.25 / ndraws)
+end
+
+# With the likelihood switched off (𝑇 = Inf), the brightness Metropolis–Hastings chain
+# samples its gamma prior: mean kθ and variance kθ².
+@testset let rng = StableRNG(13),
+    detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 2, 2),
+        cutoffs = (0, Inf),
+        readouts = zeros(UInt16, 2, 2, 1),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    ),
+    brightness = Brightness{Float64}(guess = 1.0, priorparams = (2, 0.5), proposalparams = (10, 1)),
+    llarray = SP2T.LogLikelihoodArray{Float64}(detector.readouts),
+    nsteps = 200_000
+
+    chain = [
+        SP2T.update!(rng, brightness, [0.1 0.1;;;], llarray, detector, psf, Inf).value
+        for _ = 1:nsteps
+    ]
+    m, se = batchmean(chain)
+    @test abs(m - 1.0) < 4se
+    m, se = batchmean((chain .- 1.0) .^ 2)
+    @test abs(m - 0.5) < 4se
+end
+
+# With the likelihood switched off, the joint count–brightness move (which rescales the
+# brightness by n/n′, with its Jacobian) alternated with the brightness update samples the
+# prior: on n = 1…4 (the move needs an emitter before and after), p(n) ∝ e^(logonprob·n),
+# and the brightness Gamma(2, 0.5), independent of n.
+@testset let rng = StableRNG(21),
+    detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 2, 2),
+        cutoffs = (0, Inf),
+        readouts = zeros(UInt16, 2, 2, 1),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    ),
+    count = SP2T.EmitterCount{Float64}(2, 4, -0.4),
+    brightness = Brightness{Float64}(guess = 1.0, priorparams = (2, 0.5), proposalparams = (10, 1)),
+    tracksᵥ = fill(0.1, 1, 2, 4),
+    llarray = SP2T.LogLikelihoodArray{Float64}(detector.readouts),
+    nsteps = 200_000
+
+    fill!(count.likelihood, 0) # finite, as the move compares against it
+    counts, brightnesses = zeros(Int, nsteps), zeros(nsteps)
+    for i = 1:nsteps
+        SP2T.update!(rng, count, brightness, tracksᵥ, llarray, detector, psf, Inf)
+        SP2T.update!(rng, brightness, view(tracksᵥ, :, :, 1:count.value), llarray, detector, psf, Inf)
+        counts[i], brightnesses[i] = count.value, brightness.value
+    end
+    p = exp.(-0.4 .* (1:4)) ./ sum(exp.(-0.4 .* (1:4)))
+    for n = 1:4
+        m, se = batchmean(Float64.(counts .== n))
+        @test abs(m - p[n]) < 4se
+    end
+    m, se = batchmean(brightnesses)
+    @test abs(m - 1.0) < 4se
+    m, se = batchmean((brightnesses .- 1.0) .^ 2)
+    @test abs(m - 0.5) < 4se
+    @test 0 < count.counter[1] < count.counter[2] == nsteps
+end
+
+# With the likelihood switched off, one rescaling MSD move keeps the prior. Starting from
+# exact prior draws (msd ~ InverseGamma(6, 0.05), two tracks from the track prior), the MSD
+# afterwards still has the inverse-gamma quantiles, and S/msd (S the tracks' squared
+# displacements, N = 9·2·2 of them) is still χ²(N), independent of the MSD.
+@testset let rng = StableRNG(24), nreplicates = 40_000,
+    detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 4, 4),
+        cutoffs = (0, Inf),
+        readouts = zeros(UInt16, 4, 4, 10),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    ),
+    tracks = Tracks{Float64}(
+        guess = fill(0.2, 10, 2, 2),
+        prior = SP2T.DNormal{Float64}([0.2, 0.2], [0.1, 0.1]),
+        max_ntracks = 2,
+        scaling = 0.01,
+        logonprob = -1,
+    ),
+    msd = MeanSquaredDisplacement{Float64}(guess = 0.01, priorparams = (6, 0.05), proposalscale = 0.5),
+    llarray = SP2T.SPADLogLikelihood(detector)
+
+    msds, scaled = zeros(nreplicates), zeros(nreplicates)
+    for i = 1:nreplicates
+        msd.value = rand(rng, msd.prior)
+        simulate!(rng, tracks.value[1], msd.value, tracks.onchunk.prior)
+        SP2T.update!(rng, msd, tracks, 0.5, llarray, detector, psf, Inf)
+        msds[i] = msd.value
+        scaled[i] = sum(diff(tracks.onchunk.value, dims = 1) .^ 2) / msd.value
+    end
+    for p in (0.1, 0.5, 0.9)
+        tolerance = 4 * √(p * (1 - p) / nreplicates)
+        @test abs(count(<(quantile(msd.prior, p)), msds) / nreplicates - p) < tolerance
+        @test abs(count(<(quantile(Chisq(36), p)), scaled) / nreplicates - p) < tolerance
+        both = count((msds .< quantile(msd.prior, 0.5)) .& (scaled .< quantile(Chisq(36), p)))
+        @test abs(both / nreplicates - p / 2) < 4 * √(p / 2 * (1 - p / 2) / nreplicates)
+    end
+    @test 0.2 < msd.counter[1] / msd.counter[2] < 1
+end
+
+# With the likelihood switched off, the position updates sample the track prior: the
+# first frame from DNormal(μ, σ), then Brownian steps of variance msd, so frame k has mean
+# μ and variance σ² + (k - 1)·msd.
+@testset let rng = StableRNG(14),
+    detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 4, 4),
+        cutoffs = (0, Inf),
+        readouts = zeros(UInt16, 4, 4, 3),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    ),
+    tracks = Tracks{Float64}(
+        guess = fill(0.2, 3, 2, 1),
+        prior = SP2T.DNormal{Float64}([0.2, 0.2], [0.1, 0.1]),
+        max_ntracks = 1,
+        scaling = 0.1,
+        logonprob = -10,
+    ),
+    llarray = SP2T.LogLikelihoodArray{Float64}(detector.readouts),
+    msd = 0.01,
+    nsteps = 100_000
+
+    samples = zeros(nsteps, 3)
+    for i = 1:nsteps
+        SP2T.update_onchunk!(rng, tracks, msd, 1.0, llarray, detector, psf, Inf)
+        samples[i, :] .= tracks.onchunk.value[:, 1, 1]
+    end
+    for k = 1:3
+        m, se = batchmean(samples[:, k])
+        @test abs(m - 0.2) < 4se
+        m, se = batchmean((samples[:, k] .- 0.2) .^ 2)
+        @test abs(m - (0.01 + (k - 1) * msd)) < 4se
+    end
+end
+
+# Two particles, two frames: a non-identity relabeling (probability 1/2) is accepted with
+# probability min(1, exp(Δ)), where Δ is the change in the motion log-prior across the
+# boundary. The tracks are reset after every call.
+@testset let rng = StableRNG(15),
+    guess = cat([0.0 0.0; 0.4 0.0], [1.0 0.0; 0.6 0.0], dims = 3),
+    tracks = Tracks{Float64}(
+        guess = guess,
+        prior = SP2T.DNormal{Float64}([0.5, 0.5], [1.0, 1.0]),
+        max_ntracks = 2,
+        scaling = 0.1,
+        logonprob = -10,
+    ),
+    msd = 0.2,
+    ncalls = 20_000
+
+    Δ = -((0.6 - 0.0)^2 + (0.4 - 1.0)^2 - (0.4 - 0.0)^2 - (0.6 - 1.0)^2) / (2msd)
+    p = min(1, exp(Δ)) / 2
+    for _ = 1:ncalls
+        copyto!(tracks.onchunk.value, guess)
+        SP2T.update!(rng, tracks.onchunk, tracks.proposals, msd)
+    end
+    @test abs(tracks.proposals.counter[1, 1] / ncalls - p) < 4 * √(p * (1 - p) / ncalls)
+end
+
+# The off candidates' log prior: over tracks simulated from the prior, its mean is the
+# expectation `offlogprior` returns; the exact version draws it with the same distribution,
+# whose variance is k/2 for k = noff·nframes·ndims standardized coordinates.
+@testset let rng = StableRNG(19),
+    tracks = Tracks{Float64}(
+        guess = zeros(20, 2, 1),
+        prior = SP2T.DNormal{Float64}([0.5, 0.8], [0.4, 0.3]),
+        max_ntracks = 4,
+        scaling = 0.01,
+        logonprob = -3,
+    ),
+    msd = 0.04,
+    ndraws = 20_000
+
+    expectation = SP2T.offlogprior(tracks, msd)
+    simulated = map(1:ndraws) do _
+        simulate!(rng, tracks.offchunk, msd)
+        SP2T.logprior(tracks.offchunk, msd)
+    end
+    drawn = [SP2T.offlogprior(rng, tracks, msd) for _ = 1:ndraws]
+    v = 3 * 20 * 2 / 2
+    for x in (simulated, drawn)
+        @test abs(mean(x) - expectation) < 4 * √(v / ndraws)
+        @test abs(var(x) - v) < 4 * v * √(2 / ndraws)
+    end
+end
+
+# Simulated displacements have variance msd per coordinate; a Brownian bridge's midpoint
+# has variance msd·N/4 for N steps.
+@testset let rng = StableRNG(16), msd = 0.04
+    x = zeros(1001, 2, 10)
+    simulate!(rng, x, msd)
+    steps = vec(diff(x, dims = 1))
+    @test abs(var(steps) - msd) < 4 * msd * √(2 / (length(steps) - 1))
+
+    N, nbridges = 10, 20_000
+    midpoints = [bridge!(rng, zeros(N + 1, 1, 1), msd, zeros(2, 1, 1))[N÷2+1] for _ = 1:nbridges]
+    v = msd * N / 4
+    @test abs(mean(midpoints .^ 2) - v) < 4 * v * √(2 / nbridges)
+end
+
+# Simulated readouts follow each detector's model: SPAD clicks are Binomial(batchsize,
+# 1 - e^-λ); EMCCD readouts are Normal(gλ + o, √v) rounded (variance v + 1/12); gamma
+# EMCCD readouts are Gamma(λ/f, f·g) rounded (mean λg, variance λfg² + 1/12).
+@testset let rng = StableRNG(17),
+    λ = 0.5,
+    n = 100_000,
+    common = (period = 1e-5, pixel_size = 0.1, darkcounts = fill(1e-3, 100, 100), cutoffs = (0, Inf))
+
+    means = fill(λ, 100, 100, 10)
+    p = -expm1(-λ)
+    for batchsize in (1, 5)
+        spad = SPAD{Float64}(; common..., readouts = zeros(UInt16, 100, 100, 10), batchsize = batchsize)
+        SP2T.simulate_readouts!(rng, spad, means)
+        @test abs(mean(spad.readouts) - batchsize * p) < 4 * √(batchsize * p * (1 - p) / n)
+    end
+
+    o, g, v = 100.0, 20.0, 9.0
+    emccd = EMCCD{Float64}(; common..., readouts = zeros(UInt16, 100, 100, 10), offset = o, gain = g, variance = v)
+    SP2T.simulate_readouts!(rng, emccd, means)
+    @test abs(mean(emccd.readouts) - (g * λ + o)) < 4 * √((v + 1 / 12) / n)
+    @test abs(var(emccd.readouts) - (v + 1 / 12)) < 4 * v * √(2 / n)
+
+    f, gᵧ = 2.0, 30.0
+    gamma = SP2T.EMCCDGamma{Float64}(; common..., readouts = ones(UInt16, 100, 100, 10), gain = gᵧ, noise_excess_factor = f)
+    SP2T.simulate_readouts!(rng, gamma, means)
+    vᵧ = λ * f * gᵧ^2 + 1 / 12
+    @test abs(mean(gamma.readouts) - λ * gᵧ) < 4 * √(vᵧ / n)
+end
+
+# The same seed gives the same chain; a different seed a different one. Drawing the off
+# candidates' log prior exactly uses its own generator and leaves the chain unchanged.
+@testset let detector = SPAD{Float64}(
+        period = 1e-5,
+        pixel_size = 0.1,
+        darkcounts = fill(1e-3, 6, 6),
+        cutoffs = (0, Inf),
+        readouts = UInt16.(reshape([isodd(i ÷ 7) for i = 1:360], 6, 6, 10)),
+    ),
+    psf = CircularGaussian{Float64}(
+        numerical_aperture = 1.45,
+        refractive_index = 1.515,
+        emission_wavelength = 0.665,
+        pixel_size = 0.1,
+    )
+
+    function run(seed; kwargs...)
+        tracks = Tracks{Float64}(
+            guess = fill(0.3, 10, 2, 1),
+            prior = SP2T.DNormal{Float64}([0.3, 0.3], [0.5, 0.5]),
+            max_ntracks = 3,
+            scaling = 0.01,
+            logonprob = -2,
+        )
+        return runMCMC(;
+            tracks = tracks,
+            msd = MeanSquaredDisplacement{Float64}(guess = 2e-4),
+            brightness = Brightness{Float64}(guess = 0.5),
+            detector = detector,
+            psf = psf,
+            niters = 50,
+            rng = StableRNG(seed),
+            kwargs...,
+        )
+    end
+    a, b, c = run(18), run(18), run(19)
+    @test a.msds == b.msds && a.brightnesses == b.brightnesses
+    @test a.emittercounts == b.emittercounts && a.lasttracks == b.lasttracks
+    @test a.msds != c.msds
+    d = run(18, logposterior_rng = StableRNG(20))
+    @test d.msds == a.msds && d.lasttracks == a.lasttracks
+    @test d.loglikelihoods[2:end] == a.loglikelihoods[2:end]
+    @test d.logposteriors[2:end] != a.logposteriors[2:end]
+end

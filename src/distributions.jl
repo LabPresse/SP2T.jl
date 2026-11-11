@@ -11,7 +11,7 @@ end
 
 function Base.getproperty(d::DNormal, s::Symbol)
     if s === :dims
-        return length(getfield(d, s))
+        return length(getfield(d, :μ))
     else
         return getfield(d, s)
     end
@@ -19,12 +19,8 @@ end
 
 Distributions.params(P::DNormal) = P.μ, P.σ
 
-function logprior(ℕ::DNormal{T}, x::AbstractArray{T}; normalization::Bool = false) where {T}
-    quadratic = sum(vec(@. -(x - ℕ.μ)^2 / (2 * ℕ.σ^2)))
-    normalization || return quadratic
-    ndims = length(ℕ.μ)
-    npoints = length(x) ÷ ndims
-    return quadratic - npoints * (sum(log, ℕ.σ) + ndims * log(T(2π)) / 2)
-end
+logprior(ℕ::DNormal{T}, x::AbstractArray{T}) where {T} =
+    sum(vec(@. -(x - ℕ.μ)^2 / (2 * ℕ.σ^2) - log(ℕ.σ))) - length(x) * log(2 * T(π)) / 2
 
-Random.rand!(x::AbstractVecOrMat{T}, P::DNormal{T}) where {T} = _randn!(x, P.μ, P.σ)
+Random.rand!(rng::AbstractRNG, x::AbstractVecOrMat{T}, P::DNormal{T}) where {T} =
+    _randn!(rng, x, P.μ, P.σ)
