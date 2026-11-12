@@ -15,10 +15,15 @@ function _init_pixel_detector_params(
     cutoffs::Tuple{<:Real,<:Real},
 ) where {T}
     darkcounts = copyto!(similar(darkcounts, TargetType), darkcounts)
-    darkcounts[isinf.(darkcounts)] .= floatmax(T)
+    # A pixel with infinite dark counts fires whatever the emitters do: it carries no
+    # information, so it is filtered out whatever the cutoffs. Its dark count becomes
+    # -2·log(eps): the pixel still always fires (1 - exp(-λ) rounds to 1), and its
+    # likelihood terms stay finite, so the filter's zero removes them (0·Inf would be NaN).
+    saturated = isinf.(darkcounts)
+    darkcounts[saturated] .= -2 * log(eps(T))
     darkcounts[iszero.(darkcounts)] .= floatmin(T)
     lower, upper = convert.(T, cutoffs)
-    filter = similar(darkcounts) .= lower .< darkcounts .< upper
+    filter = similar(darkcounts) .= (lower .< darkcounts .< upper) .& .!saturated
     width, height = size(darkcounts)
     pxsize = convert(T, pixel_size)
     # built on the CPU in T: a Float64 range cannot be broadcast on GPUs without Float64

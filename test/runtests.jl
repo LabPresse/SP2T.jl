@@ -181,7 +181,45 @@ println("Running fixed-variable tests...")
     )
 
     @test darkcounts == original
-    @test detector.darkcounts == [floatmin(Float64) 1.0; floatmax(Float64) 2.0]
+    @test detector.darkcounts == [floatmin(Float64) 1.0; -2log(eps(Float64)) 2.0]
+    @test detector.filter == [1 1; 0 1]
+end
+
+# A pixel with infinite dark counts fires in every frame whatever the emitters do, so it is
+# filtered out whatever the cutoffs: the log-likelihood equals that with the pixel filtered
+# by the cutoffs, in the dense and sparse workspaces, also where the pixel's readout falls
+# short of batchsize. Simulated (in Float64: Distributions' binomial sampler rejects a
+# Float32 probability), the pixel fires in every binary frame.
+@testset for T in (Float64, Float32), batchsize in (1, 3), nhot in (1, 2)
+    hot = [(2, 2), (5, 5)][1:nhot]
+    readouts = zeros(UInt16, 6, 6, 4)
+    readouts[3, 2, 2] = 1
+    infinite, filtered = fill(0.01, 6, 6), fill(0.01, 6, 6)
+    for (i, j) in hot
+        readouts[i, j, :] .= [batchsize, 0, batchsize, batchsize]
+        infinite[i, j], filtered[i, j] = Inf, 10
+    end
+    psf = CircularGaussian{T}(numerical_aperture = 1.45, refractive_index = 1.515, emission_wavelength = 0.665, pixel_size = 0.1)
+    x = fill(T(0.3), 4, 2, 1)
+    function loglikelihood(llarray, detector)
+        SP2T.reset!(llarray, detector, 1)
+        SP2T.add_poisson_mean!(llarray, detector, x, T(1), psf, 1)
+        return SP2T.get_loglikelihood!(llarray, detector)
+    end
+    common = (period = 1, pixel_size = 0.1, readouts = readouts)
+    spad(darkcounts, cutoffs) = SPAD{T}(; common..., darkcounts, cutoffs, batchsize)
+    emccd(darkcounts, cutoffs) = EMCCD{T}(; common..., darkcounts, cutoffs, offset = 100, gain = 50, variance = 400)
+    for detector in (spad, emccd), aux in (d -> SP2T.LogLikelihoodArray{T}(d.readouts), SP2T.SPADLogLikelihood)
+        detector === emccd && aux === SP2T.SPADLogLikelihood && continue
+        withinf, reference = detector(infinite, (0, Inf)), detector(filtered, (0, 1))
+        @test isfinite(loglikelihood(aux(withinf), withinf))
+        @test loglikelihood(aux(withinf), withinf) ≈ loglikelihood(aux(reference), reference)
+    end
+    if T === Float64
+        detector = spad(infinite, (0, Inf))
+        SP2T.simulate_readouts!(StableRNG(1), detector, repeat(detector.darkcounts, 1, 1, 4))
+        @test all(detector.readouts[i, j, :] == fill(batchsize, 4) for (i, j) in hot)
+    end
 end
 
 # A fixed emitter count is neither updated nor evaluated, and it selects the parametric
