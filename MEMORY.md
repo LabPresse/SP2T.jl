@@ -8,6 +8,10 @@ Open issues from the code review of 2026-10-27. Each was confirmed on CPU unless
 
 A dark frame (`active` 0) has `effvalue = Inf` in every coordinate, z included. `lateral_std` then gives σ = Inf, and `_erf!` computes (bounds − Inf)/(√2·Inf) = NaN, so with `CircularGaussianLorentzian` every dark frame's likelihood is NaN (the 2D PSF gives 0, as intended). NaN log-acceptances are never accepted and NaN emitter-count posteriors break `randc`. Any 3D run with an `active` mask is affected. Possible fix: give dark frames a finite σ (e.g. σ₀ where z is infinite), so the relative positions are −Inf and the PSF fractions 0. The SPAD equivalence test in `test/runtests.jl` keeps its dark frame out of the 3D case until this is fixed.
 
+### B12. SPAD readouts cannot be simulated in Float32 with `batchsize` > 1
+
+`simulate_readouts!` for a `SPAD{Float32}` with `batchsize` > 1 draws `rand(rng, Binomial(batchsize, p))` with a Float32 `p`, and Distributions' `BinomialGeomSampler` has no method for it (MethodError). `batchsize` 1 (a comparison with uniforms) and Float64 work; the examples simulate in Float64. Possible fix: draw with `Binomial(batchsize, Float64(p))` on the CPU, or count `batchsize` uniform comparisons. The test of infinite dark counts in `test/runtests.jl` simulates only in Float64 until this is fixed.
+
 ## Performance (CPU)
 
 2D example (50×50 pixels, 2550 frames, 10 candidates, Float32), starting from the true tracks (2 on): one nonparametric iteration took 459 ms on CPU and 166 ms on Metal (M1 Pro) after P1, and takes 58 ms on CPU and 33 ms on Metal with the PSF cutoff (`pixelfraction`) and the sparse SPAD workspace (`SPADLogLikelihood`). The dense workspace with the cutoff takes 303 ms on CPU. P2 (preallocating the PSF buffers) was measured and dropped: allocation takes 0.01–0.04 ms per call.
