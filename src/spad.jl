@@ -35,19 +35,63 @@ function SPAD{T}(;
     )
 end
 
-# Most SPAD readouts are 0, so `logexpm1` is evaluated only where it contributes: a real
-# branch (not `ifelse`) is 5× faster on CPU and up to 3.5× on Metal.
-clickterm(r::Integer, λ::T) where {T} = iszero(r) ? zero(T) : r * logexpm1(λ)
-Δclickterm(r::Integer, λ₁::T, λ₂::T) where {T} =
-    iszero(r) ? zero(T) : r * (logexpm1(λ₂) - logexpm1(λ₁))
+# log(1-exp(-λ)): use expm1 at small λ and preserve the exponentially small
+# negative tail at saturation. Never obtain that tail by subtracting λ from λ.
+_spad_log_hit(λ::T) where {T} =
+    λ <= log(T(2)) ? log(-expm1(-λ)) : log1p(-exp(-λ))
+
+function _spad_Δlog_hit(old::T, new::T) where {T}
+    old == new && old > zero(T) && return zero(T)
+    lo, hi = min(old, new), max(old, new)
+    lo <= zero(T) && return _spad_log_hit(new) - _spad_log_hit(old)
+    # p(hi)-p(lo) = exp(-lo) * (1-exp(-(hi-lo))). This also resolves
+    # close proposals for which subtraction of two log-hit scores loses bits.
+    ratio = exp(-lo) * (-expm1(-(hi - lo))) / (-expm1(-lo))
+    d = isinf(ratio) ? _spad_log_hit(hi) - _spad_log_hit(lo) : log1p(ratio)
+    return new > old ? d : -d
+end
+
+_spad_included_full(f::T, r, B, λ::T) where {T} =
+    iszero(f) ? zero(T) : _spad_loglikelihood(r, B, λ)
+_spad_included_delta(f::T, r, B, old::T, new::T) where {T} =
+    iszero(f) ? zero(T) : _spad_Δloglikelihood(r, B, old, new)
+
+# At exp(-λ) < eps(T), -log(1-exp(-λ)) equals exp(-λ) to working
+# precision. Scale by the count before forming the final product: the
+# per-hit tail can be subnormal even when the count-weighted tail is normal.
+function _spad_counted_tail(r::Integer, λ::T) where {T}
+    half = exp(-λ / T(2))
+    return (T(r) * half) * half
+end
+
+function _spad_loglikelihood(r::Integer, B::Integer, λ::T) where {T}
+    if r == B && !iszero(r) && λ > -log(eps(T))
+        return -_spad_counted_tail(r, λ)
+    end
+    hits = iszero(r) ? zero(T) : T(r) * _spad_log_hit(λ)
+    misses = r == B ? zero(T) : (T(B) - T(r)) * λ
+    return hits - misses
+end
+
+function _spad_Δloglikelihood(r::Integer, B::Integer, old::T, new::T) where {T}
+    lo, hi = min(old, new), max(old, new)
+    if r == B && !iszero(r) && lo > -log(eps(T))
+        old == new && return zero(T)
+        delta = _spad_counted_tail(r, lo) * (-expm1(-(hi - lo)))
+        return new > old ? delta : -delta
+    end
+    hits = iszero(r) ? zero(T) : T(r) * _spad_Δlog_hit(old, new)
+    misses = r == B ? zero(T) : (T(B) - T(r)) * (new - old)
+    return hits - misses
+end
 
 function set_pixel_loglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
-    @. llarray.pixel =
-        clickterm(detector.readouts, llarray.means[1]) -
-        detector.batchsize * llarray.means[1]
+    @. llarray.pixel = _spad_included_full(
+        detector.filter, detector.readouts, detector.batchsize, llarray.means[1],
+    )
     return llarray
 end
 
@@ -55,16 +99,24 @@ function set_pixel_Δloglikelihood!(
     Δllarray::LogLikelihoodArray{T},
     detector::SPAD{T},
 ) where {T}
-    @. Δllarray.pixel =
-        Δclickterm(detector.readouts, Δllarray.means[1], Δllarray.means[2]) -
-        detector.batchsize * (Δllarray.means[2] - Δllarray.means[1])
+    @. Δllarray.pixel = _spad_included_delta(
+        detector.filter, detector.readouts, detector.batchsize,
+        Δllarray.means[1], Δllarray.means[2],
+    )
     return Δllarray
 end
 
 """
     SPADLogLikelihood{T} <: LogLikelihoodAux{T}
 
-The SPAD log-likelihood, evaluated only where it is nonlinear. Per pixel it is `r·logexpm1(λ) − B·λ`. The first term vanishes where the readout `r` is 0, and the second, summed over a frame's pixels, separates: `Σ f·λ = Σ f·darkcounts + (b/A) Σₘ pxₘᵀ F pyₘ`, with `pxₘ`, `pyₘ` emitter `m`'s pixel-integrated PSF along x and y and `F` the filter. So `means[i]` holds the expected counts only at the clicks (nonzero, unfiltered readouts), and `linear[i]` each frame's `Σ f·(λ − darkcounts)`. The results equal those of `LogLikelihoodArray` up to rounding.
+The SPAD log-likelihood, storing photon means only at nonzero, unfiltered readouts.
+At those pixels use the stable hit/miss form `r·log(1-exp(-λ)) − (B-r)·λ`.
+Zero-readout pixels contribute only `−B·λ`: `darksum[k]` and `linear[i][k]`
+are the nonnegative filtered background and emitter signal sums **only over those
+zero-readout pixels**. This avoids cancellation between two large terms at saturated
+full hits. `zeroruns` identifies frames with no such pixels, all-zero readouts, or
+a mixture. The generic reduction uses bounded spatial/time tiles. CUDA sums each
+frame directly in one block while updating the clicked photon means.
 
 The clicks are padded to one column per frame, with as many rows as the busiest frame has clicks, so per-frame sums are column sums on CPUs and GPUs alike. Padding entries have readout 0, so they contribute nothing, and point at pixel (1, 1). `xindex` and `yindex` index a PSF component of size `(nx, 1, nframes)` and `(ny, 1, nframes)`. `filter` is `nothing` when no pixel is filtered out.
 """
@@ -82,37 +134,85 @@ struct SPADLogLikelihood{
     xindex::I
     yindex::I
     filter::F
-    darksum::T # Σ f·darkcounts over a frame
+    darksum::V # filtered background mass at zero-readout pixels, per frame
+    zeroruns::Vector{Tuple{UnitRange{Int},Symbol}}
     means::NTuple{2,A}
-    linear::NTuple{2,V}
+    linear::NTuple{2,V} # emitter signal mass at zero-readout pixels, per frame
     pixel::A
     frame::V
 end
 
+# Walk the included pixels once per frame, in column-major order. Only the
+# spatial index of each click is needed to pack the padded workspace below.
+function _spad_click_metadata(readouts, included, filter, darkcounts::Matrix{T}) where {T}
+    npixels, nframes = length(filter), size(readouts, 3)
+    background = zeros(Float64, npixels)
+    for p in included
+        background[p] = Float64(filter[p]) * Float64(darkcounts[p])
+    end
+    clickpixels = Int[]
+    counts = Vector{Int}(undef, nframes)
+    darkzero = Vector{T}(undef, nframes)
+    zeroruns = Tuple{UnitRange{Int},Symbol}[]
+    for k in 1:nframes
+        offset = (k - 1) * npixels
+        start = length(clickpixels)
+        total = 0.0
+        @inbounds for p in included
+            if iszero(readouts[offset + p])
+                total += background[p]
+            else
+                push!(clickpixels, p)
+            end
+        end
+        n = length(clickpixels) - start
+        counts[k], darkzero[k] = n, T(total)
+        kind = n == length(included) ? :none : iszero(n) ? :all : :mixed
+        if !isempty(zeroruns) && last(zeroruns)[2] == kind
+            zeroruns[end] = (first(last(zeroruns)[1]):k, kind)
+        else
+            push!(zeroruns, (k:k, kind))
+        end
+    end
+    return (; clickpixels, counts, darkzero, zeroruns)
+end
+
 function SPADLogLikelihood(detector::SPAD{T}) where {T}
-    # indexed on the CPU, once per run
     readouts, filter = Array(detector.readouts), Array(detector.filter)
     darkcounts = Array(detector.darkcounts)
     nx, ny, nframes = size(readouts)
-    clicks = [findall((readouts[:, :, k] .> 0) .& (filter .!= 0)) for k = 1:nframes]
-    nrows = max(1, maximum(length, clicks)) # Metal cannot launch kernels over empty arrays
-    x, y = ones(Int, nrows, nframes), ones(Int, nrows, nframes)
+    included = all(!iszero, filter) ? eachindex(filter) : findall(!iszero, vec(filter))
+    metadata = _spad_click_metadata(readouts, included, filter, darkcounts)
+    nrows = max(1, maximum(metadata.counts)) # GPU kernels need a nonempty row dimension
+    x, y = Matrix{Int}(undef, nrows, nframes), Matrix{Int}(undef, nrows, nframes)
     r, w = zeros(UInt16, nrows, nframes), zeros(T, nrows, nframes)
-    for k = 1:nframes, (j, c) in enumerate(clicks[k])
-        x[j, k], y[j, k] = Tuple(c)
-        r[j, k], w[j, k] = readouts[c, k], filter[c]
+    d = fill(darkcounts[1], nrows, nframes)
+    coords = CartesianIndices(filter)
+    firstclick = 1
+    @inbounds for k in 1:nframes
+        xoffset, yoffset = (k - 1) * nx, (k - 1) * ny
+        for j in 1:metadata.counts[k]
+            p = metadata.clickpixels[firstclick + j - 1]
+            ix, iy = Tuple(coords[p])
+            x[j, k], y[j, k] = xoffset + ix, yoffset + iy
+            r[j, k] = readouts[(k - 1) * length(filter) + p]
+            w[j, k], d[j, k] = filter[p], darkcounts[p]
+        end
+        for j in (metadata.counts[k] + 1):nrows
+            x[j, k], y[j, k] = xoffset + 1, yoffset + 1
+        end
+        firstclick += metadata.counts[k]
     end
-    d = darkcounts[CartesianIndex.(x, y)]
-    frameoffsets = (0:nframes-1)'
     todevice(a) = copyto!(similar(detector.darkcounts, eltype(a), size(a)), a)
     return SPADLogLikelihood(
         todevice(r),
         todevice(w),
         todevice(d),
-        todevice(x .+ nx .* frameoffsets),
-        todevice(y .+ ny .* frameoffsets),
+        todevice(x),
+        todevice(y),
         all(isone, filter) ? nothing : detector.filter,
-        convert(T, sum(filter .* darkcounts)),
+        todevice(metadata.darkzero),
+        metadata.zeroruns,
         (todevice(d), todevice(d)),
         (similar(detector.darkcounts, nframes), similar(detector.darkcounts, nframes)),
         todevice(w),
@@ -135,27 +235,42 @@ function reset!(llarray::SPADLogLikelihood{T}, ::SPAD{T}, i::Integer) where {T}
     return llarray
 end
 
-# Add `scale · pxᵀ F py` of each frame to `linear`; with no pixel filtered out, F is all
-# ones and this is `scale · Σpx · Σpy`.
-addframesums!(
-    linear::AbstractVector{T},
-    px::AbstractArray{T,3},
-    py::AbstractArray{T,3},
-    ::Nothing,
-    scale::T,
-) where {T} = linear .+= scale .* vec(sum(px, dims = 1)) .* vec(sum(py, dims = 1))
+_spad_zero_mass(r, f::T, x::T, y::T) where {T} =
+    iszero(f) || !iszero(r) ? zero(T) : f * x * y
+_spad_scale_mass(scale::T, mass::T) where {T} =
+    iszero(mass) ? zero(T) : scale * mass
 
-function addframesums!(
-    linear::AbstractVector{T},
-    px::AbstractArray{T,3},
-    py::AbstractArray{T,3},
-    filter::AbstractMatrix{T},
-    scale::T,
-) where {T}
-    Px, Py = reshape(px, size(px, 1), :), reshape(py, size(py, 1), :)
-    # zeroed first: Metal's mul! keeps a NaN or Inf already in the output
-    FPy = mul!(fill!(similar(Px), zero(T)), filter, Py)
-    return linear .+= scale .* vec(sum(Px .* FPy, dims = 1))
+function add_zero_framesums!(linear, px, py, detector, llarray, scale)
+    nx, ny = size(detector)
+    for (frames, kind) in llarray.zeroruns
+        kind == :none && continue
+        if kind == :all && isnothing(llarray.filter)
+            @views mass = vec(sum(px[:, :, frames], dims = 1)) .*
+                          vec(sum(py[:, :, frames], dims = 1))
+            @views linear[frames] .+= _spad_scale_mass.(scale, mass)
+            continue
+        end
+        # <= 128*8*16 scalar entries per product tile, independent of movie size.
+        # Unlike subtracting click signal from total signal, all terms are
+        # nonnegative and absent pixels are branched away before multiplication.
+        for k in first(frames):16:last(frames), j in 1:8:ny, i in 1:128:nx
+            K = k:min(k + 15, last(frames)); J = j:min(j + 7, ny); I = i:min(i + 127, nx)
+            @views reads = detector.readouts[I, J, K]
+            @views filter = detector.filter[I, J]
+            @views x = px[I, :, K]
+            @views y = reshape(py[J, :, K], 1, length(J), length(K))
+            tile = _spad_zero_mass.(reads, filter, x, y)
+            mass = vec(sum(tile, dims = (1, 2)))
+            @views linear[K] .+= _spad_scale_mass.(scale, mass)
+        end
+    end
+    return linear
+end
+
+function add_spad_signal!(llarray, detector, px, py, scale, i)
+    llarray.means[i] .+= scale .* px[llarray.xindex] .* py[llarray.yindex]
+    add_zero_framesums!(llarray.linear[i], px, py, detector, llarray, scale)
+    return llarray
 end
 
 function add_poisson_mean!(
@@ -166,6 +281,7 @@ function add_poisson_mean!(
     psf::PointSpreadFunction{T},
     i::Integer,
 ) where {T}
+    iszero(brightnessᵥ) && return llarray
     nframes = size(tracksᵥ, 1)
     psfcomponents = (
         similar(tracksᵥ, size(detector, 1), 1, nframes),
@@ -184,8 +300,7 @@ function add_poisson_mean!(
             detector.pxbounds,
             psf,
         )
-        llarray.means[i] .+= scale .* px[llarray.xindex] .* py[llarray.yindex]
-        addframesums!(llarray.linear[i], px, py, llarray.filter, scale)
+        add_spad_signal!(llarray, detector, px, py, scale, i)
     end
     return llarray
 end
@@ -199,17 +314,28 @@ function set_poisson_means!(
     psf::PointSpreadFunction{T},
 ) where {T}
     set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₁, psf, 1)
+    if iszero(brightnessᵥ₁)
+        return set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₂, psf, 2)
+    end
+    iszero(brightnessᵥ₂) && return reset!(llarray, detector, 2)
     ratio = brightnessᵥ₂ / brightnessᵥ₁
     llarray.means[2] .=
         llarray.darkcounts .+ (llarray.means[1] .- llarray.darkcounts) .* ratio
-    llarray.linear[2] .= llarray.linear[1] .* ratio
+    llarray.linear[2] .= _spad_scale_mass.(ratio, llarray.linear[1])
     return llarray
 end
 
+_spad_weighted_full(w::T, r, B, λ::T) where {T} =
+    iszero(w) ? zero(T) : w * _spad_loglikelihood(r, B, λ)
+_spad_weighted_delta(w::T, r, B, old::T, new::T) where {T} =
+    iszero(w) ? zero(T) : w * _spad_Δloglikelihood(r, B, old, new)
+
 function get_loglikelihood!(llarray::SPADLogLikelihood{T}, detector::SPAD{T}) where {T}
-    @. llarray.pixel = llarray.weights * clickterm(llarray.readouts, llarray.means[1])
+    @. llarray.pixel = _spad_weighted_full(llarray.weights, llarray.readouts, detector.batchsize, llarray.means[1])
     sum!(reshape(llarray.frame, 1, :), llarray.pixel)
-    llarray.frame .-= detector.batchsize .* (llarray.darksum .+ llarray.linear[1])
+    if !iszero(detector.batchsize)
+        llarray.frame .-= detector.batchsize .* (llarray.darksum .+ llarray.linear[1])
+    end
     return sum(llarray.frame)
 end
 
@@ -217,11 +343,13 @@ function set_frame_Δloglikelihood!(
     llarray::SPADLogLikelihood{T},
     detector::SPAD{T},
 ) where {T}
-    @. llarray.pixel =
-        llarray.weights *
-        Δclickterm(llarray.readouts, llarray.means[1], llarray.means[2])
+    @. llarray.pixel = _spad_weighted_delta(
+        llarray.weights, llarray.readouts, detector.batchsize, llarray.means[1], llarray.means[2],
+    )
     sum!(reshape(llarray.frame, 1, :), llarray.pixel)
-    llarray.frame .-= detector.batchsize .* (llarray.linear[2] .- llarray.linear[1])
+    if !iszero(detector.batchsize)
+        llarray.frame .-= detector.batchsize .* (llarray.linear[2] .- llarray.linear[1])
+    end
     return llarray
 end
 

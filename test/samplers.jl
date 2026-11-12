@@ -19,13 +19,13 @@ end
     end
 end
 
-# The MSD is drawn from its conjugate inverse-gamma posterior, with the motion likelihood
-# tempered by 𝑇: shape α + n/(2𝑇), scale β + Σd²/(2𝑇).
-@testset for 𝑇 in (1.0, 2.0)
+# Only the observation likelihood is tempered. The conditional motion prior gives
+# shape α + n/2 and scale β + Σd²/2, independently of the temperature.
+@testset for 𝑇 in (1.0, 2.0, Inf)
     rng = StableRNG(12)
     displacement² = reshape([0.01 * i for i = 1:40], 10, 2, 2)
     msd = MeanSquaredDisplacement{Float64}(guess = 1.0, priorparams = (2, 0.1))
-    posterior = InverseGamma(2 + 40 / (2𝑇), 0.1 + sum(displacement²) / (2𝑇))
+    posterior = InverseGamma(2 + 40 / 2, 0.1 + sum(displacement²) / 2)
     ndraws = 20_000
     draws = [SP2T.update!(rng, msd, displacement², 𝑇).value for _ = 1:ndraws]
     @test abs(mean(draws) - mean(posterior)) < 4 * std(posterior) / √ndraws

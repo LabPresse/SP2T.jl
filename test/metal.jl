@@ -14,6 +14,29 @@ else
 
     private(x::AbstractArray) = MtlArray{eltype(x),ndims(x),Metal.PrivateStorage}(x)
 
+    @testset "Metal Float32 detector and SPAD regressions" begin
+        detector_regression_suite(private; precisions = (Float32,))
+        spad_saturation_regression_suite(private; precisions = (Float32,), allow_subnormal_zero = true)
+        Metal.synchronize()
+    end
+
+    @testset "Inactive Metal track coordinates" begin
+        for dims in (2, 3), mask_width in (1, dims)
+            positions = reshape(Float32.(1:2*dims), 2, dims, 1)
+            mask = ones(Float32, 2, mask_width, 1)
+            mask[1, :, :] .= 0
+            expected = copy(positions)
+            expected[1, 1:2, :] .= Inf32
+            if dims == 3
+                expected[1, 3, :] .= 0
+            end
+            device_positions = private(positions)
+            effective = similar(device_positions)
+            SP2T._seteffvalue!(effective, device_positions, private(mask))
+            @test Array(effective) == expected
+        end
+    end
+
     @testset let x = Float32.(range(-6, 6, length = 101))
         @test Array(SP2T.erfdiff.(private(x[1:end-1]), private(x[2:end]))) ≈
               SP2T.erfdiff.(x[1:end-1], x[2:end]) rtol = 1e-5

@@ -8,7 +8,7 @@ format:
     html-math-method: mathjax
 ---
 
-SP2T stores a log posterior, `log𝒫`, with every sample, and `findmap` picks the sample where it is largest. This note shows that the posterior can be built in two ways, from track positions or from standardized increments; that both give the same posterior distribution; and that their densities still differ at a point by a factor that depends on the MSD. `log𝒫` uses the second construction, which is why `get_logposterior` adds `logjacobian`.
+SP2T stores a posterior ranking score, `log𝒫`, with every sample, and `findmap` picks its largest finite value after burn-in. This note shows that the posterior can be built in two ways, from track positions or from standardized increments; that both give the same posterior distribution; and that their densities still differ at a point by a factor that depends on the MSD. `log𝒫` uses the second coordinate convention, which is why `get_logposterior` adds `logjacobian`. With off candidates, its expected-prior substitution makes it a ranking score rather than the exact joint log density of a stored full state or a marginalized log density.
 
 # Setup
 
@@ -139,6 +139,8 @@ $$
 
 They differ by $\tfrac{(K-1)D}{2}\log v$, that candidate's share of the Jacobian, as the change of variables requires. With `logposterior_rng`, the expectation is replaced by an exact draw: the sum of squared standardized increments and first positions of the off tracks is $\chi^2$-distributed with $(M-n)\,K\,D$ degrees of freedom.
 
+An expected log prior is not the log of an integrated prior, and an independent draw is not the density of the particular stored off-track coordinates. These substitutions do not change the sampler, but limit interpretation of `findmap` when candidates are off. With every candidate on, the score is the standardized-coordinate joint log posterior up to sample-independent constants.
+
 # What SP2T computes
 
 $$
@@ -148,15 +150,16 @@ $$
 + \underbrace{\tfrac{N}{2} \log v}_{\texttt{logjacobian}}
 + \underbrace{\log p(v)}_{\texttt{logprior(msd)}}
 + \underbrace{\lambda\, n}_{\texttt{logprior(nemitters)}}
++ \underbrace{\log p(b)}_{\texttt{logprior(brightness)}}
 $$
 
-That is $\log \pi_B$, up to a constant shared by all samples. The track and first-position terms are normalized, because their constants depend on $v$; $\log p(v)$ and $\log p(n)$ are not, since their constants are the same for every sample. Standardizing the first positions by $\sigma_d$ as well would only add a constant, so it is left out. The brightness prior is not included.
+This is a score in construction B, with the off-candidate qualification above. The track and first-position terms are normalized, because their constants depend on $v$; omitted MSD/count prior normalizers are shared by all samples. Standardizing the first positions by $\sigma_d$ as well would only add a constant, so it is left out. Saved samples include the normalized brightness prior. The three-argument internal `get_logposterior(loglikelihood, tracks, msd)` helper remains a reduced score without brightness; the brightness-aware overload is used when saving samples.
 
 `test/runtests.jl` checks this against a direct evaluation in construction B with Distributions.jl, and that with the increments $\varepsilon$ and the log-likelihood fixed, changing $v$ changes `log𝒫` only by $\log p(v)$.
 
 # Example: the 2D example
 
-Two states of the 2D example (`examples/2D`, 50 × 50 pixels, $K = 2550$, $D = 2$, $M = 10$, so $N = 50{,}980$): the ground truth, and the state the sampler stays in when started from the example's own values (tracks at zero, brightness 0.1, MSD 2 × 10⁻⁵).
+The following historical calculation omits the brightness prior and predates the repaired sampler. It illustrates the coordinate Jacobian, not the current complete saved-score calculation or current sampler behavior. It compares two states of the 2D example (`examples/2D`, 50 × 50 pixels, $K = 2550$, $D = 2$, $M = 10$, so $N = 50{,}980$): the ground truth and an earlier stuck state.
 
 | | Ground truth | Stuck state | Truth − stuck |
 |---|---:|---:|---:|

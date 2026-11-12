@@ -7,5 +7,6 @@ SP2T.devicerng(::AbstractRNG, ::CuArray) = CUDA.default_rng()
 
 include("permutation.jl")
 include("track.jl")
+include("spad.jl")
 
 end

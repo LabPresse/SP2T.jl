@@ -36,7 +36,8 @@ Calculate the log density for `b`'s prior given its current value. `normalizatio
 """
 logprior(b::Brightness{T,P}; normalization::Bool = false) where {T,P<:Gamma{T}} =
     normalization ? logpdf(b.prior, b.value) :
-    (shape(b.prior) - 1) * log(b.value) - b.value / scale(b.prior)
+    (isone(shape(b.prior)) ? zero(T) : (shape(b.prior) - 1) * log(b.value)) -
+    b.value / scale(b.prior)
 
 """
     Δlogprior(b::Brightness{T}, xᵖ::T)

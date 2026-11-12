@@ -33,11 +33,15 @@ end
 """
     onshuffle!(rng::AbstractRNG, t::Tracks)
 
-Shuffles the tracks of the emitting particles in `t`.
+Shuffle the emitting tracks only when the proposed relabeling preserves their fixed
+activity masks. Different fixed activity histories are not exchangeable.
 """
 function onshuffle!(rng::AbstractRNG, t::Tracks)
     perm = randperm(rng, t.nemitters.value)
-    isequal(perm, 1:t.nemitters.value) || _permute!(t, perm)
+    if !isequal(perm, 1:t.nemitters.value)
+        @views all(t.onchunk.active .== t.onchunk.active[:, :, perm]) || return t
+        _permute!(t, perm)
+    end
     return t
 end
 
@@ -81,7 +85,17 @@ end
 """
     update!(rng::AbstractRNG, tracksᵒ::TrackChunk{T}, tracksᵖ::MHTrackChunk{T}, msdᵥ::T)
 
-Swap particle identities partway through the tracks. Propose a random relabeling `perm` of the particles and, independently for each boundary between frames `k - 1` and `k`, accept relabeling frames `k` onward by `perm` according to the change in the motion log-prior across that boundary. Positions in each frame are unchanged, so the likelihood and the first-frame prior are too. Accepted relabelings compose: frames after `c` accepted boundaries are relabeled by `perm` applied `c` times, which leaves the steps across every other boundary unchanged. `active` is relabeled with the positions.
+Swap two particle identities partway through their tracks. Draw two indices uniformly
+with replacement; equal indices give a no-op. Otherwise use their transposition at
+every boundary, with independent Metropolis decisions from the motion log-prior.
+Only particles with identical fixed activity histories may be exchanged, so neither
+the mask nor the image likelihood changes. The first frame is never relabeled.
+
+The shared permutation must be an involution. For a transposition, accepted boundary
+flips commute and are their own inverses; rejected-boundary probabilities also match
+in the reverse move. Arbitrary shared permutations do not have this property when
+several boundaries are tested. With two particles the proposal law remains one-half
+identity and one-half swap.
 """
 function update!(
     rng::AbstractRNG,
@@ -90,8 +104,12 @@ function update!(
     msdᵥ::T,
 ) where {T}
     nparticles = size(tracksᵒ.value, 3)
-    perm = randperm(rng, nparticles)
-    isequal(perm, 1:nparticles) && return tracksᵒ
+    (nparticles < 2 || size(tracksᵒ.value, 1) < 2) && return tracksᵒ
+    a, b = rand(rng, 1:nparticles), rand(rng, 1:nparticles)
+    a == b && return tracksᵒ
+    @views all(tracksᵒ.active[:, :, a:a] .== tracksᵒ.active[:, :, b:b]) || return tracksᵒ
+    perm = collect(1:nparticles)
+    perm[a], perm[b] = b, a
     initmh!(rng, tracksᵖ)
     permuteto!(tracksᵖ.value, tracksᵒ.value, perm, 2)
     setdisplacement²!(tracksᵒ)
@@ -103,7 +121,6 @@ function update!(
     @views tracksᵖ.counter[:, 1] .+= count(accepted), length(accepted) - 1
     any(accepted) || return tracksᵒ
     relabel!(tracksᵒ.value, relabelindices(tracksᵒ.value, perm, accepted), tracksᵖ.value)
-    relabel!(tracksᵒ.active, relabelindices(tracksᵒ.active, perm, accepted), tracksᵖ.active)
-    copyto!(tracksᵖ.active, tracksᵒ.active) # proposals share the current mask
+    copyto!(tracksᵖ.active, tracksᵒ.active) # the exchanged masks are identical
     return tracksᵒ
 end

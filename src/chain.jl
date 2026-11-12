@@ -4,7 +4,7 @@ struct Sample{T<:AbstractFloat,A<:AbstractArray{T,3}}
     brightness::T
     iteration::Int # iteration
     𝑇::T # temperature
-    log𝒫::T # log posterior
+    log𝒫::T # standardized-coordinate score; off candidates use offlogprior
     logℒ::T # log likelihood
 end
 
@@ -38,6 +38,17 @@ mutable struct Chain{T<:AbstractFloat,VofS<:Vector{<:Sample{T}},A<:Annealing{T}}
     samples::VofS
     sizelimit::Int
     annealing::A
+    iteration::Int # completed transitions, including states not retained after thinning
+end
+
+# Saved samples do not identify an unsaved live state. Supply iteration explicitly
+# when reconstructing a chain together with a separately preserved sampler state.
+function Chain(samples::Vector{<:Sample}, sizelimit::Integer, annealing::Annealing;
+    iteration::Integer = isempty(samples) ? 0 : samples[end].iteration,
+)
+    sizelimit >= 2 || throw(ArgumentError("sizelimit must be at least two"))
+    iteration >= 0 || throw(ArgumentError("iteration must be nonnegative"))
+    return Chain(samples, Int(sizelimit), annealing, Int(iteration))
 end
 
 Base.propertynames(::Chain) = (
@@ -87,16 +98,34 @@ tosave(chain::Chain, iter::Real) = iter % savestride(chain) == 0
 """
     findmap(chain::Chain; burn_in::Integer = 0)
 
-Return the sample with the largest log posterior (`chain.logposteriors`) after the first `burn_in` samples, and its index. The log posterior is a density, in the coordinates of `docs/logposterior.qmd` (first positions, standardized increments, MSD). Where a density is largest depends on the coordinates, and with thousands of track coordinates that point is not a typical posterior sample: use the result as a convenient point estimate, not as a summary of the posterior.
+Return the sample with the largest finite saved score after the first `burn_in`
+stored samples, and its index. The score uses first positions and standardized
+increments. With off candidates it includes an expected or independently drawn
+off-prior score, not their marginal density or the density of their stored
+coordinates. Consequently this is a score-maximizing point estimate, not general
+full-state MAP or a summary of the posterior distribution.
 """
 function findmap(chain::Chain; burn_in::Integer = 0)
-    ~, i = findmax(chain.logposteriors[burn_in+1:end])
-    return chain.samples[i+burn_in], i + burn_in
+    return _findbest(chain, :log𝒫, burn_in)
 end
 
 function findmle(chain::Chain; burn_in::Integer = 0)
-    ~, i = findmax(chain.loglikelihoods[burn_in+1:end])
-    return chain.samples[i+burn_in], i + burn_in
+    return _findbest(chain, :logℒ, burn_in)
+end
+
+function _findbest(chain::Chain, field::Symbol, burn_in::Integer)
+    0 <= burn_in < length(chain) || throw(ArgumentError(
+        "burn_in must be nonnegative and smaller than the number of stored samples",
+    ))
+    best_index, best_score = 0, -Inf
+    for i in burn_in+1:length(chain)
+        score = getproperty(chain.samples[i], field)
+        if isfinite(score) && (best_index == 0 || score > best_score)
+            best_index, best_score = i, score
+        end
+    end
+    best_index > 0 || throw(ArgumentError("no finite $field scores remain after burn-in"))
+    return chain.samples[best_index], best_index
 end
 
 jumpdistances(tracks::AbstractArray{<:Real}) = sqrt.(sum(diff(tracks, dims=1) .^ 2, dims=2))
@@ -128,7 +157,7 @@ function extend!(
     logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
 ) where {T}
     loglikelihood = get_loglikelihood!(llarray, tracks, brightness, detector, psf)
-    logposterior = get_logposterior(loglikelihood, tracks, msd, logposterior_rng)
+    logposterior = get_logposterior(loglikelihood, tracks, msd, brightness, logposterior_rng)
     push!(
         chain.samples,
         Sample(tracks.onchunk, msd, brightness, iter, 𝑇, logposterior, loglikelihood),
@@ -148,10 +177,9 @@ function get_loglikelihood!(
     return get_loglikelihood!(llarray, detector)
 end
 
-# The log posterior of the whole weak-limit state, all `limit` candidates, so every sample's
-# density has the same units; the off candidates enter through `offlogprior`. Its density is
-# in the coordinates (first positions, standardized increments, MSD) (`logjacobian`), where
-# the tracks' prior does not depend on the MSD; see docs/logposterior.qmd.
+# Reduced standardized-coordinate score, retained for callers that do not supply
+# brightness. Off candidates contribute an expected or independently drawn
+# log-prior proxy, not the marginalized density or their stored-state log density.
 get_logposterior(
     loglikelihood::T,
     tracks::Tracks{T},
@@ -164,6 +192,33 @@ get_logposterior(
     logjacobian(tracks, msd.value) +
     logprior(msd) +
     logprior(tracks.nemitters)
+
+# Saved scores include the brightness prior as well. Keep the standardized-
+# increment Jacobian and the declared off-candidate proxy from the current model.
+get_logposterior(
+    loglikelihood::T,
+    tracks::Tracks{T},
+    msd::MeanSquaredDisplacement{T},
+    brightness::Brightness{T},
+    logposterior_rng::Union{Nothing,AbstractRNG} = nothing,
+) where {T} = get_logposterior(loglikelihood, tracks, msd, logposterior_rng) +
+    logprior(brightness; normalization = true)
+
+# GPU kernel launches can consume the host task RNG during deterministic scratch
+# initialization. Rebuilding scratch at a continuation boundary must not consume
+# proposal draws. This guard does not restore device RNGs or cover sampling/scoring.
+function _continuation_likelihood_array(tracks::Tracks{T}, detector::Detector{T}) where {T}
+    host_rng = Random.default_rng()
+    saved_rng = copy(host_rng)
+    try
+        llarray = loglikelihoodaux(detector)
+        reset!(llarray, detector, 1)
+        tracks.nemitters.loglikelihood[1] = get_loglikelihood!(llarray, detector)
+        return llarray
+    finally
+        copy!(host_rng, saved_rng)
+    end
+end
 
 function parametricMCMC!(
     rng::AbstractRNG,
@@ -253,11 +308,14 @@ Continue running a MCMC sampling with the specified keyword arguments. Requires 
 - `niters`: The number of additional iterations for the MCMC simulation.
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC. A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 - `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
-- `logposterior_rng`: The log posterior of each sample covers all `max_ntracks` candidates, so that samples with different emitter counts compare. The off candidates' tracks enter through their expected log prior (default: `nothing`), or, given a random number generator, through an exact draw of it, as if their tracks had been simulated. That generator is kept apart from `rng`, so the chain itself does not change.
+- `logposterior_rng`: Saved scores include the brightness prior and use standardized increments. Off candidates contribute their expected log prior (default: `nothing`) or an independent draw of that log prior using this generator. This is an off-prior score proxy, not a marginalized density or the density of the stored off tracks. Use a generator distinct from `rng` to leave sampling unchanged.
 - `msdrescale`: Also run the rescaling MSD move after the MSD's Gibbs draw, which stretches the on tracks with the MSD (default: `false`; `docs/msdrescale.qmd`). It costs one likelihood evaluation per iteration.
 - `countbrightness`: Also run the joint count–brightness move after the emitter-count update, which switches one emitter on or off and rescales the brightness by n/n′ (default: `false`; `docs/countbrightness.qmd`). Nonparametric sweep only.
 Both moves leave the posterior unchanged; they change only how the chain moves.
 The chain's size limit and annealing schedule are those stored in `chain`.
+`chain.iteration` counts completed transitions independently of retained samples.
+Free brightness must be finite and strictly positive: its multiplicative proposal
+cannot leave zero. Fixed zero brightness remains permitted.
 """
 function runMCMC!(;
     chain::Chain{T},
@@ -273,10 +331,17 @@ function runMCMC!(;
     msdrescale::Bool = false,
     countbrightness::Bool = false,
 ) where {T}
-    prev_niters = chain.samples[end].iteration
-    llarray = loglikelihoodaux(detector)
-    reset!(llarray, detector, 1)
-    tracks.nemitters.loglikelihood[1] = get_loglikelihood!(llarray, detector)
+    niters >= 0 || throw(ArgumentError("niters must be nonnegative"))
+    isfixed(brightness) || (isfinite(brightness.value) && brightness.value > zero(T)) ||
+        throw(ArgumentError(
+            "free brightness must be finite and positive; its multiplicative proposal cannot leave zero",
+        ))
+    prev_niters = chain.iteration
+    llarray = _continuation_likelihood_array(tracks, detector)
+    if isempty(chain.samples)
+        extend!(chain, tracks, msd, brightness, llarray, detector, psf,
+            prev_niters, temperature(chain, prev_niters), logposterior_rng)
+    end
     parametric = parametric || isfixed(tracks.nemitters)
     nextsample! = parametric ? parametricMCMC! : nonparametricMCMC!
     @showprogress dt = 1 desc = "Computing..." for iter in prev_niters .+ (1:niters)
@@ -293,6 +358,7 @@ function runMCMC!(;
             msdrescale,
             countbrightness,
         )
+        chain.iteration = iter
         if tosave(chain, iter)
             isfull(chain) && shrink!(chain)
             extend!(
@@ -309,6 +375,7 @@ function runMCMC!(;
             )
         end
     end
+    return chain
 end
 
 """
@@ -358,7 +425,7 @@ Run a MCMC sampling with the specified keyword arguments. Requires the following
 - `annealing`: An `Annealing` object representing the annealing schedule (default: `ConstantAnnealing{T}(1)`).
 - `parametric`: A boolean indicating whether to use parametric or non-parametric MCMC (default: `false`). A fixed emitter count (`tracks.nemitters.fixed`) also selects parametric MCMC.
 - `rng`: The random number generator (default: `Random.default_rng()`). On GPU, array draws use `CUDA.default_rng()` instead; seed it separately for reproducible GPU runs.
-- `logposterior_rng`: The log posterior of each sample covers all `max_ntracks` candidates, so that samples with different emitter counts compare. The off candidates' tracks enter through their expected log prior (default: `nothing`), or, given a random number generator, through an exact draw of it, as if their tracks had been simulated. That generator is kept apart from `rng`, so the chain itself does not change.
+- `logposterior_rng`: Saved scores include the brightness prior and use standardized increments. Off candidates contribute their expected log prior (default: `nothing`) or an independent draw of that log prior using this generator. This is an off-prior score proxy, not a marginalized density or the density of the stored off tracks. Use a generator distinct from `rng` to leave sampling unchanged.
 - `msdrescale`: Also run the rescaling MSD move after the MSD's Gibbs draw, which stretches the on tracks with the MSD (default: `false`; `docs/msdrescale.qmd`). It costs one likelihood evaluation per iteration.
 - `countbrightness`: Also run the joint count–brightness move after the emitter-count update, which switches one emitter on or off and rescales the brightness by n/n′ (default: `false`; `docs/countbrightness.qmd`). Nonparametric sweep only.
 Both moves leave the posterior unchanged; they change only how the chain moves.
@@ -379,7 +446,8 @@ function runMCMC(;
     countbrightness::Bool = false,
 ) where {T}
     isnothing(annealing) && (annealing = ConstantAnnealing{T}(1))
-    chain = Chain([Sample(tracks.onchunk, msd, brightness)], sizelimit, annealing)
+    sample_type = typeof(Sample(tracks.onchunk, msd, brightness))
+    chain = Chain(sample_type[], sizelimit, annealing)
     runMCMC!(
         chain = chain,
         tracks = tracks,

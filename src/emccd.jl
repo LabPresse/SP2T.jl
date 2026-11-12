@@ -60,15 +60,36 @@ function set_pixel_loglikelihood!(
     return llarray
 end
 
+# Factor the residual-square difference before device arithmetic. This preserves
+# exact identity increments despite device fused multiply-add contraction.
+function _emccd_Δloglikelihood(
+    readout,
+    oldmean::T,
+    newmean::T,
+    gain::T,
+    offset::T,
+    variance::T,
+) where {T}
+    if oldmean == newmean && isfinite(oldmean) && isfinite(gain) &&
+       isfinite(offset) && isfinite(variance) && variance > zero(T)
+        return zero(T)
+    end
+    return gain * (newmean - oldmean) *
+           (2 * (T(readout) - offset) - gain * (newmean + oldmean)) / (2 * variance)
+end
+
 function set_pixel_Δloglikelihood!(
     llarray::LogLikelihoodArray{T},
     detector::EMCCD{T},
 ) where {T}
-    @. llarray.pixel =
-        (
-            (detector.readouts - detector.gain * llarray.means[1] - detector.offset)^2 -
-            (detector.readouts - detector.gain * llarray.means[2] - detector.offset)^2
-        ) / (2 * detector.variance)
+    @. llarray.pixel = _emccd_Δloglikelihood(
+        detector.readouts,
+        llarray.means[1],
+        llarray.means[2],
+        detector.gain,
+        detector.offset,
+        detector.variance,
+    )
     return llarray
 end
 
@@ -127,14 +148,24 @@ function EMCCDGamma{T}(;
     )
 end
 
-function set_pixel_loglikelihood!(
-    llarray::LogLikelihoodArray{T},
-    detector::EMCCDGamma{T},
-) where {T}
-    llarray.means[2] .= llarray.means[1] ./ detector.noise_excess_factor
-    llarray.pixel .=
-        (llarray.means[2] .- 1) .* log.(detector.readouts) .- loggamma.(llarray.means[2]) .-
-        llarray.means[2] .* log(detector.noise_excess_factor * detector.gain)
+function _gamma_pixel(weight::T, readout, mean::T, excess::T, logscale::T) where {T}
+    # Exclude before calling loggamma: a filtered negative calibration can have
+    # a shape outside the real log-gamma domain.
+    iszero(weight) && return zero(T)
+    k = mean / excess
+    return (k - one(T)) * log(T(readout)) - loggamma(k) - k * logscale
+end
+
+function _gamma_pixel_delta(weight::T, readout, old::T, new::T, excess::T, logscale::T) where {T}
+    iszero(weight) && return zero(T)
+    ko, kn = old / excess, new / excess
+    return (kn - ko) * (log(T(readout)) - logscale) - (loggamma(kn) - loggamma(ko))
+end
+
+function set_pixel_loglikelihood!(llarray::LogLikelihoodArray{T}, detector::EMCCDGamma{T}) where {T}
+    logscale = log(detector.noise_excess_factor * detector.gain)
+    llarray.pixel .= _gamma_pixel.(detector.filter, detector.readouts, llarray.means[1],
+                                  detector.noise_excess_factor, logscale)
     return llarray
 end
 
@@ -142,12 +173,9 @@ function set_pixel_Δloglikelihood!(
     Δllarray::LogLikelihoodArray{T},
     detector::EMCCDGamma{T},
 ) where {T}
-    Δllarray.means[1] ./= detector.noise_excess_factor
-    Δllarray.means[2] ./= detector.noise_excess_factor
-    @. Δllarray.pixel =
-        (Δllarray.means[2] .- Δllarray.means[1]) .*
-        (log.(detector.readouts) .- log(detector.noise_excess_factor * detector.gain)) .-
-        loggamma.(Δllarray.means[2]) .+ loggamma.(Δllarray.means[1])
+    logscale = log(detector.noise_excess_factor * detector.gain)
+    Δllarray.pixel .= _gamma_pixel_delta.(detector.filter, detector.readouts,
+        Δllarray.means[1], Δllarray.means[2], detector.noise_excess_factor, logscale)
     return Δllarray
 end
 

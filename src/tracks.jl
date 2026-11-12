@@ -74,11 +74,26 @@ setacceptance!(t::MHTrackChunk; start::Integer, step::Integer) =
 """
     seteffvalue!(tracks::AbstractTrackChunk{T})
 
-Set the effective value of the track chunk. The effective value is calculated as `value / active`. Note that `effvalue == value` when `active` is 1, and `effvalue == Inf` (a particle is infinitely far away so cannot contribute any photons) when `active` is 0. Currently, `active` should ONLY be used in parametric runs.
+Set the effective positions, preserving active coordinates. Inactive particles
+have infinite lateral coordinates and zero axial coordinate in 3D, so they
+contribute no photons without forming `0/0` or an infinite Lorentzian width.
+Currently, `active` should ONLY be used in parametric runs.
 """
 function seteffvalue!(tracks::AbstractTrackChunk{T}) where {T}
-    @. tracks.effvalue = tracks.value / tracks.active
+    _seteffvalue!(tracks.effvalue, tracks.value, tracks.active)
     return tracks
+end
+
+function _seteffvalue!(effective::AbstractArray{T,3}, value, active) where {T}
+    isempty(effective) && return effective
+    inactive_position = T(Inf)
+    @. effective = ifelse(iszero(active), inactive_position, value)
+    if size(value, 2) == 3
+        mask_column = size(active, 2) == 1 ? 1 : 3
+        axial_active = @view active[:, mask_column:mask_column, :]
+        @views effective[:, 3:3, :] .= ifelse.(iszero.(axial_active), zero(T), value[:, 3:3, :])
+    end
+    return effective
 end
 
 """
@@ -140,7 +155,7 @@ end
 """
     offlogprior([rng::AbstractRNG,] tracks::Tracks{T}, msdᵥ::T)
 
-The off candidates' `logprior` without simulating their tracks: its expectation over tracks drawn from the prior given `msdᵥ` or, with `rng`, an exact draw of it. For such tracks, every displacement divided by `√msdᵥ` and every first position standardized by the `DNormal` prior is standard normal, so the sum of their squares is χ²-distributed with `nframes · ndims` degrees of freedom per track; the expectation replaces it by its mean.
+The off candidates' `logprior` without simulating their tracks: its expectation over tracks drawn from the prior given `msdᵥ` or, with `rng`, an exact draw of it. For such tracks, every displacement divided by `√msdᵥ` and every first position standardized by the `DNormal` prior is standard normal, so the sum of their squares is χ²-distributed with `nframes · ndims` degrees of freedom per track; the expectation replaces it by its mean. This is a score proxy, not a marginalized log density or the log density of the particular off-track values stored in `tracks`.
 """
 offlogprior(tracks::Tracks{T}, msdᵥ::T) where {T} =
     offlogprior(identity, tracks, msdᵥ) # E[χ²(k)] = k
@@ -180,17 +195,24 @@ function Tracks{T}(;
 ) where {T,P}
     guess = elconvert(T, guess)
     nframes, ndims, nguesses = size(guess)
+    max_ntracks >= nguesses || throw(ArgumentError("max_ntracks must include every guessed track"))
+    if !isnothing(active)
+        size(active, 1) == nframes && size(active, 2) in (1, ndims) &&
+            size(active, 3) == nguesses || throw(DimensionMismatch(
+                "active must match guessed frames and particles, with 1 or $ndims columns",
+            ))
+        all(x -> iszero(x) || isone(x), active) || throw(ArgumentError(
+            "active must contain only zero or one",
+        ))
+        size(active, 2) == 1 || all(active .== view(active, :, 1:1, :)) ||
+            throw(ArgumentError("active must agree across coordinates of each particle"))
+    end
     value = copyto!(similar(guess, nframes, ndims, max_ntracks), guess)
     values = (value, similar(value))
 
     scaling isa Real && (scaling = fill!(similar(value), convert(T, scaling)))
 
     active = if !isnothing(active)
-        dimsmatch(guess, active, dims = 1) && size(active, 2) in (1, ndims) || throw(
-            DimensionMismatch(
-                "active must have as many frames as guess and 1 or $ndims columns",
-            ),
-        )
         _resize3(elconvert(T, active), max_ntracks, fill = one(T))
     else
         fill!(similar(value, nframes, ndims, max_ntracks), true)
@@ -227,7 +249,7 @@ function setdisplacement²!(tracks::Tracks, i::Integer = 1)
 end
 
 function seteffvalue!(tracks::Tracks, i::Integer = 1)
-    @. tracks.effvalue[i] = tracks.value[i] / tracks.active[i]
+    _seteffvalue!(tracks.effvalue[i], tracks.value[i], tracks.active[i])
     return tracks
 end
 
@@ -312,6 +334,8 @@ bridge!(x::AbstractArray{T,3}, msd::T, xend::AbstractArray{T,3}) where {T} =
     bridge!(Random.default_rng(), x, msd, xend)
 
 function propose!(rng::AbstractRNG, proposals::MHTrackChunk{T}, tracks::TrackChunk{T}) where {T}
+    # Activity is fixed conditioning data, not part of the position proposal.
+    copyto!(proposals.active, tracks.active)
     arw_propose!(
         rng,
         proposals.value,

@@ -206,6 +206,9 @@ function set_poisson_means!(
     psf::PointSpreadFunction{T},
 ) where {T}
     set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₁, psf, 1)
+    if iszero(brightnessᵥ₁)
+        return set_poisson_mean!(llarray, detector, tracksᵥ, brightnessᵥ₂, psf, 2)
+    end
     llarray.means[2] .=
         detector.darkcounts .+
         (llarray.means[1] .- detector.darkcounts) .* (brightnessᵥ₂ / brightnessᵥ₁)

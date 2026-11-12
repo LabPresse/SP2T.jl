@@ -62,11 +62,16 @@ LogLikelihoodArray{T}(frames::AbstractArray) where {T<:AbstractFloat} = LogLikel
 """
     framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T}
 
-Store in `r` the `b`-weighted sum over pixels of each frame of `A`; a more efficient way to implement `r .= vec(sum(A .* b, dims = (1, 2)))`.
+Store in `r` the `b`-weighted sum over pixels of each frame of `A`.
+Zero weights exclude their inputs, including `NaN` and `Inf`, before reduction.
+Nonzero weights preserve nonfinite included values. Neither input is modified.
 """
-framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T} =
-    # zeroed first: Metal's mul! computes 0 * r, which keeps a NaN or Inf already in `r`
-    mul!(fill!(r, zero(T)), transpose(reshape(A, length(b), :)), vec(b))
+function framesum!(r::AbstractVector{T}, A::AbstractArray{T,3}, b::AbstractMatrix{T}) where {T}
+    selected = ifelse.(iszero.(b), zero(T), A .* b)
+    # Reduction works on the array's backend without routing device pointers to BLAS.
+    sum!(reshape(r, 1, 1, :), selected)
+    return r
+end
 
 """
     devicerng(rng::AbstractRNG, x::AbstractArray)
@@ -137,7 +142,8 @@ dimsmatch(A::AbstractArray, B::AbstractArray; dims::Union{Integer,AbstractUnitRa
     size(A)[dims] == size(B)[dims]
 
 Δlogpdf(P::Gamma{T}, xᵖ::T, xᵒ::T) where {T<:AbstractFloat} =
-    (shape(P) - 1) * log(xᵖ / xᵒ) - (xᵖ - xᵒ) / scale(P)
+    (isone(shape(P)) ? zero(T) : (shape(P) - 1) * log(xᵖ / xᵒ)) -
+    (xᵖ - xᵒ) / scale(P)
 
 Δlogpdf(P::InverseGamma{T}, xᵖ::T, xᵒ::T) where {T<:AbstractFloat} =
     -(shape(P) + 1) * log(xᵖ / xᵒ) - scale(P) * (1 / xᵖ - 1 / xᵒ)
@@ -190,6 +196,7 @@ function boolcopyto!(
     src::AbstractArray{T,3},
     i::AbstractVector{T},
 ) where {T}
-    @. dest .+= i .* (src .- dest)
+    # Arithmetic masking contaminates rejected values and can overflow src - dest.
+    @. dest = ifelse(iszero(i), dest, src)
     return dest
 end

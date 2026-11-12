@@ -293,12 +293,12 @@ end
 # With a small MSD, swapping back at boundary 5 → 6 is overwhelmingly favored and any
 # other swap overwhelmingly disfavored, so once a non-identity relabeling is proposed
 # (probability 1/2 per call; 1 - 2^-50 within 50 calls), the tracks are untangled and
-# stay so. The particle on y = 0 is dark in frames 3 and 8; its mask must follow it.
+# stay so. Both particles share the same fixed dark frames, so they are exchangeable.
 @testset let nframes = 10,
     line = [0.0, 1.0],
     swapped = [k <= 5 ? m : 3 - m for k = 1:nframes, m = 1:2],
     guess = [d == 1 ? 0.1k : line[swapped[k, m]] for k = 1:nframes, d = 1:2, m = 1:2],
-    dark = [swapped[k, m] == 1 && k in (3, 8) for k = 1:nframes, d = 1:1, m = 1:2],
+    dark = [k in (3, 8) for k = 1:nframes, d = 1:1, m = 1:2],
     tracks = Tracks{Float64}(
         guess = guess,
         prior = SP2T.DNormal{Float64}([0.5, 0.5], [1.0, 1.0]),
@@ -317,7 +317,7 @@ end
     @test all(m -> allequal(value[:, 2, m]), 1:2)
     @test sort(value[1, 2, :]) == line
     for m = 1:2
-        @test active[:, :, m] == (value[1, 2, m] == 0 ? [!(k in (3, 8)) for k = 1:nframes, d = 1:1] : trues(nframes, 1))
+        @test active[:, :, m] == [!(k in (3, 8)) for k = 1:nframes, d = 1:1]
     end
     @test tracks.proposals.active == active
     @test tracks.proposals.counter[2, 1] > 0
@@ -683,5 +683,12 @@ end
 end
 
 include("samplers.jl")
+
+include("detector_regressions.jl")
+detector_regression_suite()
+include("spad_saturation_regressions.jl")
+spad_saturation_regression_suite()
+include("core_regressions.jl")
+include("identity_regressions.jl")
 
 Sys.isapple() && include("metal.jl")

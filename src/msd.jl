@@ -42,7 +42,9 @@ logprior(msd::MeanSquaredDisplacement; normalization::Bool = false) =
 """
     update!(rng::AbstractRNG, msd::MeanSquaredDisplacement{T}, displacement²::AbstractArray{T,3}, 𝑇::T)
 
-Directly sample `msd`'s new value from its posterior given the `displacement²` array and the temperature `𝑇`.
+Directly sample `msd`'s new value from its posterior given `displacement²`.
+Only the detector likelihood is tempered, so the motion-prior sufficient
+statistics and this conditional do not depend on `𝑇`.
 """
 function update!(
     rng::AbstractRNG,
@@ -51,7 +53,7 @@ function update!(
     𝑇::T,
 ) where {T}
     isfixed(msd) && return msd
-    Δparams = (length(displacement²), sum(vec(displacement²))) ./ (2 * 𝑇) #* sum(vec(displacement²))) as summing vec is currently faster using CUDA.jl
+    Δparams = (T(length(displacement²)) / 2, sum(vec(displacement²)) / 2)
     msd.value = _rand(rng, msd.prior, Δparams)
     return msd
 end
