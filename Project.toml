@@ -22,7 +22,7 @@ SP2TCUDAExt = "CUDA"
 SP2TMetalExt = "Metal"
 
 [compat]
-julia = "1.13"
+julia = "1.11"
 
 [workspace]
 projects = ["test"]
