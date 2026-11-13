@@ -682,6 +682,100 @@ end
     @test jumpdistances(chain) == [0.0, 0.0, 0.0, 0.0, 5.0, 13.0, 1.0, 2.0]
 end
 
+postchain(xs...) = Chain(
+    [Sample(x, 1.0, 1.0, 0, 1.0, NaN, NaN) for x in xs],
+    10,
+    ConstantAnnealing{Float64}(1),
+)
+
+# sampledtracks concatenates, in order, the emitters of every sample after the first
+# burn_in, whatever their number.
+@testset let (a, b, c) = (reshape(Float64.(n .+ (1:6)), 3, 2, 1) for n in (0, 10, 20)),
+    d = reshape(Float64.(31:36), 3, 2, 1)
+
+    @test sampledtracks(postchain(a, cat(b, c; dims = 3), d)) == cat(a, b, c, d; dims = 3)
+    @test sampledtracks(postchain(a, cat(b, c; dims = 3), d); burn_in = 1) ==
+          cat(b, c, d; dims = 3)
+    @test size(sampledtracks(postchain(a, b); burn_in = 2)) == (3, 2, 0)
+end
+
+# The localization error is the RMS over frames and coordinates of the per-coordinate
+# posterior standard deviation. Samples at μ ± s have the variance s² (over the samples
+# themselves), so the error is sqrt(mean(s²)). A sample far away is skipped as burn-in;
+# samples with other than one emitter are rejected.
+@testset let μ = reshape([1.0 2.0; 1.5 2.5; 2.0 3.0], 3, 2, 1),
+    s = reshape([0.1 0.2; 0.3 0.1; 0.2 0.4], 3, 2, 1),
+    far = fill(50.0, 3, 2, 1)
+
+    @test localization_error(postchain(far, μ .+ s, μ .- s); burn_in = 1) ≈
+          sqrt(sum(s .^ 2) / 6)
+    @test localization_error(postchain(μ .+ s, μ .- s, μ .+ s, μ .- s)) ≈
+          sqrt(sum(s .^ 2) / 6)
+    @test_throws ArgumentError localization_error(
+        postchain(μ .+ s, cat(μ, μ .- s; dims = 3)),
+    )
+    @test_throws ArgumentError localization_error(postchain(μ .+ s, μ .- s); burn_in = 2)
+end
+
+# credible1D and credible2D give, for each frame, the fraction of sampled positions in each
+# bin: for one emitter (i) or pooled over all. Two identical samples, two frames: emitter 1
+# is at (0.5, 1.5) then (1.5, 2.5), emitter 2 at (2.5, 0.5) in both; bins 0:1:3 on each
+# axis. credible2D's rows are x bins and its columns y bins.
+@testset let positions = cat([0.5 1.5; 1.5 2.5], [2.5 0.5; 2.5 0.5]; dims = 3),
+    samples = [Sample(positions, 1.0, 1.0, 0, 1.0, NaN, NaN) for _ = 1:2],
+    edges = 0:1:3
+
+    onehot(i, j) = (h = zeros(3, 3); h[i, j] = 1; h)
+    x, y = credible1D(samples, 1, edges, edges)
+    @test x == [1 0 0; 0 1 0]
+    @test y == [0 1 0; 0 0 1]
+    x, y = credible1D(samples, edges, edges)
+    @test x == [0.5 0 0.5; 0 0.5 0.5]
+    @test y == [0.5 0.5 0; 0.5 0 0.5]
+
+    c = credible2D(samples, 1, edges, edges)
+    @test c[:, :, 1] == onehot(1, 2) # x bin 1, y bin 2
+    @test c[:, :, 2] == onehot(2, 3)
+    c = credible2D(samples, edges, edges)
+    @test c[:, :, 1] == (onehot(1, 2) + onehot(3, 1)) / 2
+    @test c[:, :, 2] == (onehot(2, 3) + onehot(3, 1)) / 2
+
+    # factor and shift: positions are shifted, then scaled, before binning
+    x, ~ = credible1D(samples, 1, 0:2:6, edges; factor = 2, xshift = 0.5)
+    @test x == [1 0 0; 0 1 0] # 2·(0.5 + 0.5) = 2 and 2·(1.5 + 0.5) = 4
+end
+
+# A pixel that clicks in k of N binary frames has the dark count -log(1 - k/N): 4 frames of
+# batchsize 3 give N = 12, and k = 0, 3, 6, 12 give 0, log(4/3), log(2), Inf. A pixel that
+# always clicks gives Inf with a warning, and SPAD filters it out. Readouts above the
+# batchsize mean a wrong batchsize.
+@testset let darkframes = zeros(UInt8, 2, 2, 4), binary = zeros(UInt8, 2, 2, 4)
+    darkframes[2, 1, :] = [1, 0, 2, 0] # k = 3
+    darkframes[1, 2, :] = [3, 0, 3, 0] # k = 6
+    darkframes[2, 2, :] .= 3 # k = 12
+    darkcounts = @test_logs (:warn, r"1 pixel\(s\) clicked in every binary frame") getdarkcounts(
+        darkframes;
+        batchsize = 3,
+    )
+    @test darkcounts ≈ [0 log(2); log(4 / 3) Inf]
+    detector = SPAD{Float64}(
+        period = 1,
+        pixel_size = 0.1,
+        darkcounts = darkcounts,
+        cutoffs = (0, Inf),
+        readouts = zeros(UInt16, 2, 2, 1),
+        batchsize = 3,
+    )
+    @test detector.filter == [1 1; 1 0]
+
+    # binary frames: k = 0, 2, 3 of N = 4 give 0, log(2), log(4)
+    binary[2, 1, :] = [1, 0, 1, 0]
+    binary[1, 2, :] = [1, 1, 1, 0]
+    @test (@test_logs getdarkcounts(binary)) ≈ [0 log(4); log(2) 0]
+
+    @test_throws ArgumentError getdarkcounts(darkframes)
+end
+
 include("samplers.jl")
 
 Sys.isapple() && include("metal.jl")

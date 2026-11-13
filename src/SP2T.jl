@@ -26,6 +26,8 @@ export Tracks,
 
 export simulate!, bridge!, runMCMC!, runMCMC, findmap, findmle, jumpdistances
 
+export sampledtracks, localization_error, credible1D, credible2D, getdarkcounts
+
 include("base.jl")
 include("distributions.jl")
 include("gaussianpsf.jl")
@@ -42,4 +44,5 @@ include("tracks.jl")
 include("annealing.jl")
 include("permutation.jl")
 include("chain.jl")
+include("postprocess.jl")
 end
