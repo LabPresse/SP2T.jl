@@ -13,7 +13,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 julia --project=. -e 'using SP2T'            # quick load check
 ```
 
-Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] projects = ["test"]` in `Project.toml`), not in `[extras]`. CI and `[compat]` target Julia 1.13 only; do not add code paths for older versions.
+Test dependencies live in `test/Project.toml` (Julia workspace: `[workspace] projects = ["test"]` in `Project.toml`), not in `[extras]`. Development is mostly based on the latest official Julia release (1.13); `[compat]` allows 1.11 and later, and tests are also run on those earlier versions.
 
 ## Layout
 
